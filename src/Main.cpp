@@ -1,0 +1,5061 @@
+#include "CelestialValidation.hpp"
+#include "CloudValidation.hpp"
+#include "CockpitMotionValidation.hpp"
+#include "CombatOperationsValidation.hpp"
+#include "CrewFlightValidation.hpp"
+#include "CutterAudio.hpp"
+#include "infinity/Discovery.hpp"
+#include "infinity/SignalTraffic.hpp"
+#include "infinity/ShipSignals.hpp"
+#include "CrewGunsValidation.hpp"
+#include "CrewTradeValidation.hpp"
+#include "CrewValidation.hpp"
+#include "DockingValidation.hpp"
+#include "EconomyValidation.hpp"
+#include "ExpeditionValidation.hpp"
+#include "ExplorationValidation.hpp"
+#include "FlightValidation.hpp"
+#include "LandingLightValidation.hpp"
+#include "NpcValidation.hpp"
+#include "PilotValidation.hpp"
+#include "PlanetDiversityValidation.hpp"
+#include "PlanetValidation.hpp"
+#include "PointLightValidation.hpp"
+#include "PolarValidation.hpp"
+#include "ProspectingValidation.hpp"
+#include "SeamValidation.hpp"
+#include "MicroFlightValidation.hpp"
+#include "MiningProbeValidation.hpp"
+#include "PlannerValidation.hpp"
+#include "StationSwapValidation.hpp"
+#include "StellarDiversityValidation.hpp"
+#include "StreamingValidation.hpp"
+#include "SurfaceValidation.hpp"
+#include "TerrainValidation.hpp"
+#include "UiValidation.hpp"
+#include "WeatherValidation.hpp"
+#include "WindowSizing.hpp"
+#include "infinity/Cockpit.hpp"
+#include "infinity/CavernHazard.hpp"
+#include "infinity/CrewMinimap.hpp"
+#include "infinity/Excavation.hpp"
+#include "infinity/Continuity.hpp"
+#include "infinity/Crew.hpp"
+#include "infinity/Economy.hpp"
+#include "infinity/FireControl.hpp"
+#include "infinity/Targeting.hpp"
+#include "infinity/Defence.hpp"
+#include "infinity/Flight.hpp"
+#include "infinity/SurfaceProvince.hpp"
+#include "infinity/NpcCombat.hpp"
+#include "infinity/OrbitalDebris.hpp"
+#include "infinity/Piloting.hpp"
+#include "infinity/Recovery.hpp"
+#include "infinity/Renderer.hpp"
+#include "infinity/Arrival.hpp"
+#include "infinity/SurfaceOperations.hpp"
+#include "infinity/SurfaceRecon.hpp"
+#include "infinity/SaveTag.hpp"
+#include "infinity/ProbePresentation.hpp"
+#include "infinity/ExpeditionPlanner.hpp"
+#include "infinity/StationControl.hpp"
+#include "infinity/Weapons.hpp"
+#include <SDL3/SDL.h>
+#include <algorithm>
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <numeric>
+#include <oneapi/tbb/global_control.h>
+#include <sstream>
+#include <thread>
+#if defined(__APPLE__) || defined(__linux__)
+#include <sys/resource.h>
+#endif
+
+using namespace infinity;
+struct Options {
+    bool tour = false, smoke = false, fresh = false, benchmark = false;
+    int frames = 0, width = 1440, height = 900;
+    uint64_t seed = 0x494e46494e495445ULL;
+    std::string captures, profile, data, terrainView;
+    RenderMode renderMode = RenderMode::Hyperion;
+    double visualTime = -1;
+    bool presentationTest = false;
+    bool flightTest = false, planetTest = false, uiFitTest = false, polarTest = false, cloudTest = false,
+         celestialTest = false, celestialSunOnly = false, landingLightTest = false, weatherTest = false,
+         diversityTest = false, stellarDiversityTest = false;
+    bool streamingTest = false;
+    bool terrainQuality = false, terrainSurfaceFrame = false, sunShadows = true;
+    bool economyTest = false, cockpitMotionTest = false, npcTest = false, crewTest = false,
+         crewTradeTest = false, crewFlightTest = false, crewGunsTest = false, stationSwapTest = false,
+         starStabilityTest = false, combatOperationsTest = false, explorationTest = false,
+         dockingTest = false, expeditionTest = false, prospectingTest = false, seamTest = false, probeTest = false, plannerTest = false;
+    bool pilotTest = false, terrainTest = false, surfaceTest = false, probeVideo = false, probeReference = false, probeBenchmark = false;
+    bool microExpeditionTest = false;
+};
+static Options options(int argc, char** argv) {
+    Options o;
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        auto value = [&]() {
+            if (i + 1 >= argc)
+                throw std::invalid_argument("Missing value for " + arg);
+            return std::string(argv[++i]);
+        };
+        if (arg == "--tour")
+            o.tour = true;
+        else if (arg == "--no-sun-shadows")
+            o.sunShadows = false;
+        else if (arg == "--smoke-test")
+            o.smoke = o.tour = o.fresh = true;
+        else if (arg == "--benchmark-tour")
+            o.benchmark = o.smoke = o.tour = o.fresh = true;
+        else if (arg == "--star-stability-test") {
+            o.smoke = o.fresh = o.starStabilityTest = o.benchmark = true;
+            o.visualTime = 12;
+        } else if (arg == "--docking-test") {
+            o.smoke = o.fresh = o.dockingTest = o.benchmark = true;
+            o.visualTime = 12;
+        } else if (arg == "--probe-benchmark") {
+            o.smoke=o.fresh=o.probeTest=o.probeVideo=o.probeBenchmark=o.benchmark=true;
+            o.visualTime=100;
+        } else if (arg == "--probe-reference-render") {
+            o.probeReference=true;
+        } else if (arg == "--probe-video") {
+            o.smoke=o.fresh=o.probeTest=o.probeVideo=o.benchmark=true;
+        } else if (arg == "--planner-test") {
+            o.smoke=o.fresh=o.plannerTest=o.benchmark=true;
+            o.visualTime=100;
+        } else if (arg == "--probe-test") {
+            o.smoke=o.fresh=o.probeTest=o.benchmark=true;
+            o.visualTime=100;
+        } else if (arg == "--micro-expedition-test") {
+            o.smoke = o.fresh = o.microExpeditionTest = o.benchmark = true;
+            o.visualTime = 100;
+        } else if (arg == "--seam-test") {
+            o.smoke = o.fresh = o.seamTest = o.benchmark = true;
+            o.visualTime = 100;
+        } else if (arg == "--prospecting-test") {
+            o.smoke = o.fresh = o.prospectingTest = o.benchmark = true;
+            o.visualTime = 100;
+        } else if (arg == "--expedition-test") {
+            o.smoke = o.fresh = o.expeditionTest = o.benchmark = true;
+            o.visualTime = 100;
+        } else if (arg == "--exploration-test") {
+            o.smoke = o.fresh = o.explorationTest = o.benchmark = true;
+            o.visualTime = 100;
+        } else if (arg == "--combat-operations-test") {
+            o.smoke = o.fresh = o.combatOperationsTest = o.benchmark = true;
+            o.visualTime = 60;
+        } else if (arg == "--station-swap-test") {
+            o.smoke = o.fresh = o.stationSwapTest = o.benchmark = true;
+            o.visualTime = 12;
+        } else if (arg == "--crew-guns-test") {
+            o.smoke = o.fresh = o.crewGunsTest = o.benchmark = true;
+            o.tour = false;
+        } else if (arg == "--crew-flight-test") {
+            o.smoke = o.fresh = o.crewFlightTest = o.benchmark = true;
+            o.tour = false;
+        } else if (arg == "--crew-trade-test") {
+            o.smoke = o.fresh = o.crewTradeTest = o.benchmark = true;
+            o.tour = false;
+        } else if (arg == "--crew-test") {
+            o.smoke = o.fresh = o.crewTest = o.benchmark = true;
+            o.tour = false;
+        } else if (arg == "--npc-combat-test") {
+            o.smoke = o.fresh = o.npcTest = o.benchmark = true;
+            o.tour = false;
+        } else if (arg == "--economy-test") {
+            o.economyTest = o.benchmark = o.smoke = o.fresh = true;
+            o.visualTime = 12;
+        } else if (arg == "--cockpit-motion-test") {
+            o.cockpitMotionTest = o.benchmark = o.smoke = o.fresh = true;
+            o.visualTime = 12;
+        } else if (arg == "--stellar-diversity-test") {
+            o.stellarDiversityTest = o.benchmark = o.smoke = o.fresh = true;
+            o.visualTime = 12;
+        } else if (arg == "--planet-diversity-test") {
+            o.diversityTest = o.benchmark = o.smoke = o.fresh = true;
+            o.visualTime = 12;
+        } else if (arg == "--weather-visibility-test") {
+            o.weatherTest = o.benchmark = o.smoke = o.fresh = true;
+            o.visualTime = 12;
+        } else if (arg == "--landing-light-test") {
+            o.landingLightTest = o.benchmark = o.smoke = o.fresh = true;
+            o.visualTime = 12;
+        } else if (arg == "--celestial-graphics-test" || arg == "--stellar-sun-test") {
+            o.celestialSunOnly = arg == "--stellar-sun-test";
+            o.celestialTest = o.benchmark = o.smoke = o.fresh = true;
+            o.visualTime = 12;
+        } else if (arg == "--cloud-volume-test") {
+            o.cloudTest = o.benchmark = o.smoke = o.fresh = true;
+            o.visualTime = 12;
+        } else if (arg == "--polar-optics-test") {
+            o.polarTest = o.benchmark = o.smoke = o.fresh = true;
+            o.visualTime = 12;
+        } else if (arg == "--ui-fit-test") {
+            o.uiFitTest = o.benchmark = o.smoke = o.fresh = true;
+            o.visualTime = 12;
+        } else if (arg == "--planet-stability-test") {
+            o.planetTest = o.benchmark = o.smoke = o.fresh = true;
+            o.visualTime = 12;
+        } else if (arg == "--flight-test") {
+            o.flightTest = o.benchmark = o.smoke = o.fresh = true;
+            o.visualTime = 12;
+        } else if (arg == "--streaming-test") {
+            o.streamingTest = o.benchmark = o.smoke = o.fresh = true;
+            o.visualTime = 12;
+        } else if (arg == "--pilot-test") {
+            o.pilotTest = o.benchmark = o.smoke = o.fresh = true;
+            o.visualTime = 12;
+        } else if (arg == "--terrain-saved-view-test") {
+            o.terrainView = value();
+            o.terrainTest = o.benchmark = o.smoke = o.fresh = true;
+            o.visualTime = 12;
+        } else if (arg == "--terrain-surface-frame-test") {
+            o.terrainSurfaceFrame = o.terrainQuality = o.terrainTest = o.benchmark = o.smoke = o.fresh = true;
+            o.visualTime = 12;
+        } else if (arg == "--terrain-quality-test") {
+            o.terrainQuality = o.terrainTest = o.benchmark = o.smoke = o.fresh = true;
+            o.visualTime = 12;
+        } else if (arg == "--terrain-test") {
+            o.terrainTest = o.benchmark = o.smoke = o.fresh = true;
+            o.visualTime = 12;
+        } else if (arg == "--surface-test") {
+            o.surfaceTest = o.benchmark = o.smoke = o.fresh = true;
+            o.visualTime = 12;
+        } else if (arg == "--fresh")
+            o.fresh = true;
+        else if (arg == "--render-mode") {
+            o.renderMode = parseRenderMode(value());
+        } else if (arg == "--visual-time")
+            o.visualTime = std::stod(value());
+        else if (arg == "--presentation-test") {
+            o.presentationTest = o.benchmark = o.smoke = o.tour = o.fresh = true;
+            o.visualTime = 12;
+        } else if (arg == "--frames")
+            o.frames = std::stoi(value());
+        else if (arg == "--width")
+            o.width = std::stoi(value());
+        else if (arg == "--height")
+            o.height = std::stoi(value());
+        else if (arg == "--seed")
+            o.seed = std::stoull(value(), nullptr, 0);
+        else if (arg == "--capture-dir")
+            o.captures = value();
+        else if (arg == "--profile")
+            o.profile = value();
+        else if (arg == "--data")
+            o.data = value();
+        else if (arg == "--help") {
+            std::cout
+                << "Infinity pilot: W/S throttle, A/D strafe, Q/E lift, U/O or Alt+A/D roll, B brake, X "
+                   "assist, "
+                   "J navigate, L land, Enter launch, G gear, N warp, Ctrl+N warp to target, Z shrink, comma/period "
+                   "size, Y planets, Shift-Y moons, V explorer. "
+                   "Space fire laser, F9 crew console, F10 swap with gunner / return helm, "
+                   "C mouse helm, arrows pitch/yaw or gun aim, right-drag look, "
+                   "-/+ speed, Shift boost, Ctrl fine, scroll scale, click select, F focus, "
+                   "Backspace parent, F1 controls, F7 cockpit motion, Tab overlay, R reset, M marker, P "
+                   "screenshot, T tour, Esc "
+                   "release mouse / quit.\nCLI: --fresh --tour --smoke-test --frames N --width N "
+                   "--height N --seed N "
+                   "--benchmark-tour --flight-test --streaming-test --pilot-test --planet-stability-test "
+                   "--economy-test --station-swap-test --cockpit-motion-test --ui-fit-test "
+                   "--polar-optics-test "
+                   "--cloud-volume-test "
+                   "--celestial-graphics-test "
+                   "--stellar-diversity-test --stellar-sun-test --landing-light-test "
+                   "--weather-visibility-test "
+                   "--planet-diversity-test "
+                   "--terrain-test "
+                   "--surface-test --terrain-quality-test --terrain-surface-frame-test "
+                   "--terrain-saved-view-test FILE --no-sun-shadows "
+                   "--planner-test --micro-expedition-test --probe-test --probe-video --probe-benchmark --probe-reference-render --capture-dir DIR "
+                   "--profile CSV "
+                   "--data DIR\n";
+            std::cout
+                << "Hyperion rendering. --render-mode hyperion --presentation-test --visual-time SECONDS\n";
+            std::cout
+                << "F2 market, F5 goods/routes/industry/jobs/services/outcomes/weapons; arrows select, Enter "
+                   "buy/fund/deliver, "
+                   "Backspace "
+                   "sell/collect; F3 supply "
+                   "contract. Shift-F11 material expeditions; Shift-F12 mineral prospects.\nLocal activity: K "
+                   "cycles traffic, I hails, J approaches/matches course, F6 "
+                   "hides/shows. Shift-K cycles surface ports; J approaches, L lands.\n";
+            std::exit(0);
+        } else
+            throw std::invalid_argument("Unknown option " + arg);
+    }
+    if (o.presentationTest || o.terrainTest || o.surfaceTest || o.planetTest) {
+        o.visualTime = 12;
+    }
+    const unsigned validationModes =
+        unsigned(o.economyTest) + unsigned(o.flightTest) + unsigned(o.streamingTest) + unsigned(o.pilotTest) +
+        unsigned(o.terrainTest) + unsigned(o.surfaceTest) + unsigned(o.planetTest) + unsigned(o.uiFitTest) +
+        unsigned(o.polarTest) + unsigned(o.cloudTest) + unsigned(o.celestialTest) +
+        unsigned(o.landingLightTest) + unsigned(o.weatherTest) + unsigned(o.diversityTest) +
+        unsigned(o.stellarDiversityTest) + unsigned(o.npcTest) + unsigned(o.crewTest) +
+        unsigned(o.crewTradeTest) + unsigned(o.crewFlightTest) + unsigned(o.crewGunsTest) +
+        unsigned(o.stationSwapTest) + unsigned(o.starStabilityTest) + unsigned(o.combatOperationsTest) +
+        unsigned(o.explorationTest) + unsigned(o.dockingTest);
+    if (validationModes > 1 || (validationModes && o.tour))
+        throw std::invalid_argument("Choose one automated validation mode");
+    if (o.width < 320 || o.height < 240 || o.width > 7680 || o.height > 4320 || o.frames < 0)
+        throw std::invalid_argument("Invalid window size or frame count");
+    return o;
+}
+int main(int argc, char** argv) {
+    SDL_Window* window = nullptr;
+    try {
+        auto opt = options(argc, argv);
+        oneapi::tbb::global_control workers(oneapi::tbb::global_control::max_allowed_parallelism, 4);
+        SDL_SetAppMetadata("Infinity", nullptr, "org.infinity.universe");
+        if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS))
+            throw std::runtime_error(SDL_GetError());
+        window = SDL_CreateWindow("INFINITY / A deterministic universe", opt.width, opt.height,
+                                  (opt.smoke ? SDL_WINDOW_HIGH_PIXEL_DENSITY : 0) |
+                                      ((!opt.smoke || opt.uiFitTest) ? SDL_WINDOW_RESIZABLE : 0));
+        if (!window)
+            throw std::runtime_error(SDL_GetError());
+        if (opt.smoke && !opt.uiFitTest) {
+            double density = std::max(1.0, static_cast<double>(SDL_GetWindowPixelDensity(window)));
+            SDL_SetWindowSize(window, static_cast<int>(std::lround(opt.width / density)),
+                              static_cast<int>(std::lround(opt.height / density)));
+            SDL_SyncWindow(window);
+        } else {
+            SDL_SyncWindow(window);
+            fitWindowToDisplay(window, true);
+        }
+        int pixelWidth = 0, pixelHeight = 0;
+        SDL_GetWindowSizeInPixels(window, &pixelWidth, &pixelHeight);
+        std::cout << "BACKBUFFER " << pixelWidth << 'x' << pixelHeight << " (requested " << opt.width << 'x'
+                  << opt.height << ")\n";
+        Universe universe(opt.seed);
+        Navigation nav(universe);
+        if (opt.presentationTest)
+            nav.parent();
+        RegionCache cache(universe);
+        FlightController flight(universe, nav, cache);
+        Pilot pilot(universe, nav, flight);
+        bool pilotEnabled = (!opt.smoke && !opt.tour) || opt.economyTest || opt.pilotTest ||
+                            opt.terrainTest || opt.surfaceTest || opt.planetTest || opt.uiFitTest ||
+                            opt.polarTest || opt.cloudTest || opt.celestialTest || opt.landingLightTest ||
+                            opt.weatherTest || opt.diversityTest || opt.stellarDiversityTest ||
+                            opt.cockpitMotionTest || opt.npcTest || opt.crewTest || opt.crewTradeTest ||
+                            opt.crewFlightTest || opt.crewGunsTest || opt.stationSwapTest ||
+                            opt.starStabilityTest || opt.combatOperationsTest || opt.explorationTest ||
+                            opt.dockingTest || opt.expeditionTest || opt.prospectingTest || opt.seamTest || opt.probeTest || opt.plannerTest || opt.microExpeditionTest;
+        std::unique_ptr<FlightValidation> flightProof;
+        if (opt.flightTest)
+            flightProof = std::make_unique<FlightValidation>(universe, nav);
+        std::unique_ptr<StreamingValidation> streamingProof;
+        if (opt.streamingTest)
+            streamingProof = std::make_unique<StreamingValidation>(universe, nav, cache);
+        auto executable = std::filesystem::weakly_canonical(std::filesystem::absolute(argv[0]));
+        auto defaultData = executable.parent_path() / "user-data";
+        if (executable.parent_path().filename() == "MacOS" &&
+            executable.parent_path().parent_path().filename() == "Contents")
+            defaultData = executable.parent_path().parent_path().parent_path().parent_path() / "user-data";
+        std::filesystem::path data = opt.data.empty() ? defaultData : std::filesystem::path(opt.data);
+        std::filesystem::create_directories(data);
+        Persistence persistence((data / "universe.sqlite").string(), universe.seed());
+        if (!opt.fresh)
+            if (auto state = persistence.loadState())
+                nav.restore(*state);
+        if (!opt.captures.empty())
+            std::filesystem::create_directories(opt.captures);
+        {
+            Renderer renderer(window, universe, opt.benchmark);
+            CutterAudio cutterAudio(!opt.smoke && !opt.benchmark);
+            renderer.setProbeOptimisation(!opt.probeReference);
+            renderer.setSunShadows(opt.sunShadows);
+            renderer.setMode(opt.renderMode);
+            if (!opt.smoke) {
+                std::ifstream motionSettings(data / "cockpit-motion.txt");
+                int enabled = 1;
+                if (motionSettings >> enabled && (enabled == 0 || enabled == 1))
+                    renderer.setCockpitMotionEnabled(enabled != 0);
+            }
+            std::unique_ptr<TerrainValidation> terrainProof;
+            std::string terrainView;
+            if (!opt.terrainView.empty()) {
+                std::ifstream input(opt.terrainView);
+                std::ostringstream contents;
+                contents << input.rdbuf();
+                terrainView = contents.str();
+                if (terrainView.empty())
+                    throw std::runtime_error("Cannot read terrain view fixture");
+            }
+            if (opt.terrainTest)
+                terrainProof = std::make_unique<TerrainValidation>(universe, nav, pilot, opt.terrainQuality,
+                                                                   opt.terrainSurfaceFrame, terrainView);
+            std::unique_ptr<PilotValidation> pilotProof;
+            if (opt.pilotTest)
+                pilotProof = std::make_unique<PilotValidation>(universe, nav, pilot);
+            std::unique_ptr<CockpitMotionValidation> motionProof;
+            if (opt.cockpitMotionTest)
+                motionProof = std::make_unique<CockpitMotionValidation>(universe, nav, pilot);
+            std::unique_ptr<PlanetValidation> planetProof;
+            if (opt.planetTest)
+                planetProof = std::make_unique<PlanetValidation>(universe, nav, pilot);
+            std::unique_ptr<UiValidation> uiProof;
+            if (opt.uiFitTest)
+                uiProof = std::make_unique<UiValidation>(window, nav, pilot);
+            std::unique_ptr<PolarValidation> polarProof;
+            if (opt.polarTest)
+                polarProof = std::make_unique<PolarValidation>(universe, nav, pilot);
+            std::unique_ptr<CloudValidation> cloudProof;
+            if (opt.cloudTest)
+                cloudProof = std::make_unique<CloudValidation>(universe, nav, pilot);
+            std::unique_ptr<CelestialValidation> celestialProof;
+            if (opt.celestialTest)
+                celestialProof =
+                    std::make_unique<CelestialValidation>(universe, nav, pilot, opt.celestialSunOnly);
+            std::unique_ptr<LandingLightValidation> landingLightProof;
+            if (opt.landingLightTest)
+                landingLightProof = std::make_unique<LandingLightValidation>(universe, nav, pilot);
+            bool shipRestored = false, legacyShip = false;
+            if (!opt.fresh && !opt.smoke) {
+                std::ifstream saved(data / ("ship-" + std::to_string(universe.seed()) + ".txt"));
+                std::string state;
+                if (std::getline(saved, state)) {
+                    std::istringstream header(state);
+                    std::string tag;
+                    unsigned version = 0;
+                    legacyShip = !(header >> tag >> version) || !matchesSaveTag(tag, "INFINITY_SHIP") ||
+                                 version < 3 || version > 7;
+                    shipRestored = pilot.restore(state);
+                }
+            }
+            if (pilotEnabled && !opt.smoke && (!shipRestored || legacyShip) &&
+                nav.anchor.kind() < Kind::System)
+                pilot.startInSystem();
+            else if (!shipRestored && !opt.smoke && nav.anchor.kind() >= Kind::Rock &&
+                     !pilot.ship().shrinking) {
+                pilot.fitToView();
+            }
+            renderer.freezeVisualTime(opt.visualTime);
+            ActivityState activity;
+            activity.seconds = pilot.ship().flightSeconds;
+            if (!opt.fresh && !opt.smoke) {
+                std::ifstream file(data / ("activity-" + std::to_string(universe.seed()) + ".txt"));
+                std::string text;
+                if (std::getline(file, text))
+                    activity.restore(text, universe);
+            }
+            if (opt.smoke)
+                activity.seconds = opt.visualTime >= 0 ? opt.visualTime : 12;
+            WeaponSystem weapons;
+            ShipCrew crew(universe.seed());
+            StationControl stationControl;
+            FireControl fireControl;
+            TargetingComputer targeting;
+            CombatAwareness awareness;
+            DefenceController defence;
+            NpcPlayer defenceObserver;
+            bool defencePointDefenceArmed=false;
+            if(!opt.fresh&&!opt.smoke){std::ifstream file(data/("defence-"+std::to_string(universe.seed())+".txt"));std::string text;if(std::getline(file,text))defence.restore(text);}
+            ShipSystem targetSystem = ShipSystem::Hull;
+            RecoveryController recovery;
+            if (!opt.fresh && !opt.smoke) {
+                std::ifstream file(data / ("fire-control-" + std::to_string(universe.seed()) + ".txt"));
+                std::string state;
+                if (std::getline(file, state))
+                    fireControl.restore(state);
+            }
+            if (!opt.smoke) {
+                std::ifstream file(data / ("crew-" + std::to_string(universe.seed()) + ".txt"));
+                if (file) {
+                    std::string text;
+                    if (!std::getline(file, text) || !crew.restore(text))
+                        throw std::runtime_error("Invalid crew save / original file retained");
+                }
+            }
+            crew.observeHull(pilot.ship().hull);
+            if (!opt.smoke) {
+                std::ifstream file(data / ("combat-" + std::to_string(universe.seed()) + ".txt"));
+                std::string text;
+                if (std::getline(file, text))
+                    weapons.restore(text, universe);
+            }
+            std::array<uint64_t, maxWeaponMounts> audibleShots{};
+            for (unsigned mount = 0; mount < maxWeaponMounts; ++mount)
+                audibleShots[mount] = weapons.mount(mount).shotsFired;
+            NpcCombat npcCombat;
+            VesselOperations vesselOperations;
+            DiscoveryCache discoveryCache;
+            DiscoveryController discoveries;
+            ShipSignals shipSignalsController;
+            std::optional<ActivityBody> radioShip;
+            if(!opt.smoke&&!opt.fresh){std::ifstream in(data/("ship-signals-"+std::to_string(universe.seed())+".txt"));std::string saved;if(std::getline(in,saved))shipSignalsController.restore(saved,universe.seed());}
+            if(!opt.smoke&&!opt.fresh){std::ifstream in(data/("discovery-"+std::to_string(universe.seed())+".txt"));std::string saved;if(std::getline(in,saved))discoveries.restore(saved,universe);}
+            if (!opt.smoke) {
+                std::ifstream in(data / ("vessels-" + std::to_string(universe.seed()) + ".txt"));
+                std::string text; if (std::getline(in,text)) vesselOperations.restore(text,universe);
+            }
+            ArrivalDirector arrivals;
+            if (!opt.smoke) {
+                std::ifstream file(data / ("npc-combat-" + std::to_string(universe.seed()) + ".txt"));
+                std::string text;
+                if (std::getline(file, text))
+                    npcCombat.restore(text, universe);
+            }
+            renderer.setNpcCombat(&npcCombat);
+            renderer.setWeapons(&weapons);
+            renderer.setActivity(&activity);
+            std::unique_ptr<ProspectingValidation> prospectingProof;
+            std::unique_ptr<SeamValidation> seamProof;
+            std::unique_ptr<MicroFlightValidation> microFlightProof;
+            if (opt.microExpeditionTest)
+                microFlightProof = std::make_unique<MicroFlightValidation>(universe, nav, pilot, renderer);
+            std::unique_ptr<MiningProbeValidation> probeProof;
+            std::unique_ptr<PlannerValidation> plannerProof;
+            if(opt.plannerTest)plannerProof=std::make_unique<PlannerValidation>(universe,nav,pilot,renderer,window);
+            if (opt.probeTest)
+                probeProof=std::make_unique<MiningProbeValidation>(universe,nav,pilot,renderer,window,opt.probeVideo,opt.probeReference,opt.probeBenchmark);
+            if (opt.seamTest)
+                seamProof = std::make_unique<SeamValidation>(universe, nav, pilot, renderer, weapons, window);
+            if (opt.prospectingTest)
+                prospectingProof =
+                    std::make_unique<ProspectingValidation>(universe, nav, pilot, renderer, weapons, window);
+            std::unique_ptr<ExpeditionValidation> expeditionProof;
+            if (opt.expeditionTest)
+                expeditionProof =
+                    std::make_unique<ExpeditionValidation>(universe, nav, pilot, renderer, window);
+            std::unique_ptr<ExplorationValidation> explorationProof;
+            std::unique_ptr<DockingValidation> dockingProof;
+            if (opt.dockingTest)
+                dockingProof = std::make_unique<DockingValidation>(universe, nav, pilot, activity);
+            if (opt.explorationTest)
+                explorationProof = std::make_unique<ExplorationValidation>(universe, nav, pilot, crew,
+                                                                           weapons, activity, window);
+            std::unique_ptr<EconomyRuntime> economy;
+            if (!opt.smoke || opt.economyTest || opt.crewTradeTest || opt.crewGunsTest)
+                economy = std::make_unique<EconomyRuntime>(universe, data);
+            if (!opt.smoke)
+                weapons.setLoadout({0, 0, 0}); // wait for the authoritative saved mounts
+            std::shared_ptr<const EconomySnapshot> economicSnapshot;
+            SurveyController surveyController;
+            MiningController miningController;
+            SpecimenProbe specimenProbe;
+            uint64_t pendingSpecimen = 0, pendingSpecimenSequence = 0;
+            std::optional<ActivityId> parkedSelection;
+            bool parkedActivityEnabled = true, parkedCombatSelection = false;
+
+            MarketView marketView;
+            bool marketOpen = false;
+            bool plannerOpen = false;
+            PlannerChoice plannerChoice;
+            ExpeditionPlan plannerView;
+            std::string plannerFeedback;
+            double plannerFeedbackSeconds=0,plannerRefresh=0;
+            uint64_t plannerPending=0;
+            uint64_t surveyDeliveryAwaiting=0;
+            bool crewOpen = false, vesselOpen = false, vesselTransferPending = false, discoveryOpen=false;
+            bool radioConsumedFire=false;
+            double radioTrafficAt=-1;
+            bool crewFlightOpen = false;
+            size_t crewSelected = 0;
+            size_t crewOffer = 0;
+            CrewStation crewStation = CrewStation::Bridge;
+            CrewView crewView;
+            std::string crewFeedback;
+            auto crewCommand = [&](CrewCommand command) {
+                crewFeedback = crew.command(command, crewSelected, crewStation);
+            };
+            uint64_t pendingCrewSequence = 0;
+            std::optional<ActivityId> marketPort;
+            size_t marketGood = 1;
+            MarketPage marketPage = MarketPage::Goods;
+            unsigned incidentResponse = 0;
+            std::string incidentComms;
+            unsigned marketWeaponMount = 0;
+            std::optional<ActivityId> tradeBuyer;
+            Good tradeGood = Good::Water;
+            int64_t tradeKg = 0;
+            std::string tradeHint;
+            EconomicAction pendingEconomicAction = EconomicAction::Buy;
+            bool pendingAutomaticEngineering=false;
+            Good pendingEconomicGood = Good::Water;
+            auto marketRows = [&]() -> size_t {
+                return marketPage == MarketPage::Expeditions
+                           ? std::max<size_t>(1, economicSnapshot ? economicSnapshot->expeditions.jobs.size()
+                                                                  : 0)
+                       : marketPage == MarketPage::Goods    ? goodCount
+                       : marketPage == MarketPage::Industry ? facilityModuleCount
+                       : marketPage == MarketPage::Services ? 3
+                       : marketPage == MarketPage::Weapons  ? maxWeaponLevel
+                       : marketPage == MarketPage::Journal
+                           ? std::max<size_t>(
+                                 1, economicSnapshot ? economicSnapshot->exploration.journal.size() : 0)
+                       : marketPage == MarketPage::Survey
+                           ? 6 + (economicSnapshot ? explorationJobs(*economicSnapshot).size() : 0)
+                       : marketPage == MarketPage::Crew
+                           ? std::max<size_t>(
+                                 1, economicSnapshot && marketPort && economicSnapshot->siteIndex(*marketPort)
+                                        ? economicCrewOffers(*economicSnapshot,
+                                                             *economicSnapshot->siteIndex(*marketPort))
+                                                  .size() +
+                                              crew.members().size()
+                                        : 0)
+                       : marketPage == MarketPage::Outcomes
+                           ? std::max<size_t>(1, economicSnapshot ? economicSnapshot->outcomes.size() : 0)
+                       : marketPage == MarketPage::Jobs
+                           ? std::max<size_t>(1, economicSnapshot ? economicSnapshot->jobs.size() : 0)
+                       : marketPage == MarketPage::Incidents
+                           ? std::max<size_t>(1, economicSnapshot ? economicSnapshot->incidents.size() : 0)
+                           : std::max<size_t>(1, economicSnapshot ? economicSnapshot->routes.size() : 0);
+            };
+            int64_t marketQuantity = 10;
+            uint64_t economicSequence = 0, pendingEconomicSequence = 0;
+            Navigation probeNav(universe);
+            bool probeViewing = false, probeTriggerHeld = false;
+            uint64_t probeAwaitingLaunch = 0;
+            uint64_t probePreviousId = 0;
+            unsigned probeBay = 0;
+            unsigned cavernSelection = 0;
+            double probeLaunchDepth = 80, cavernScanProgress = 0;
+            if(!opt.smoke&&!opt.fresh){
+                std::ifstream in(data/("expedition-plan-"+std::to_string(universe.seed())+".txt"));
+                if(in){std::ostringstream saved;saved<<in.rdbuf();if(plannerChoice.restore(saved.str())){
+                    probeLaunchDepth=plannerChoice.depth;probeBay=plannerChoice.bay;}}
+            }
+            uint64_t cavernScanHole = 0;
+            unsigned cavernScanFind = 0;
+            bool cavernScanSubmitted = false;
+            MiningController cavernMiner;
+            IceStress iceStress;
+            ExcavationWork excavationWork;
+            double cavernRecoveryProgress=0;
+            uint64_t seenCollapseBore=0;
+            std::array<unsigned,cavernFindCount> seenCollapses{};
+            SurfaceMapCache reconMaps;
+            ReconOrders reconOrders;
+            std::shared_ptr<const SurfaceReconView> reconView;
+            uint64_t reconSelected=0;
+            uint64_t reconNavAnnounced=0;
+            bool reconOpen=false;
+            double reconRefresh=0,reconElapsed=0,reconCallCooldown=0;
+            std::string reconLastCall;
+            uint64_t seenEnvironmentalStrike=0;
+            std::string cavernWorkStatus;
+            glm::dvec2 probeLook{};
+            double probeBlastClock = activity.seconds;
+            uint64_t pendingSecuritySequence = 0;
+            uint64_t pendingRecoverySequence = 0;
+            uint64_t pendingWreck = 0;
+            std::string recoveryMessage;
+            double lastSecurityReport = -1;
+            int64_t pendingCargoKg = 0;
+            std::string marketFeedback;
+            double marketFeedbackSeconds = 0;
+            auto marketSay = [&](std::string message) {
+                marketFeedback = std::move(message);
+                marketFeedbackSeconds = 4;
+            };
+            auto connectedMarket = [&] {
+                if (!pilotEnabled || !economicSnapshot || economicSnapshot->catchingUp || !marketPort)
+                    return false;
+                auto i = economicSnapshot->siteIndex(*marketPort);
+                return i && economicTradeAccess(universe, nav, pilot, economicSnapshot->network->sites[*i]);
+            };
+            auto explorationObserver = [&] {
+                SurveyObserver o;
+                o.reference = nav.anchor;
+                o.position = nav.cameraPosition() * std::pow(10., nav.logDistance);
+                o.velocity =
+                    universe.relative(pilot.ship().frame, nav.anchor, 0).orientation * pilot.ship().velocity;
+                o.attitude = nav.orientation;
+                o.size = pilot.sizeRatio();
+                o.hull = pilot.ship().hull;
+                o.seconds = activity.seconds;
+                o.landed = pilot.ship().landed;
+                o.field = !pilotEnabled || pilot.ship().cruise || pilot.instruments().fieldActive;
+                return o;
+            };
+            auto marketContext = [&] {
+                MarketContext context;
+                context.weaponMount = marketWeaponMount;
+                context.hull = pilot.ship().hull;
+                context.cruiseSpeed = pilot.ship().cruiseSpeed;
+                context.crew = crew.members();
+                context.incidentResponse = incidentResponse;
+                if (economicSnapshot && economicSnapshot->network &&
+                    economicSnapshot->network->system.ancestorOf(nav.anchor)) {
+                    const auto home = universe.describe(nav.anchor);
+                    context.systemPosition = universe.pointRelative(
+                        nav.anchor,
+                        nav.cameraPosition() * std::pow(10., nav.logDistance - home.frame.logRadius),
+                        economicSnapshot->network->system, 0);
+                    if (marketPage == MarketPage::Incidents && incidentResponse == 0) {
+                        const auto* incident = selectedIncident(*economicSnapshot, marketGood);
+                        if (incident && incident->flight && incident->flight <= economicSnapshot->flights.size()) {
+                            const auto& flight = economicSnapshot->flights[incident->flight - 1];
+                            const auto body = sampleEconomicFreight(universe, *economicSnapshot->network, flight, activity.seconds);
+                            context.wreckPosition = universe.pointRelative(body.id.home,
+                                body.position / std::pow(10., universe.describe(body.id.home).frame.logRadius),
+                                economicSnapshot->network->system, 0);
+                        }
+                    }
+                }
+                return context;
+            };
+            auto selectMarket = [&] {
+                if (!economicSnapshot || !economicSnapshot->network)
+                    return;
+                if (activity.selected && economicSnapshot->siteIndex(*activity.selected))
+                    marketPort = activity.selected;
+                else {
+                    double best = 1e300;
+                    for (const auto& site : economicSnapshot->network->sites) {
+                        const auto home = universe.describe(site.id.home);
+                        auto point = universe.pointRelative(site.id.home,
+                                                            site.metres / std::pow(10., home.frame.logRadius),
+                                                            nav.anchor, nav.logDistance);
+                        double distance = glm::length(point - nav.cameraPosition());
+                        if (distance < best) {
+                            best = distance;
+                            marketPort = site.id;
+                        }
+                    }
+                }
+                if (marketPort)
+                    activity.select(*marketPort);
+            };
+            auto crewPort = [&]() -> std::optional<size_t> {
+                if (!pilotEnabled || !economicSnapshot || !economicSnapshot->network ||
+                    economicSnapshot->catchingUp)
+                    return {};
+                for (size_t i = 0; i < economicSnapshot->network->sites.size(); ++i)
+                    if (economicTradeAccess(universe, nav, pilot, economicSnapshot->network->sites[i]))
+                        return i;
+                return {};
+            };
+            auto submitCrew = [&](ShipService service) {
+                const auto port = crewPort();
+                if (!port || !economy) {
+                    crewFeedback = "BERTH OR LAND AT A PORT / FULL SIZE / STOP SHIP";
+                    return;
+                }
+                if (pendingCrewSequence > economicSnapshot->player.lastCommand ||
+                    pendingEconomicSequence > economicSnapshot->player.lastCommand) {
+                    crewFeedback = "WAIT FOR PORT ORDER";
+                    return;
+                }
+                if (service == ShipService::CrewHire &&
+                    crew.living() + economicSnapshot->player.rescued.size() >= maxShipCrew) {
+                    crewFeedback = "ALL EIGHT BERTHS FILLED";
+                    return;
+                }
+                if (service == ShipService::CrewSupplies && crew.spares() >= 100 && crew.medical() >= 50) {
+                    crewFeedback = "CREW STORES FULL";
+                    return;
+                }
+                auto quote = economicServiceQuote(*economicSnapshot, *port, service, 1);
+                if (!quote.available) {
+                    crewFeedback = quote.status;
+                    return;
+                }
+                EconomicCommand c;
+                c.port = economicSnapshot->network->sites[*port].id;
+                c.action = service == ShipService::CrewHire       ? EconomicAction::HireCrew
+                           : service == ShipService::CrewSupplies ? EconomicAction::SupplyCrew
+                                                                  : EconomicAction::TreatCrew;
+                c.serviceUnits = 1;
+                c.limitCents = quote.totalCents();
+                c.sequence = economicSequence =
+                    std::max(economicSequence, economicSnapshot->player.lastCommand) + 1;
+                if (economy->command(c)) {
+                    pendingCrewSequence = c.sequence;
+                    crewFeedback = "CREW SERVICE ORDER SENT";
+                } else
+                    crewFeedback = "PORT QUEUE BUSY / TRY AGAIN";
+            };
+            auto tradeCrew = [&](EconomicAction action, const CrewMember& person,
+                                 std::optional<size_t> port) {
+                if(person.id==vesselOperations.party()){crewFeedback="CREW OFF SHIP / CTRL-0 RECALL FIRST";marketSay(crewFeedback);return;}
+                if (!port || !economy || !economicSnapshot || economicSnapshot->catchingUp ||
+                    !economicTradeAccess(universe, nav, pilot, economicSnapshot->network->sites[*port])) {
+                    crewFeedback = "BERTH OR LAND AT THIS PORT / FULL SIZE AND STOPPED";
+                    marketSay(crewFeedback);
+                    return;
+                }
+                if (pendingCrewSequence > economicSnapshot->player.lastCommand ||
+                    pendingEconomicSequence > economicSnapshot->player.lastCommand) {
+                    crewFeedback = "WAIT FOR PORT ORDER";
+                    marketSay(crewFeedback);
+                    return;
+                }
+                const bool buy = action == EconomicAction::BuyCrew;
+                const auto quote = economicCrewQuote(*economicSnapshot, *port, person, buy,
+                                                     crew.living() + economicSnapshot->player.rescued.size());
+                if (action != EconomicAction::ReleaseCrew && !quote.available) {
+                    crewFeedback = quote.status;
+                    marketSay(crewFeedback);
+                    return;
+                }
+                EconomicCommand c;
+                c.port = economicSnapshot->network->sites[*port].id;
+                c.action = action;
+                c.crewId = person.id;
+                c.crewAboard = unsigned(crew.living() + economicSnapshot->player.rescued.size());
+                if (!buy)
+                    c.person = person;
+                else {
+                    const auto lost = std::find_if(crew.members().begin(), crew.members().end(),
+                                                   [](const auto& m) { return m.health <= 0; });
+                    if (lost != crew.members().end())
+                        c.person = *lost;
+                }
+                c.limitCents = buy ? quote.buyCents : quote.sellCents;
+                c.sequence = economicSequence =
+                    std::max(economicSequence, economicSnapshot->player.lastCommand) + 1;
+                if (economy->command(c)) {
+                    pendingCrewSequence = c.sequence;
+                    crewFeedback = "CREW TRANSFER PENDING";
+                    marketSay(crewFeedback);
+                }
+            };
+            auto tradeMarketCrew = [&](EconomicAction action) {
+                if (!economicSnapshot || !marketPort)
+                    return;
+                const auto port = economicSnapshot->siteIndex(*marketPort);
+                if (!port)
+                    return;
+                const auto rows = economicCrewRows(*economicSnapshot, *port, crew.members());
+                if (marketGood >= rows.size())
+                    return;
+                const auto& row = rows[marketGood];
+                if ((action == EconomicAction::BuyCrew) != row.buy) {
+                    marketSay(row.buy ? "ENTER BUYS A PORT OFFER" : "BACKSPACE SELLS ABOARD CREW");
+                    return;
+                }
+                tradeCrew(action, row.person, port);
+            };
+            auto submitExpedition = [&](EconomicAction action, const MaterialExpedition& job) {
+                if (!economy || !economicSnapshot || economicSnapshot->catchingUp ||
+                    pendingEconomicSequence || pendingCrewSequence || pendingSecuritySequence ||
+                    pendingRecoverySequence || pendingWreck)
+                    return;
+                EconomicCommand c;
+                c.action = action;
+                c.contract = job.id;
+                c.port = action == EconomicAction::OpenSpecimen && marketPort ? *marketPort : job.colony;
+                c.observer = explorationObserver();
+                c.sequence = economicSequence =
+                    std::max(economicSequence, economicSnapshot->player.lastCommand) + 1;
+                if (economy->command(c)) {
+                    pendingEconomicSequence = c.sequence;
+                    pendingEconomicAction = action;
+                    if (action == EconomicAction::OpenSpecimen) {
+                        pendingSpecimen = job.id;
+                        pendingSpecimenSequence = c.sequence;
+                    }
+                    marketSay("EXPEDITION ORDER SENT");
+                }
+            };
+            auto submitMarket = [&](EconomicAction action, const EconomySnapshot::Job* job = nullptr) {
+                if (!economy || !economicSnapshot || !marketPort || economicSnapshot->catchingUp)
+                    return;
+                if (job && job->distress && job->action == EconomicAction::RecoverWreck) {
+                    marketSay("F4 TARGET WRECK / MATCH VELOCITY / HOLD 0 CLOSE TO THE HULL");
+                    return;
+                }
+                auto i = economicSnapshot->siteIndex(*marketPort);
+                if (!i)
+                    return;
+                if (pendingEconomicSequence > economicSnapshot->player.lastCommand ||
+                    pendingCrewSequence > economicSnapshot->player.lastCommand)
+                    return;
+                EconomicCommand command;
+                command.port = *marketPort;
+                command.action = action;
+                command.good = marketPage == MarketPage::Goods ? Good(marketGood) : Good::Water;
+                command.module = FacilityModule(std::min(marketGood, facilityModuleCount - 1));
+                command.kg = marketQuantity;
+                if (action >= EconomicAction::ScanSurvey) {
+                    command.observer = explorationObserver();
+                    command.weaponMount = marketWeaponMount;
+                    if (marketPage == MarketPage::Journal) {
+                        const auto& records = economicSnapshot->exploration.journal;
+                        if (records.empty())
+                            return;
+                        command.surveyTarget =
+                            records[records.size() - 1 - std::min(marketGood, records.size() - 1)].address;
+                    }
+                    if (marketPage == MarketPage::Survey && marketGood >= 3 &&
+                        marketGood < 3+explorationJobs(*economicSnapshot).size()) {
+                        const auto jobs = explorationJobs(*economicSnapshot);
+                        if (marketGood - 3 >= jobs.size())
+                            return;
+                        const auto& j = economicSnapshot->exploration.contracts[jobs[marketGood - 3]];
+                        command.port = j.issuer;
+                        command.contract = j.id;
+                        i = economicSnapshot->siteIndex(command.port);
+                        if (!i)
+                            return;
+                    }
+                }
+                if (job) {
+                    action = action == EconomicAction::CancelHaul ? action : job->action;
+                    command.action = action;
+                    command.port = job->target;
+                    command.contract = job->id;
+                    command.good = job->good;
+                    command.kg = job->kg;
+                    if (job->distress)
+                        command.combatTarget = job->distress;
+                    if (job->combat) {
+                        action =
+                            action == EconomicAction::CancelHaul ? EconomicAction::CancelCombat : job->action;
+                        command.action = action;
+                        command.port = job->issuer;
+                        if (action == EconomicAction::ReportCombat) {
+                            marketSay(job->route + " / F4 CONTACT / KEEP PROTECTING");
+                            return;
+                        }
+                        auto contract = std::find_if(economicSnapshot->combatContracts.begin(),
+                                                     economicSnapshot->combatContracts.end(),
+                                                     [&](const auto& c) { return c.id == job->id; });
+                        if (contract == economicSnapshot->combatContracts.end())
+                            return;
+                        auto body = sampleCombatActivity(universe, contract->target, activity.seconds);
+                        weapons.apply(body);
+                        command.combatTarget = contract->target;
+                        command.targetHull = body.hull;
+                        command.impactSeconds = activity.seconds;
+                    }
+                    if (action == EconomicAction::CancelHaul && economicSnapshot->player.haul)
+                        command.port = economicSnapshot->player.haul->source;
+                    i = economicSnapshot->siteIndex(command.port);
+                    if (!i) {
+                        marketSay("RETURN TO THE JOB'S SYSTEM FIRST / F4");
+                        return;
+                    }
+                }
+                bool needsLink = action != EconomicAction::CollectDividends &&
+                                 action != EconomicAction::AcceptHaul &&
+                                 action != EconomicAction::AcceptRecovery;
+                if (action == EconomicAction::AcceptCombat || action == EconomicAction::CancelCombat)
+                    needsLink = false;
+                if (action == EconomicAction::AcceptSurvey || action == EconomicAction::CancelSurvey)
+                    needsLink = false;
+                if (action == EconomicAction::CancelHaul)
+                    needsLink = economicSnapshot->player.haul && economicSnapshot->player.haul->onboard;
+                if (action == EconomicAction::Contract) {
+                    auto it = std::find_if(
+                        economicSnapshot->contracts.begin(), economicSnapshot->contracts.end(),
+                        [&](const auto& c) {
+                            return c.site == *i && (!command.contract || c.id == command.contract) &&
+                                   (c.phase == ContractPhase::Open || c.phase == ContractPhase::Accepted);
+                        });
+                    if (it == economicSnapshot->contracts.end())
+                        return;
+                    command.contract = it->id;
+                    command.good = it->good;
+                    needsLink = it->phase != ContractPhase::Open;
+                }
+                if (needsLink &&
+                    !economicTradeAccess(universe, nav, pilot, economicSnapshot->network->sites[*i])) {
+                    marketSay(job ? ("JOB PORT " + economicSnapshot->network->sites[*i].name +
+                                     (action == EconomicAction::CancelHaul ? " / SHIFT-F4 RETURN SOURCE"
+                                                                           : " / F4 TARGET / J APPROACH"))
+                                  : "APPROACH PORT / STOP BELOW 3 M/S / LAND AT SURFACE PORTS");
+                    return;
+                }
+                auto q = economicSnapshot->quote(*i, command.good, marketQuantity);
+                command.limitCents = action == EconomicAction::Buy ? q.buyCents : q.sellCents;
+                if (action == EconomicAction::UpgradeScanner || action == EconomicAction::FitMiningHead ||
+                    action == EconomicAction::SellMiningHead) {
+                    const auto quote = economicExplorationQuote(
+                        *economicSnapshot, *i, action != EconomicAction::UpgradeScanner, marketWeaponMount,
+                        action == EconomicAction::SellMiningHead);
+                    if (!quote.available) {
+                        marketSay(quote.status);
+                        return;
+                    }
+                    command.limitCents =
+                        action == EconomicAction::SellMiningHead ? quote.sellCents : quote.totalCents();
+                }
+                if (action == EconomicAction::FitProbeLauncher || action == EconomicAction::ReloadProbe ||
+                    action == EconomicAction::SellProbeLauncher) {
+                    const auto service = action == EconomicAction::FitProbeLauncher ? ProbeService::Fit
+                                       : action == EconomicAction::ReloadProbe ? ProbeService::Reload : ProbeService::Remove;
+                    const auto quote=economicProbeQuote(*economicSnapshot,*i,marketWeaponMount,service);
+                    if (!quote.available) { marketSay(quote.status); return; }
+                    command.limitCents=service==ProbeService::Remove?quote.sellCents:quote.totalCents();
+                }
+                if (action == EconomicAction::Invest)
+                    command.limitCents =
+                        facilityRefit(command.module,
+                                      economicSnapshot->sites[*i].modules[size_t(command.module)] + 1)
+                            .labourCents;
+                if (action == EconomicAction::FitWeapon || action == EconomicAction::SellWeapon) {
+                    command.weaponMount = marketWeaponMount;
+                    command.serviceUnits = action == EconomicAction::SellWeapon
+                                               ? economicSnapshot->player.weaponAt(marketWeaponMount)
+                                               : unsigned(marketGood + 1);
+                    auto q = economicWeaponQuote(*economicSnapshot, *i, command.serviceUnits,
+                                                 action == EconomicAction::SellWeapon, marketWeaponMount);
+                    if (!q.available) {
+                        marketSay(q.status);
+                        return;
+                    }
+                    command.limitCents = action == EconomicAction::SellWeapon ? q.sellCents : q.totalCents();
+                }
+                if (action == EconomicAction::RepairHull || action == EconomicAction::UpgradeCargo) {
+                    command.serviceUnits =
+                        action == EconomicAction::RepairHull
+                            ? unsigned(std::ceil(std::clamp(100. - pilot.ship().hull, 0., 10.)))
+                            : economicSnapshot->player.cargoLevel + 1;
+                    auto serviceQuote = economicServiceQuote(
+                        *economicSnapshot, *i,
+                        action == EconomicAction::RepairHull ? ShipService::Repair : ShipService::CargoHold,
+                        command.serviceUnits);
+                    if (!serviceQuote.available) {
+                        marketSay(serviceQuote.status);
+                        return;
+                    }
+                    command.limitCents = serviceQuote.totalCents();
+                }
+                economicSequence = std::max(economicSequence, economicSnapshot->player.lastCommand);
+                command.sequence = ++economicSequence;
+                command.surveyAccount=expeditionAccountFor(economicSnapshot->exploration,plannerChoice.contract,economicSnapshot->network->system);
+                if(action==EconomicAction::RepairHull)command.observer=explorationObserver();
+                if (economy->command(command)) {
+                    if(action==EconomicAction::AcceptSurvey&&command.contract){plannerChoice.contract=command.contract;plannerChoice.tracking=true;}
+                    if(action==EconomicAction::ClaimSurvey)surveyDeliveryAwaiting=command.contract;
+                    pendingEconomicSequence = command.sequence;
+                    pendingEconomicAction = action;
+                    pendingEconomicGood = command.good;
+                    pendingCargoKg = economicPendingPayload(command, economicSnapshot->sites[*i]);
+                    pilot.setCargoMass(std::min<int64_t>(maxShipPayloadKg,
+                                                         economicSnapshot->player.massKg() + pendingCargoKg));
+                    marketSay("ORDER SUBMITTED / AWAITING LEDGER");
+                }
+            };
+            std::unique_ptr<EconomyValidation> economyProof;
+            if (opt.economyTest)
+                economyProof = std::make_unique<EconomyValidation>(universe, nav, pilot, *economy, activity,
+                                                                   window, weapons);
+            std::unique_ptr<NpcValidation> npcProof;
+            if (opt.npcTest)
+                npcProof = std::make_unique<NpcValidation>(universe, nav, pilot, activity, weapons, npcCombat,
+                                                           window);
+            std::unique_ptr<CrewValidation> crewProof;
+            if (opt.crewTest)
+                crewProof = std::make_unique<CrewValidation>(universe, nav, pilot, crew, window);
+            std::unique_ptr<CrewTradeValidation> crewTradeProof;
+            if (opt.crewTradeTest)
+                crewTradeProof =
+                    std::make_unique<CrewTradeValidation>(universe, nav, pilot, crew, *economy, window);
+            std::unique_ptr<CrewFlightValidation> crewFlightProof;
+            if (opt.crewFlightTest)
+                crewFlightProof = std::make_unique<CrewFlightValidation>(universe, nav, pilot, crew, window);
+            std::unique_ptr<CrewGunsValidation> crewGunsProof;
+            if (opt.crewGunsTest)
+                crewGunsProof = std::make_unique<CrewGunsValidation>(universe, nav, pilot, crew, weapons,
+                                                                     *economy, activity, window);
+            std::unique_ptr<CombatOperationsValidation> combatOperationsProof;
+            if (opt.combatOperationsTest)
+                combatOperationsProof = std::make_unique<CombatOperationsValidation>(
+                    universe, nav, pilot, crew, weapons, fireControl, activity);
+            std::unique_ptr<StationSwapValidation> stationSwapProof;
+            if (opt.stationSwapTest)
+                stationSwapProof = std::make_unique<StationSwapValidation>(
+                    universe, nav, pilot, crew, weapons, stationControl, activity, window);
+            std::unique_ptr<PointLightValidation> pointLightProof;
+            if (opt.starStabilityTest)
+                pointLightProof = std::make_unique<PointLightValidation>(universe, nav, pilot, activity);
+            std::unique_ptr<SurfaceValidation> surfaceProof;
+            if (opt.surfaceTest)
+                surfaceProof = std::make_unique<SurfaceValidation>(universe, nav, pilot, activity);
+            std::unique_ptr<WeatherValidation> weatherProof;
+            if (opt.weatherTest)
+                weatherProof = std::make_unique<WeatherValidation>(universe, nav, pilot, activity);
+            std::unique_ptr<StellarDiversityValidation> stellarDiversityProof;
+            if (opt.stellarDiversityTest)
+                stellarDiversityProof =
+                    std::make_unique<StellarDiversityValidation>(universe, nav, pilot, activity);
+            std::unique_ptr<PlanetDiversityValidation> diversityProof;
+            if (opt.diversityTest)
+                diversityProof = std::make_unique<PlanetDiversityValidation>(universe, nav, pilot, activity);
+            auto damagedBody = [&](ActivityBody body) {
+                npcCombat.apply(body);
+                weapons.apply(body);
+                return body;
+            };
+            auto activityBody = [&]() -> std::optional<ActivityBody> {
+                if (!activity.selected)
+                    return {};
+                if (economicSnapshot && economicSnapshot->network) {
+                    auto flight =
+                        std::find_if(economicSnapshot->flights.begin(), economicSnapshot->flights.end(),
+                                     [&](const auto& f) { return f.id == *activity.selected; });
+                    if (flight != economicSnapshot->flights.end())
+                        return damagedBody(sampleEconomicFreight(universe, *economicSnapshot->network,
+                                                                 *flight, activity.seconds));
+                    if (auto i = economicSnapshot->siteIndex(*activity.selected)) {
+                        const auto& site = economicSnapshot->network->sites[*i];
+                        ActivityBody body;
+                        body.id = site.id;
+                        body.kind = site.orbital ? ActivityKind::Harbour : ActivityKind::SurfacePort;
+                        body.position = site.metres;
+                        body.radius = site.radius;
+                        body.name = site.name;
+                        body.status = site.role + " / F2 MARKET";
+                        annotateEconomicPort(body, *economicSnapshot);
+                        if (!site.orbital)
+                            if (const auto world=renderer.surfaceWorld(site.id.home))
+                                for (const auto& city:world->settlements)
+                                    if (surfaceActivitySlot+city.slot==site.id.slot) {
+                                        const auto weather=sampleWeather(world->climate,city.direction,
+                                            glm::length(city.landingPoint)-world->radiusMetres,activity.seconds);
+                                        body.status+=" / "+settlementWork(*world,city,weather,economicSnapshot.get()).status;
+                                        break;
+                                    }
+                        return body;
+                    }
+                }
+                if (activity.selected->slot >= surfaceActivitySlot) {
+                    const auto world = renderer.surfaceWorld(activity.selected->home);
+                    if (!world) {
+                        for (const auto& c : renderer.activityContacts())
+                            if (c.body.id == *activity.selected)
+                                return c.body;
+                        return {};
+                    }
+                    for (const auto& s : world->settlements)
+                        if (surfaceActivitySlot + s.slot == activity.selected->slot)
+                            return surfaceContact(*world, s, activity.seconds);
+                    return {};
+                }
+                return damagedBody(sampleCombatActivity(universe, *activity.selected, activity.seconds));
+            };
+            auto waypointFor = [](const ActivityBody& body) {
+                const bool surface = body.kind == ActivityKind::SurfacePort;
+                return FlightWaypoint{body.id.home,
+                                      body.position +
+                                          (surface ? glm::normalize(body.position) * 60. : glm::dvec3(0)),
+                                      body.velocity,
+                                      surface                              ? 0.
+                                      : body.kind == ActivityKind::Harbour ? body.radius * 4
+                                      : isOrbitalDebris(body.id)            ? std::max(260., body.radius * 4.2)
+                                      : (body.disabled || body.systems[size_t(ShipSystem::Engines)] <= 0)
+                                          ? body.radius + 55
+                                          : std::max(750., body.radius * 5),
+                                      body.name,
+                                      surface,
+                                      dockingBerth(body)};
+            };
+            auto chooseActivity = [&](const ActivityId& id) {
+                activity.select(id);
+                pilot.brake();
+                pilot.clearWaypoint();
+                if (auto body = activityBody())
+                    pilot.trackWaypoint(waypointFor(*body));
+            };
+
+            auto selectedProspect = [&]() -> const ProspectSite* {
+                if (!nav.selected)
+                    return nullptr;
+                for (const auto& site : renderer.prospects())
+                    if (site.surface.ancestorOf(*nav.selected))
+                        return &site;
+                return nullptr;
+            };
+            auto prospectWaypointFor = [&](const ProspectSite& site) {
+                FlightWaypoint point;
+                point.reference = site.surface.parent();
+                point.metres = site.metres + site.direction * 16.;
+                point.standOff = 12;
+                point.surfacePort = true;
+                point.label = site.name;
+                return point;
+            };
+            auto navigateSelected = [&]() {
+                if (pilot.landedDebris())
+                    return;
+                if(activity.combatSelection&&activity.selected){
+                    activity.combatSelection=false;
+                    if(const auto body=activityBody())pilot.navigateWaypoint(waypointFor(*body));
+                    return;
+                }
+                activity.combatSelection=false;
+                if (!pilot.ship().shrinking && economicSnapshot && nav.selected)
+                    if (const auto* seam = markedSeam(economicSnapshot->exploration, *nav.selected)) {
+                        FlightWaypoint point;
+                        point.reference = seam->pool.parent();
+                        point.metres = seam->entryMetres;
+                        point.standOff = 12;
+                        point.surfacePort = true;
+                        point.label = "MARKED " + std::string(resourceName(seam->resource)) + " / OUTCROP CLEARING";
+                        pilot.navigateWaypoint(point);
+                        return;
+                    }
+                if (const auto* site = selectedProspect(); site && !pilot.ship().shrinking) {
+                    pilot.navigateWaypoint(prospectWaypointFor(*site));
+                } else if (auto body = activityBody())
+                    pilot.navigateWaypoint(waypointFor(*body));
+                else if (nav.selected)
+                    pilot.navigate(*nav.selected);
+            };
+            auto currentSeam = [&]() -> const SeamExpedition* {
+                return economicSnapshot && economicSnapshot->network
+                           ? activeSeam(economicSnapshot->exploration, economicSnapshot->network->system)
+                           : nullptr;
+            };
+            auto currentProbe = [&]() -> const Borehole* {
+                return economicSnapshot && economicSnapshot->network
+                    ? latestProbe(economicSnapshot->exploration.probes,economicSnapshot->network->system) : nullptr;
+            };
+            auto currentCavern = [&]() -> const Borehole* {
+                if(!economicSnapshot||!economicSnapshot->network||specimenProbe.active())return nullptr;
+                const auto observer=explorationObserver();
+                for(const auto& b:economicSnapshot->exploration.probes.holes) {
+                    if(!b.geologyVersion||b.planet.parent()!=economicSnapshot->network->system||activity.seconds<b.blastTime())continue;
+                    const auto eye=observer.reference==b.planet?observer.position:universe.pointRelative(observer.reference,
+                        observer.position/std::pow(10.,universe.describe(observer.reference).frame.logRadius),b.planet,0);
+                    if(glm::length(eye-b.entry)<b.finalDepth()+b.roomRadius()+30&&boreClearance(b,eye,activity.seconds)>0)return &b;
+                }
+                return nullptr;
+            };
+            auto cavernOrder = [&](EconomicAction action,const Borehole& b,unsigned find,double work=0) -> bool {
+                if(!economy||!economicSnapshot||economicSnapshot->catchingUp||pendingEconomicSequence||pendingCrewSequence||
+                   pendingSecuritySequence||pendingRecoverySequence||pendingWreck)return false;
+                EconomicCommand c;c.action=action;c.contract=b.id;c.cavernFind=find;c.surveyTarget=b.planet;
+                c.observer=explorationObserver();c.workSeconds=work;c.combatPresent=true;
+                c.serviceUnits=unsigned(std::clamp(crew.efficiency(CrewStation::Navigation)*100,0.,150.));
+                c.weaponMount=economicSnapshot->exploration.miningMount;
+                c.carefulCut=excavationWork.careful;
+                c.engineering=unsigned(std::clamp(crew.efficiency(CrewStation::Engineering)*100,0.,150.));
+                c.surveyAccount=expeditionAccountFor(economicSnapshot->exploration,plannerChoice.contract,economicSnapshot->network->system);
+                c.sequence=economicSequence=std::max(economicSequence,economicSnapshot->player.lastCommand)+1;
+                if(!economy->command(c))return false;
+                pendingEconomicSequence=c.sequence;pendingEconomicAction=action;
+                if(action==EconomicAction::ExtractCavern)pendingCargoKg=std::min<int64_t>(20*economicSnapshot->exploration.miningLevel,
+                    economicSnapshot->player.capacityKg-economicSnapshot->player.massKg());
+                return true;
+            };
+            double lastEngineeringSupply=-100;
+            auto supplyEngineering = [&](bool automatic=false) -> std::string {
+                if(!economy||!economicSnapshot||economicSnapshot->catchingUp||pendingEconomicSequence||pendingCrewSequence||
+                   pendingSecuritySequence||pendingRecoverySequence||pendingWreck)return "ENGINEERING SUPPLY WAITING";
+                constexpr std::array goods{Good::Propellant,Good::Water,Good::Oxygen};
+                std::array<size_t,3> priority{0,1,2};
+                std::sort(priority.begin(),priority.end(),[&](auto a,auto b){return crew.plant().stores[a]/engineeringCapacity[a]<crew.plant().stores[b]/engineeringCapacity[b];});
+                for(size_t i:priority) {
+                    const double stored=crew.plant().stores[i],capacity=engineeringCapacity[i];
+                    if(automatic&&stored>capacity*.4)continue;
+                    const auto kg=std::min({int64_t(20),int64_t(std::floor(capacity-stored)),economicSnapshot->player.availableCargo(goods[i])});
+                    if(kg<=0)continue;
+                    EconomicCommand c;c.action=EconomicAction::SupplyEngineering;c.plantSupply=EngineeringSupply(i);c.kg=kg;
+                    c.sequence=economicSequence=std::max(economicSequence,economicSnapshot->player.lastCommand)+1;
+                    if(!economy->command(c))return "ENGINEERING SUPPLY QUEUE BUSY";
+                    pendingEconomicSequence=c.sequence;pendingEconomicAction=c.action;lastEngineeringSupply=activity.seconds;
+                    pendingAutomaticEngineering=automatic;
+                    return "ENGINEERING CARGO TRANSFER / AWAITING SAVED RECEIPT";
+                }
+                return "TANKS FULL OR NO UNSEALED PROPELLANT / WATER / OXYGEN / F2 TRADE";
+            };
+            auto drillControl = [&](ProbeControl control,double value) -> std::string {
+                const auto* b=currentProbe();
+                if(!b||!economy||!economicSnapshot||economicSnapshot->catchingUp)return "NO LOCAL PROBE CONTROL LINK";
+                if(pendingEconomicSequence||pendingCrewSequence||pendingSecuritySequence||pendingRecoverySequence||pendingWreck)
+                    return "DRILL CONTROL WAITING / FLIGHT COMPUTER BUSY";
+                EconomicCommand c;c.action=EconomicAction::ControlProbe;c.contract=b->id;c.observer=explorationObserver();
+                c.probeControl=control;c.probeValue=value;
+                c.sequence=economicSequence=std::max(economicSequence,economicSnapshot->player.lastCommand)+1;
+                if(!economy->command(c))return "DRILL CONTROL QUEUE BUSY / RETRY";
+                pendingEconomicSequence=c.sequence;pendingEconomicAction=c.action;return "DRILL CONTROL SENT / AWAITING SAVED RECEIPT";
+            };
+            auto approachProbeEntry = [&]() -> std::string {
+                const auto* b=currentProbe();
+                if(plannerView.tracking&&plannerView.bore&&economicSnapshot)
+                    for(const auto& saved:economicSnapshot->exploration.probes.holes)
+                        if(saved.id==plannerView.bore&&saved.planet.parent()==economicSnapshot->network->system)b=&saved;
+                if (!b || activity.seconds < b->blastTime()) return "NO COMPLETED LOCAL EXCAVATION";
+                probeViewing=false; activity.clearSelection();
+                FlightWaypoint point;
+                point.reference=b->planet; point.metres=b->entry+glm::normalize(b->entry)*25.;
+                point.standOff=5; point.surfacePort=true; point.label="EXCAVATION / BORE ENTRANCE";
+                if(pilot.instruments().phase=="CAVERN EXPLORATION") {
+                    pilot.brake();pilot.trackWaypoint(point);
+                    return "BORE EXIT GUIDANCE / FLY MANUALLY THROUGH THE OPEN SHAFT";
+                }
+                pilot.navigateWaypoint(point);
+                return "BORE ENTRANCE / J APPROACH / Z SHRINK FOR CAREFUL ENTRY";
+            };
+            auto launchProbe = [&]() -> std::string {
+                if (!economy || !economicSnapshot || economicSnapshot->catchingUp || pendingEconomicSequence ||
+                    pendingCrewSequence || pendingSecuritySequence || pendingRecoverySequence || pendingWreck)
+                    return "PROBE LAUNCH WAITING / FLIGHT COMPUTER BUSY";
+                if (probeViewing || specimenProbe.active() || !pilotEnabled)
+                    return "RETURN TO THE PLAYER SHIP BEFORE LAUNCHING";
+                const auto& loadout=economicSnapshot->exploration.probes;
+                if (!loadout.launchers[probeBay])
+                    for (unsigned k=0;k<maxWeaponMounts;++k) if(loadout.launchers[k]) {probeBay=k;break;}
+                if (!loadout.launchers[probeBay]) return "FIT A PROBE LAUNCHER / F2 SURVEY / LEFT-RIGHT BAY";
+                if (!loadout.rounds[probeBay]) return "PROBE BAY EMPTY / RELOAD AT PORT";
+                auto target=nav.selected.value_or(nav.anchor);
+                while(target.kind()>Kind::Planet)target=target.parent();
+                if(target.kind()!=Kind::Planet){target=nav.anchor;while(target.kind()>Kind::Planet)target=target.parent();}
+                if(target.kind()!=Kind::Planet)return "SELECT A SOLID PLANET OR MOON / FACE ITS SURFACE";
+                const bool captain=probeBay==(stationControl.active()?stationControl.mount():0);
+                const double readiness=(captain?1.:crew.gunnerReadiness(probeBay))*
+                    crew.systemHealth(ShipSystem(unsigned(ShipSystem::NoseGun)+probeBay))/100.;
+                if(readiness<.25)return "PROBE BAY NEEDS A READY OPERATOR / F9 CREW";
+                EconomicCommand c;c.action=EconomicAction::LaunchProbe;c.weaponMount=probeBay;
+                c.observer=explorationObserver();c.surveyTarget=target;
+                auto ray=stationControl.ray(nav,pilot,activity.seconds);
+                ray.origin=c.observer->position+nav.orientation*glm::dvec3(weaponMountLateralMetres(probeBay),0,-4);
+                c.probeRay=ray;c.serviceUnits=unsigned(std::clamp(readiness*100,0.,150.));c.probeValue=probeLaunchDepth;c.probeRate=plannerChoice.feed;
+                c.surveyAccount=expeditionAccountFor(economicSnapshot->exploration,plannerChoice.contract,economicSnapshot->network->system);
+                c.sequence=economicSequence=std::max(economicSequence,economicSnapshot->player.lastCommand)+1;
+                if(!economy->command(c))return "PROBE LAUNCH QUEUE BUSY / RETRY";
+                probePreviousId=currentProbe()?currentProbe()->id:0;
+                probeAwaitingLaunch=pendingEconomicSequence=c.sequence;pendingEconomicAction=c.action;
+                return "PROBE LAUNCH REQUESTED / AWAITING SAVED RECEIPT";
+            };
+            auto returnToSeamEntry = [&]() -> std::string {
+                if (const auto* seam = currentSeam()) {
+                    FlightWaypoint point;
+                    point.reference = seam->pool.parent();
+                    point.metres = seam->entryMetres;
+                    point.standOff = 1.5 * pilot.sizeRatio();
+                    point.surfacePort = true;
+                    point.label = "SEAM ENTRY / SAFE REGROWTH";
+                    activity.clearSelection();
+                    selectSeamSource(nav, seam->source);
+                    pilot.brake();
+                    if (pilot.ship().shrinking && nav.anchor.kind() >= Kind::Rock) {
+                        pilot.trackWaypoint(point);
+                        return "ENTRY BEACON / STEER BACK THROUGH OPEN FRACTURES / SHIFT-Z REGROW WHEN CLEAR";
+                    } else {
+                        pilot.navigateWaypoint(point);
+                        return "RETURNING TO ENTRY BEACON / B TAKES HELM / SHIFT-Z REGROW WHEN CLEAR";
+                    }
+                }
+                return "NO ACTIVE SEAM EXPEDITION";
+            };
+            std::unique_ptr<RoundTripVerifier> proof;
+            if (opt.smoke && !opt.benchmark)
+                proof = std::make_unique<RoundTripVerifier>(universe);
+            std::cout << "Infinity / " << renderer.backend() << " / seed " << universe.seed() << '\n'
+                      << std::flush;
+            std::ofstream profile;
+            if (!opt.profile.empty()) {
+                profile.open(opt.profile);
+                profile
+                    << "frame,kind,view_log_m,wall_ms,cpu_ms,gpu_ms,draws,visible,atoms,cpu_cache_bytes,"
+                       "gpu_bytes,pending,lod_transitions,sections,submit_ms,vertices,triangles,"
+                       "particles,upload_bytes,transitioning,queued,cancelled,evicted,atom_triangles,"
+                       "upload_deferred,render_mode,effect_bytes,terrain_tiles,root_cells,activity_"
+                       "bodies,activity_visible,activity_triangles,activity_bytes,material_bytes,"
+                       "surface_sites,surface_buildings,surface_residents,surface_triangles,surface_bytes,"
+                       "surface_gpu_bytes,surface_pending,weather_cells,weather_particles,shadow_bytes,"
+                       "shadow_active,shadow_updates,weather_pending,weather_cache_bytes,weather_gpu_bytes,"
+                       "weather_volumes,prospect_sites,prospect_rocks,prospect_markers,probe_cpu_ms,probe_light_uploads,hidden_exterior\n";
+            }
+            bool running = true, overlay = true, looking = false;
+            bool contactsExpanded=false;
+            bool mouseFlight = false, rightLook = false;
+            int frame = 0, tourStage = 0, stable = 0, captureHold = 0;
+            bool captureQueued = false, returning = false, tourPassed = false;
+            uint64_t compareHash = 0;
+            std::string compareCamera;
+            GenerationStats compareGeneration{};
+            size_t tourVisited = 0;
+            std::vector<std::pair<Address, uint64_t>> visited;
+            std::vector<double> frameTimes;
+            double fps = 60, noticeTime = 6;
+            std::string notice = "C mouse helm / U-O or Alt+A-D roll / J approach / L land / B brake";
+            auto issueDefence = [&](bool build,bool automatic=false){
+                if(!economy||!economicSnapshot||pendingEconomicSequence||pendingCrewSequence||pendingSecuritySequence||pendingRecoverySequence||pendingWreck){
+                    if(!automatic){notice="DEFENCE / WAIT FOR SHIP LEDGER";noticeTime=4;}return false;
+                }
+                auto command=defence.command(*economicSnapshot,explorationObserver(),build);
+                if(!command){if(!automatic){notice=defence.status();noticeTime=5;}return false;}
+                command->sequence=economicSequence=std::max(economicSequence,economicSnapshot->player.lastCommand)+1;
+                if(!economy->command(*command))return false;
+                pendingEconomicSequence=command->sequence;pendingEconomicAction=command->action;
+                defence.sent(command->sequence,build);
+                if(!automatic){notice=defence.status();noticeTime=4;}return true;
+            };
+
+            auto captureLook = [&] {
+                const bool enabled = !discoveryOpen && !vesselOpen && (mouseFlight || rightLook);
+                if (enabled == looking)
+                    return;
+                if (SDL_SetWindowRelativeMouseMode(window, enabled))
+                    looking = enabled;
+                else {
+                    mouseFlight = rightLook = looking = false;
+                    notice = std::string("Mouse capture unavailable: ") + SDL_GetError();
+                    noticeTime = 6;
+                }
+            };
+            auto releaseLook = [&] {
+                mouseFlight = rightLook = false;
+                captureLook();
+            };
+            auto reconRoute = [&] {
+                if(!reconView||!reconView->map||!reconView->target())return;
+                const auto& target=*reconView->target();FlightWaypoint point;
+                point.reference=reconView->map->planet;point.surfacePort=true;
+                point.metres=target.metres+glm::normalize(target.metres)*(target.kind==ReconKind::Entrance?25.:reconView->safeAltitude);
+                point.standOff=10;point.label=target.name;
+                if(target.site)chooseActivity(*target.site);
+                pilot.navigateWaypoint(point);reconOpen=false;
+                notice="SCANNER ROUTE / "+target.name+" / CHECK TERRAIN / L LAND";noticeTime=6;
+            };
+            auto refreshPlanner = [&] {
+                plannerChoice.depth=probeLaunchDepth;plannerChoice.bay=probeBay;
+                PlannerInput input;input.observer=explorationObserver();input.crew=&crew;
+                input.captainMount=stationControl.active()?stationControl.mount():0;
+                input.open=plannerOpen;input.pending=pendingEconomicSequence||pendingCrewSequence||pendingSecuritySequence||pendingRecoverySequence||pendingWreck;
+                plannerView=planCavernExpedition(universe,economicSnapshot.get(),plannerChoice,input);
+                if(economicSnapshot&&plannerView.contract)
+                    if(auto i=economicSnapshot->siteIndex(plannerView.issuer);
+                       i&&economicTradeAccess(universe,nav,pilot,economicSnapshot->network->sites[*i])){
+                        input.connectedIssuer=true;plannerView=planCavernExpedition(universe,economicSnapshot.get(),plannerChoice,input);}
+                if(!plannerChoice.contract&&plannerView.contract){plannerChoice.contract=plannerView.contract;plannerChoice.tracking=plannerView.tracking;}
+                if(plannerFeedbackSeconds>0)plannerView.message=plannerFeedback;
+            };
+            auto openPlanner = [&] {
+                plannerOpen=!plannerOpen;
+                if(plannerOpen){marketOpen=crewOpen=crewFlightOpen=probeViewing=false;overlay=true;releaseLook();}
+                refreshPlanner();
+            };
+            auto plannerSetting = [&](unsigned setting,int direction) {
+                if(setting==0)probeLaunchDepth=std::clamp(probeLaunchDepth+direction*10,40.,120.);
+                if(setting==1)plannerChoice.feed=std::clamp(plannerChoice.feed+direction*.15,.35,1.5);
+                if(setting==2)probeBay=unsigned((int(probeBay)+int(maxWeaponMounts)+direction)%int(maxWeaponMounts));
+                refreshPlanner();
+            };
+            auto plannerRoute = [&](bool fly) {
+                refreshPlanner();const auto& plan=plannerView;if(!plan.contract)return;
+                plannerOpen=false;activity.clearSelection();
+                if(plan.stage>=PlanStage::Overview&&plan.stage<=PlanStage::Extract) {
+                    cavernSelection=plan.find;notice="EXPEDITION DEPOSIT SELECTED / FOLLOW THE CAVERN TARGET";
+                } else if(plan.returnToPort) {
+                    if(economicSnapshot&&economicSnapshot->siteIndex(plan.issuer)) {
+                        chooseActivity(plan.issuer);
+                        if(auto body=activityBody()){
+                            if(fly)pilot.navigateWaypoint(waypointFor(*body));else pilot.trackWaypoint(waypointFor(*body));
+                        }
+                        notice="ASSAY ISSUER TARGETED / J APPROACH / DOCK OR LAND TO DELIVER";
+                    }else{
+                        pilot.clearWaypoint();if(fly)pilot.navigate(plan.issuer.home);else nav.select(plan.issuer.home);
+                        notice="ISSUER WORLD TARGETED / LOCAL PORT ROUTE AVAILABLE ON ARRIVAL";
+                    }
+                } else if(plan.entrance&&(plan.stage==PlanStage::Enter||plan.stage==PlanStage::Return)) {
+                    FlightWaypoint point;point.reference=plan.world;point.metres=*plan.entrance+glm::normalize(*plan.entrance)*25.;
+                    point.standOff=5;point.surfacePort=true;point.label="EXPEDITION / SAVED BORE ENTRANCE";
+                    if(plan.stage==PlanStage::Return){pilot.trackWaypoint(point);notice="EXIT GUIDANCE / FLY MANUALLY THROUGH THE SHAFT";}
+                    else {if(fly)pilot.navigateWaypoint(point);else pilot.trackWaypoint(point);notice="EXPEDITION ENTRANCE TARGETED / J APPROACH";}
+                } else if(plan.worksite&&(plan.stage==PlanStage::Travel||plan.stage==PlanStage::Drill)) {
+                    FlightWaypoint point;point.reference=plan.world;point.metres=*plan.worksite+glm::normalize(*plan.worksite)*500.;
+                    point.standOff=25;point.surfacePort=true;point.label="LOCAL SUPPLY / RESOURCE REGION";
+                    if(fly)pilot.navigateWaypoint(point);else pilot.trackWaypoint(point);
+                    notice="RESOURCE REGION TARGETED / CHECK WEATHER / LAND ON EXPOSED GROUND / CTRL-P DRILL";
+                } else {
+                    pilot.clearWaypoint();if(fly)pilot.navigate(plan.world);else if(plan.world!=nav.anchor)nav.select(plan.world);
+                    notice="EXPEDITION WORLD TARGETED / J APPROACH / FACE SOLID LAND";
+                }
+                noticeTime=7;refreshPlanner();
+            };
+            auto plannerEquipment = [&] {
+                refreshPlanner();if(!economicSnapshot||!economicSnapshot->network)return;
+                plannerOpen=false;marketOpen=true;crewOpen=crewFlightOpen=false;
+                selectMarket();marketPage=plannerView.equipmentPage;marketGood=plannerView.equipmentRow;marketWeaponMount=plannerView.equipmentMount;
+                releaseLook();
+            };
+            auto plannerContract = [&](EconomicAction action) {
+                refreshPlanner();if(!plannerView.primaryEnabled||!economy||!economicSnapshot||plannerView.busy)return;
+                EconomicCommand c;c.action=action;c.contract=plannerView.contract;c.port=plannerView.issuer;c.observer=explorationObserver();
+                c.sequence=economicSequence=std::max(economicSequence,economicSnapshot->player.lastCommand)+1;
+                if(economy->command(c)){
+                    if(action==EconomicAction::ClaimSurvey)surveyDeliveryAwaiting=c.contract;
+                    pendingEconomicSequence=plannerPending=c.sequence;pendingEconomicAction=c.action;
+                    plannerChoice.tracking=true;plannerChoice.contract=c.contract;
+                    plannerFeedback="ORDER SENT / AWAITING SAVED RECEIPT";
+                }else plannerFeedback="FLIGHT COMPUTER BUSY / RETRY";
+                plannerFeedbackSeconds=8;refreshPlanner();
+            };
+            auto plannerAction = [&](unsigned action) {
+                refreshPlanner();
+                if(action==0){if(!plannerView.primaryEnabled)return;
+                    switch(plannerView.primary){
+                    case PlannerAction::Accept:plannerContract(EconomicAction::AcceptSurvey);break;
+                    case PlannerAction::Deliver:plannerContract(EconomicAction::ClaimSurvey);break;
+                    case PlannerAction::Course:plannerRoute(true);break;
+                    case PlannerAction::Equipment:plannerEquipment();break;
+                    case PlannerAction::Crew:plannerOpen=false;crewFlightOpen=true;crewOpen=marketOpen=false;releaseLook();break;
+                    case PlannerAction::Resume:plannerOpen=false;break;
+                    case PlannerAction::Next:
+                        plannerChoice.contract=plannerView.nextContract;plannerChoice.bore=0;plannerChoice.newSite=false;plannerChoice.tracking=false;
+                        plannerFeedback.clear();plannerFeedbackSeconds=0;break;
+                    }
+                }else if(action==1)plannerRoute(false);
+                else if(action==2)plannerEquipment();
+                else if(action==3){plannerOpen=false;crewFlightOpen=true;crewOpen=marketOpen=false;releaseLook();}
+                else if(action==4){plannerChoice.contract=plannerView.contract;plannerChoice.tracking=!plannerChoice.tracking;}
+                else if(action==5){probeLaunchDepth=plannerView.suggestedDepth;plannerChoice.feed=plannerView.suggestedFeed;}
+                refreshPlanner();
+            };
+            auto previous = std::chrono::steady_clock::now();
+            auto start = previous;
+            auto targetMarketRoute = [&](bool destination) {
+                if (!economicSnapshot || marketGood >= economicSnapshot->routes.size())
+                    return;
+                const auto& route = economicSnapshot->routes[marketGood];
+                tradeBuyer = economicSnapshot->network->sites[route.destination].id;
+                tradeGood = route.good;
+                tradeKg = route.kg;
+                tradeHint = "F4 BUYER " + economicSnapshot->network->sites[route.destination].name + " / " +
+                            std::to_string(route.kg) + " KG " + std::string(goodInfo(route.good).name);
+                marketPage = MarketPage::Goods;
+                marketGood = size_t(route.good);
+                marketQuantity = route.kg;
+                marketOpen = false;
+                chooseActivity(
+                    economicSnapshot->network->sites[destination ? route.destination : route.source].id);
+                notice = destination ? "TRADE BUYER TARGETED / J APPROACH / F2 MARKET"
+                                     : "SUPPLIER TARGETED / J APPROACH / F2 BUY / F4 BUYER";
+                noticeTime = 5;
+            };
+            auto targetTradeBuyer = [&]() {
+                if (!tradeBuyer || !economicSnapshot || !economicSnapshot->siteIndex(*tradeBuyer))
+                    return false;
+                chooseActivity(*tradeBuyer);
+                marketOpen = false;
+                marketGood = size_t(tradeGood);
+                marketQuantity =
+                    std::max<int64_t>(1, std::min(tradeKg, economicSnapshot->player.cargo[marketGood]));
+                notice = "TRADE BUYER TARGETED / J APPROACH / F2 SELL";
+                noticeTime = 5;
+                return true;
+            };
+            auto targetActiveHaul = [&](bool returnSource = false) {
+                if (!economicSnapshot || !economicSnapshot->player.haul)
+                    return false;
+                const auto& h = *economicSnapshot->player.haul;
+                marketOpen = false;
+                if (!economicSnapshot->network || h.system != economicSnapshot->network->system) {
+                    activity.clearSelection();
+                    pilot.brake();
+                    pilot.clearWaypoint();
+                    nav.select(h.system);
+                    notice = "ACTIVE HAUL'S SYSTEM TARGETED / J APPROACH / CTRL-N WARP";
+                } else {
+                    chooseActivity(returnSource || !h.onboard ? h.source : h.destination);
+                    notice = returnSource ? "HAUL RETURN SOURCE / J APPROACH / F2 JOBS"
+                             : h.onboard  ? "HAUL DELIVERY / J APPROACH / F2 JOBS"
+                                          : "HAUL PICKUP / J APPROACH / F2 JOBS";
+                }
+                noticeTime = 6;
+                return true;
+            };
+            auto targetSecuritySystem = [&]() {
+                if (!economicSnapshot || !economicSnapshot->player.combatJob || !economicSnapshot->network ||
+                    economicSnapshot->player.combatJob->system == economicSnapshot->network->system)
+                    return false;
+                activity.clearSelection();
+                pilot.brake();
+                pilot.clearWaypoint();
+                nav.select(economicSnapshot->player.combatJob->system);
+                marketOpen = false;
+                notice = "SECURITY CONTRACT SYSTEM TARGETED / J APPROACH / CTRL-N WARP";
+                noticeTime = 6;
+                return true;
+            };
+            auto selectedJob = [&]() -> const EconomySnapshot::Job* {
+                return economicSnapshot && marketGood < economicSnapshot->jobs.size()
+                           ? &economicSnapshot->jobs[marketGood]
+                           : nullptr;
+            };
+            auto targetJob = [&](bool returnSource) {
+                if (targetSecuritySystem())
+                    return;
+                if (economicSnapshot && economicSnapshot->player.haul && economicSnapshot->network &&
+                    economicSnapshot->player.haul->system != economicSnapshot->network->system) {
+                    targetActiveHaul(returnSource);
+                    return;
+                }
+                const auto* job = selectedJob();
+                if (!job)
+                    return;
+                if (returnSource && job->haul && economicSnapshot->player.haul &&
+                    economicSnapshot->player.haul->id == job->id) {
+                    targetActiveHaul(true);
+                    return;
+                }
+                chooseActivity(job->target);
+                marketOpen = false;
+                notice = job->distress && job->action == EconomicAction::RecoverWreck
+                    ? "DISTRESS CONTACT TARGETED / J APPROACH / HOLD 0 CLOSE AND SLOW"
+                    : "JOB PORT TARGETED / J APPROACH / F2 JOBS";
+                noticeTime = 6;
+            };
+
+            auto leaveSpecimen = [&] {
+                if (!specimenProbe.leave(nav, pilot))
+                    return;
+                activity.selected = parkedSelection;
+                activity.combatSelection = parkedCombatSelection;
+                activity.enabled = parkedActivityEnabled;
+                renderer.setSpecimen({});
+                renderer.setActivity(&activity);
+                renderer.setWeapons(&weapons);
+                renderer.setNpcCombat(&npcCombat);
+                pilotEnabled = true;
+                surveyController.reset();
+                miningController.reset();
+                notice = "BACK ABOARD / SAME PARKED SHIP / CORE ASSAYS RETAINED";
+                noticeTime = 7;
+            };
+            while (running) {
+                auto now = std::chrono::steady_clock::now();
+                double wall = std::chrono::duration<double>(now - previous).count();
+                previous = now;
+                double dt = std::clamp(wall, .0001, .05);
+                fps = glm::mix(fps, 1 / std::max(wall, .0001), .035);
+                double mouseX = 0, mouseY = 0;
+                SDL_Event event;
+                while (SDL_PollEvent(&event)) {
+                    // Offline/native fixtures must not consume incidental mouse
+                    // or typing events from the desktop running the tests.
+                    if (opt.smoke && event.type != SDL_EVENT_QUIT &&
+                        event.type != SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED)
+                        continue;
+                    if (event.type == SDL_EVENT_QUIT)
+                        running = false;
+                    if (event.type == SDL_EVENT_WINDOW_FOCUS_LOST)
+                        releaseLook();
+                    if (!opt.smoke && (event.type == SDL_EVENT_WINDOW_DISPLAY_CHANGED ||
+                                       event.type == SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED ||
+                                       event.type == SDL_EVENT_WINDOW_RESTORED ||
+                                       event.type == SDL_EVENT_DISPLAY_CONTENT_SCALE_CHANGED ||
+                                       event.type == SDL_EVENT_DISPLAY_DESKTOP_MODE_CHANGED))
+                        fitWindowToDisplay(window, false);
+                    if (event.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED) {
+                        int w, h;
+                        SDL_GetWindowSizeInPixels(window, &w, &h);
+                        renderer.resize(w, h);
+                    }
+                    if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+                        if(vesselOpen||discoveryOpen)continue;
+                        if(reconOpen&&reconView&&!plannerOpen&&!discoveryOpen&&!vesselOpen&&!marketOpen&&!crewOpen&&!crewFlightOpen){
+                            if(event.button.button==SDL_BUTTON_LEFT){
+                                int w,h,pw,ph;SDL_GetWindowSize(window,&w,&h);SDL_GetWindowSizeInPixels(window,&pw,&ph);
+                                const auto viewport=renderer.cockpitViewport();const auto p=viewport.toCanvas({event.button.x*pw/w,event.button.y*ph/h});
+                                const auto area=surfaceReconMapRect(viewport.aspect());
+                                if(area.contains(p))if(auto id=pickReconPoint(*reconView,{(p.x-area.x)/area.w*2-1,(p.y-area.y)/area.h*2-1})){
+                                    reconSelected=*id;reconRefresh=0;
+                                }
+                            }
+                            continue;
+                        }
+                        if(plannerOpen) {
+                            if(event.button.button==SDL_BUTTON_LEFT){
+                                refreshPlanner();int w,h,pw,ph;SDL_GetWindowSize(window,&w,&h);SDL_GetWindowSizeInPixels(window,&pw,&ph);
+                                const auto viewport=renderer.cockpitViewport();const auto point=viewport.toCanvas({event.button.x*pw/w,event.button.y*ph/h});
+                                const PlannerLayout layout(viewport.aspect(),plannerView.details,&plannerView);
+                                if(layout.details.contains(point)){plannerChoice.details=!plannerChoice.details;refreshPlanner();continue;}
+                                if(layout.close.contains(point)){plannerOpen=false;refreshPlanner();continue;}
+                                for(size_t i=0;i<(plannerView.details?layout.offers.size():size_t(1));++i)if(layout.offers[i].contains(point)&&plannerView.firstOffer+i<plannerView.offers.size()){
+                                    const auto& offer=plannerView.offers[plannerView.firstOffer+i];plannerChoice.contract=offer.id;
+                                    plannerChoice.bore=0;plannerChoice.newSite=false;plannerChoice.tracking=offer.phase==SurveyPhase::Accepted;plannerFeedback.clear();plannerFeedbackSeconds=0;
+                                }
+                                if(plannerView.details)for(unsigned i=0;i<layout.minus.size();++i){if(layout.minus[i].contains(point))plannerSetting(i,-1);if(layout.plus[i].contains(point))plannerSetting(i,1);}
+                                for(unsigned i=0;i<layout.actions.size();++i)if(layout.actions[i].w>0&&layout.actions[i].contains(point))plannerAction(i);
+                                refreshPlanner();
+                            }
+                            continue;
+                        }
+                        if (!looking && overlay && !probeViewing && !plannerOpen && !marketOpen &&
+                            !crewOpen && !reconOpen && !specimenProbe.active() && !contactsExpanded &&
+                            event.button.button == SDL_BUTTON_LEFT) {
+                            int w,h,pw,ph;SDL_GetWindowSize(window,&w,&h);SDL_GetWindowSizeInPixels(window,&pw,&ph);
+                            const auto viewport=renderer.cockpitViewport();
+                            const auto point=viewport.toCanvas({event.button.x*pw/w,event.button.y*ph/h});
+                            const auto map=crewMinimap(crewView,viewport.aspect());
+                            if(renderer.engineeringHit(event.button.x*pw/w,event.button.y*ph/h)) {
+                                const EngineeringLayout layout(viewport.aspect());
+                                for(size_t i=0;i<4;++i)if(layout.presets[i].contains(point))crewFeedback=crew.powerPreset(PowerPreset(i));
+                                for(size_t i=0;i<4;++i)if(layout.actions[i].contains(point)){
+                                    if(i<2){if(crewFlightOpen)crewFeedback=crew.isolate(crewStation,i==0);
+                                        else{crewFlightOpen=true;crewFeedback="SELECT A ROOM / ISOLATE OR OPEN BULKHEADS";}}
+                                    if(i==2)crewFeedback=crew.flushCooling();
+                                    if(i==3)crewFeedback=supplyEngineering();
+                                }
+                                notice=crewFeedback;noticeTime=5;continue;
+                            }
+                            if(renderer.crewMinimapHit(event.button.x*pw/w,event.button.y*ph/h)) {
+                                if(!pilotEnabled){notice="V RETURN TO SHIP / F9 CREW ORDERS";noticeTime=5;continue;}
+                                if(const auto id=map.pickCrew(point)) {
+                                    const auto found=std::find_if(crew.members().begin(),crew.members().end(),[&](const auto& m){return m.id==*id;});
+                                    if(found!=crew.members().end())crewSelected=size_t(found-crew.members().begin());
+                                } else if(const auto room=map.pickRoom(point))crewStation=*room;
+                                crewFlightOpen=true;releaseLook();
+                                crewFeedback="CREW MAP / SELECTED / CHOOSE AN ORDER";
+                                continue;
+                            }
+                        }
+                        if (crewFlightOpen && !crewOpen && !marketOpen && pilotEnabled &&
+                            event.button.button == SDL_BUTTON_LEFT) {
+                            int w, h, pw, ph;
+                            SDL_GetWindowSize(window, &w, &h);
+                            SDL_GetWindowSizeInPixels(window, &pw, &ph);
+                            const auto viewport = renderer.cockpitViewport();
+                            const auto point =
+                                viewport.toCanvas({event.button.x * pw / w, event.button.y * ph / h});
+                            const CrewFlightLayout layout(viewport.aspect());
+                            if (layout.panel.contains(point)) {
+                                for (size_t i = 0; i < crew.members().size(); ++i)
+                                    if (layout.roster[i].contains(point))
+                                        crewSelected = i;
+                                for (size_t i = 0; i < crewRoomCount; ++i)
+                                    if (layout.rooms[i].contains(point))
+                                        crewStation = CrewStation(i);
+                                for (size_t i = 0; i < layout.actions.size(); ++i)
+                                    if (layout.actions[i].contains(point))
+                                        crewCommand(CrewCommand(i));
+                                for (unsigned i = 0; i < maxWeaponMounts; ++i)
+                                    if (layout.guns[i].contains(point))
+                                        crewFeedback = crew.manWeapon(crewSelected, i);
+                                if (layout.automatic.contains(point))
+                                    crewCommand(CrewCommand::Automatic);
+                                continue;
+                            }
+                        }
+                        if (crewOpen) {
+                            if (event.button.button == SDL_BUTTON_LEFT) {
+                                int w, h, pw, ph;
+                                SDL_GetWindowSize(window, &w, &h);
+                                SDL_GetWindowSizeInPixels(window, &pw, &ph);
+                                const auto viewport = renderer.cockpitViewport();
+                                const auto point =
+                                    viewport.toCanvas({event.button.x * pw / w, event.button.y * ph / h});
+                                const CrewPanelLayout layout(viewport.aspect());
+                                for (size_t i = 0; i < crew.members().size(); ++i)
+                                    if (layout.roster[i].contains(point))
+                                        crewSelected = i;
+                                for (size_t i = 0; i < crewRoomCount; ++i)
+                                    if (layout.rooms[i].contains(point)) {
+                                        crewStation = CrewStation(i);
+                                        crewFeedback = crew.assign(crewSelected, crewStation);
+                                    }
+                            }
+                            continue;
+                        }
+                        if (event.button.button == SDL_BUTTON_RIGHT) {
+                            rightLook = true;
+                            captureLook();
+                        } else if (event.button.button == SDL_BUTTON_LEFT) {
+                            if (probeViewing) continue;
+                            int w, h, pw, ph;
+                            SDL_GetWindowSize(window, &w, &h);
+                            SDL_GetWindowSizeInPixels(window, &pw, &ph);
+                            const double x = looking ? pw * .5 : event.button.x * pw / w;
+                            const double y = looking ? ph * .5 : event.button.y * ph / h;
+                            if(!looking&&renderer.contactsToggleHit(x,y)){
+                                contactsExpanded=!contactsExpanded;
+                                if(contactsExpanded&&noticeTime>0)noticeTime=std::max(noticeTime,30.);
+                            } else if (pilotEnabled && renderer.pickActivity(x, y)) {
+                                chooseActivity(*renderer.pickActivity(x, y));
+                                notice = hailActivity(*activityBody());
+                                noticeTime = 6;
+                            } else if (auto a = renderer.pick(x, y)) {
+                                activity.clearSelection();
+                                pilot.clearWaypoint();
+                                if (pilotEnabled && a->kind() == Kind::Planet)
+                                    pilot.selectPlanet(*a);
+                                else
+                                    nav.select(*a);
+                                if (const auto* site = selectedProspect(); site && !pilot.ship().shrinking)
+                                    pilot.trackWaypoint(prospectWaypointFor(*site));
+                                notice = "Selected " + universe.describe(*a).label() +
+                                         " / J navigate / F explorer focus";
+                                noticeTime = 4;
+                            }
+                        }
+                    }
+                    if (event.type == SDL_EVENT_MOUSE_BUTTON_UP && event.button.button == SDL_BUTTON_RIGHT) {
+                        rightLook = false;
+                        captureLook();
+                    }
+                    if (event.type == SDL_EVENT_MOUSE_MOTION && looking && !plannerOpen && !crewOpen &&
+                        (event.motion.xrel != 0 || event.motion.yrel != 0)) {
+                        if (probeViewing) {
+                            probeLook.x=std::clamp(probeLook.x-event.motion.xrel*.0025,-1.25,1.25);
+                            probeLook.y=std::clamp(probeLook.y-event.motion.yrel*.0025,-.8,.8);
+                        } else if (pilotEnabled) {
+                            mouseX += event.motion.xrel;
+                            mouseY += event.motion.yrel;
+                        } else
+                            nav.rotate(event.motion.xrel, event.motion.yrel);
+                        opt.tour = false;
+                    }
+                    if(plannerOpen&&event.type==SDL_EVENT_MOUSE_WHEEL){refreshPlanner();cyclePlannerContract(plannerChoice,plannerView,event.wheel.y>0?-1:1);refreshPlanner();continue;}
+                    if (crewOpen && event.type == SDL_EVENT_MOUSE_WHEEL)
+                        continue;
+                    if (crewFlightOpen && !marketOpen && pilotEnabled &&
+                        event.type == SDL_EVENT_MOUSE_WHEEL) {
+                        float x, y;
+                        int w, h, pw, ph;
+                        SDL_GetMouseState(&x, &y);
+                        SDL_GetWindowSize(window, &w, &h);
+                        SDL_GetWindowSizeInPixels(window, &pw, &ph);
+                        const auto viewport = renderer.cockpitViewport();
+                        if (CrewFlightLayout(viewport.aspect())
+                                .panel.contains(viewport.toCanvas({x * pw / w, y * ph / h}))) {
+                            if (!crew.members().empty() && event.wheel.y != 0)
+                                crewSelected =
+                                    (crewSelected + crew.members().size() + (event.wheel.y > 0 ? -1 : 1)) %
+                                    crew.members().size();
+                            continue;
+                        }
+                    }
+                    if (marketOpen && event.type == SDL_EVENT_MOUSE_WHEEL && event.wheel.y != 0) {
+                        marketGood =
+                            (marketGood + marketRows() + (event.wheel.y > 0 ? -1 : 1)) % marketRows();
+                        continue;
+                    }
+                    if (event.type == SDL_EVENT_MOUSE_WHEEL && event.wheel.y != 0 && specimenProbe.active()) {
+                        pilot.adjustSize(event.wheel.y * -.25);
+                        continue;
+                    }
+                    if (event.type == SDL_EVENT_MOUSE_WHEEL && event.wheel.y != 0) {
+                        if(probeViewing)continue;
+                        if (stationControl.requested())
+                            stationControl.returnToHelm(crew);
+                        nav.zoom(event.wheel.y);
+                        if (pilotEnabled) {
+                            pilotEnabled = false;
+                            pilot.resetMotion();
+                        }
+                        opt.tour = false;
+                    }
+                    if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat) {
+                        if(event.key.scancode==SDL_SCANCODE_F11&&(event.key.mod&SDL_KMOD_CTRL)&&pilotEnabled&&!probeViewing&&!specimenProbe.active()){
+                            discoveryOpen=!discoveryOpen;
+                            if(discoveryOpen){plannerOpen=marketOpen=crewOpen=crewFlightOpen=reconOpen=vesselOpen=false;renderer.closeCockpitHelp();overlay=true;releaseLook();}
+                            mouseX=mouseY=0;continue;
+                        }
+                        if(discoveryOpen){
+                            if(event.key.scancode==SDL_SCANCODE_SPACE)radioConsumedFire=true;
+                            switch(event.key.scancode){
+                            case SDL_SCANCODE_ESCAPE:discoveryOpen=false;break;
+                            case SDL_SCANCODE_F1:discoveryOpen=false;renderer.toggleCockpitHelp();break;
+                            case SDL_SCANCODE_LEFTBRACKET:discoveries.tune(-1);break;
+                            case SDL_SCANCODE_RIGHTBRACKET:discoveries.tune(1);break;
+                            case SDL_SCANCODE_LEFT:discoveries.tune(-10);break;
+                            case SDL_SCANCODE_RIGHT:discoveries.tune(10);break;
+                            case SDL_SCANCODE_TAB:discoveries.nextCarrier(event.key.mod&SDL_KMOD_SHIFT?-1:1);break;
+                            case SDL_SCANCODE_L:discoveries.toggleJournal();break;
+                            case SDL_SCANCODE_P:discoveries.toggleMonitor();break;
+                            case SDL_SCANCODE_N:discoveries.toggleAssistance();break;
+                            case SDL_SCANCODE_C:discoveries.nextCall();break;
+                            case SDL_SCANCODE_V:discoveries.nextShip();break;
+                            case SDL_SCANCODE_S:if(const auto id=discoveries.shipContact())activity.select(*id,true);break;
+                            case SDL_SCANCODE_R:{
+                                if(!economy||!economicSnapshot){notice="LOCAL ECONOMY NOT READY";noticeTime=5;break;}
+                                if(pendingEconomicSequence||pendingCrewSequence||pendingSecuritySequence||pendingRecoverySequence||pendingWreck){notice="RADIO RESPONSE / WAITING FOR SAVED ORDER";noticeTime=5;break;}
+                                auto command=signalResponse(discoveries,*economicSnapshot);
+                                if(!command){notice="DECODE AN OPEN CALL FIRST / OFFER MAY HAVE CLOSED";noticeTime=5;break;}
+                                command->sequence=economicSequence=std::max(economicSequence,economicSnapshot->player.lastCommand)+1;
+                                if(economy->command(*command)){pendingEconomicSequence=command->sequence;pendingEconomicAction=command->action;notice="RADIO RESPONSE SENT / AWAITING LEDGER";noticeTime=5;}
+                                break;
+                            }
+                            case SDL_SCANCODE_B:pilot.brake();break;
+                            case SDL_SCANCODE_UP:discoveries.nextJournal(-1);break;
+                            case SDL_SCANCODE_DOWN:discoveries.nextJournal(1);break;
+                            case SDL_SCANCODE_1:case SDL_SCANCODE_2:case SDL_SCANCODE_3:discoveries.evidence(unsigned(event.key.scancode-SDL_SCANCODE_1));break;
+                            case SDL_SCANCODE_T:discoveries.hypothesis();break;
+                            case SDL_SCANCODE_RETURN:{const auto* record=discoveries.record();notice=record&&record->facts==7?discoveries.conclude():discoveries.recordBearing();noticeTime=6;break;}
+                            case SDL_SCANCODE_G:if(const auto target=discoveries.target()){pilot.adjustSize(std::log10(target->size)-pilot.ship().targetLogSize);notice="PROBE SIZE REQUESTED / SAME SHIP / TINY HULL IS FRAGILE";noticeTime=6;}break;
+                            case SDL_SCANCODE_J:if(const auto target=discoveries.target()){
+                                FlightWaypoint point;point.reference=target->reference;point.metres=target->metres;point.standOff=target->standOff;point.surfacePort=target->surface;point.label=target->label;
+                                if(target->contact){chooseActivity(*target->contact);if(const auto body=activityBody())point=waypointFor(*body);}
+                                else activity.clearSelection();
+                                pilot.navigateWaypoint(point);discoveryOpen=false;
+                                notice=target->contact?"RADIO CONTACT SELECTED / F2 PORT JOBS / 0 SHIP RECOVERY / CTRL-0 BOARD":"DISCOVERY COURSE / CTRL-F11 RECEIVER / G MATCH SIZE IN CONSOLE";noticeTime=6;
+                            }else{notice="TRIANGULATE WITH TWO SEPARATED BEARINGS FIRST";noticeTime=5;}break;
+                            default:break;
+                            }
+                            continue;
+                        }
+                        if(event.key.scancode==SDL_SCANCODE_0 && (event.key.mod&SDL_KMOD_CTRL) && pilotEnabled && !probeViewing && !specimenProbe.active()) {
+                            vesselOpen=!vesselOpen;
+                            if(vesselOpen){plannerOpen=marketOpen=crewOpen=crewFlightOpen=reconOpen=false;overlay=true;releaseLook();}
+                            mouseX=mouseY=0;continue;
+                        }
+                        if(vesselOpen){
+                            if(event.key.scancode==SDL_SCANCODE_ESCAPE){vesselOpen=false;continue;}
+                            if(event.key.scancode==SDL_SCANCODE_F9){vesselOpen=false;crewFlightOpen=true;continue;}
+                            if(event.key.scancode==SDL_SCANCODE_4)vesselOperations.recall();
+                            if(event.key.scancode>=SDL_SCANCODE_1&&event.key.scancode<=SDL_SCANCODE_3){
+                                if(const auto body=activityBody())notice=vesselOperations.begin(VesselTask(unsigned(event.key.scancode-SDL_SCANCODE_1)+1),*body,npcCombat.engineering(body->id),crew);
+                                noticeTime=5;
+                            }
+                            continue;
+                        }
+                        if(event.key.scancode==SDL_SCANCODE_F3&&pilotEnabled&&!specimenProbe.active()&&
+                           (!marketOpen||marketPage==MarketPage::Survey||plannerOpen)) {openPlanner();continue;}
+                        if(plannerOpen) {
+                            switch(event.key.scancode){
+                            case SDL_SCANCODE_ESCAPE:plannerOpen=false;refreshPlanner();break;
+                            case SDL_SCANCODE_UP:refreshPlanner();cyclePlannerContract(plannerChoice,plannerView,-1);refreshPlanner();break;
+                            case SDL_SCANCODE_DOWN:refreshPlanner();cyclePlannerContract(plannerChoice,plannerView,1);refreshPlanner();break;
+                            case SDL_SCANCODE_LEFT:case SDL_SCANCODE_RIGHT:
+                                plannerSetting(event.key.mod&SDL_KMOD_CTRL?2:event.key.mod&SDL_KMOD_SHIFT?1:0,event.key.scancode==SDL_SCANCODE_LEFT?-1:1);break;
+                            case SDL_SCANCODE_RETURN:plannerAction(0);break;
+                            case SDL_SCANCODE_F4:plannerAction(1);break;
+                            case SDL_SCANCODE_F2:plannerAction(2);break;
+                            case SDL_SCANCODE_F9:plannerAction(3);break;
+                            case SDL_SCANCODE_T:plannerAction(4);break;
+                            case SDL_SCANCODE_R:plannerAction(5);break;
+                            case SDL_SCANCODE_D:plannerChoice.details=!plannerChoice.details;refreshPlanner();break;
+                            case SDL_SCANCODE_B:if(economicSnapshot)cyclePlannerBore(plannerChoice,plannerView,economicSnapshot->exploration);refreshPlanner();break;
+                            case SDL_SCANCODE_N:plannerChoice.bore=0;plannerChoice.newSite=true;refreshPlanner();break;
+                            case SDL_SCANCODE_F1:plannerOpen=false;renderer.toggleCockpitHelp();break;
+                            default:break;
+                            }
+                            continue;
+                        }
+                        if (event.key.scancode == SDL_SCANCODE_P && (event.key.mod & SDL_KMOD_ALT)) {
+                            if (currentProbe() && pilotEnabled && !specimenProbe.active()) {
+                                probeViewing=!probeViewing;probeLook={};mouseX=mouseY=0;
+                                if(probeViewing){pilot.brake();marketOpen=crewOpen=false;}
+                                notice=probeViewing?"PROBE CAMERA / ESC OR ALT-P RETURNS TO SHIP":"PLAYER SHIP / CTRL-J BORE ENTRY / ALT-P CAMERA";
+                            } else notice=!pilotEnabled?"V RETURNS TO THE SHIP / ALT-P PROBE CAMERA"
+                                                       :"NO LOCAL PROBE CAMERA / CTRL-P LAUNCH";
+                            noticeTime=5;continue;
+                        }
+                        if (probeViewing) {
+                            if(event.key.scancode==SDL_SCANCODE_ESCAPE){probeViewing=false;probeLook={};notice="PLAYER SHIP / CTRL-J BORE ENTRY / ALT-P CAMERA";noticeTime=5;continue;}
+                            if(const auto* b=currentProbe()) {
+                                const auto operation=probeOperation(*b,activity.seconds);
+                                std::optional<ProbeControl> control;double value=0;
+                                if(event.key.scancode==SDL_SCANCODE_P&&!(event.key.mod&(SDL_KMOD_CTRL|SDL_KMOD_ALT|SDL_KMOD_SHIFT)))
+                                    control=operation.phase==ProbePhase::Paused?ProbeControl::Resume:ProbeControl::Pause;
+                                else if(event.key.scancode==SDL_SCANCODE_LEFTBRACKET||event.key.scancode==SDL_SCANCODE_RIGHTBRACKET) {
+                                    control=ProbeControl::Depth;value=std::clamp(operation.target+(event.key.scancode==SDL_SCANCODE_LEFTBRACKET?-10:10),40.,120.);
+                                } else if(event.key.scancode==SDL_SCANCODE_MINUS||event.key.scancode==SDL_SCANCODE_EQUALS) {
+                                    control=ProbeControl::Rate;value=std::clamp(operation.rate+(event.key.scancode==SDL_SCANCODE_MINUS?-.15:.15),.35,1.5);
+                                } else if(event.key.scancode==SDL_SCANCODE_R)control=ProbeControl::Retract;
+                                else if(event.key.scancode==SDL_SCANCODE_RETURN)control=ProbeControl::Detonate;
+                                if(control){notice=drillControl(*control,value);noticeTime=5;continue;}
+                            }
+                            if(event.key.scancode!=SDL_SCANCODE_P&&event.key.scancode!=SDL_SCANCODE_C&&
+                               event.key.scancode!=SDL_SCANCODE_TAB)continue;
+                        }
+                        if(!probeViewing&&!discoveryOpen&&!vesselOpen&&!marketOpen&&!crewOpen&&pilotEnabled&&(event.key.mod&SDL_KMOD_ALT)&&
+                           (event.key.scancode==SDL_SCANCODE_LEFTBRACKET||event.key.scancode==SDL_SCANCODE_RIGHTBRACKET)) {
+                            probeLaunchDepth=std::clamp(probeLaunchDepth+(event.key.scancode==SDL_SCANCODE_LEFTBRACKET?-10:10),40.,120.);
+                            notice="PROBE DEPTH PRESET "+std::to_string(int(probeLaunchDepth))+" M / CTRL-P LAUNCH";noticeTime=5;continue;
+                        }
+                        if (event.key.scancode == SDL_SCANCODE_P && (event.key.mod & SDL_KMOD_CTRL)) {
+                            notice=launchProbe();noticeTime=7;continue;
+                        }
+                        if (event.key.scancode == SDL_SCANCODE_P && (event.key.mod & SDL_KMOD_SHIFT)) {
+                            if(economicSnapshot)
+                                for(unsigned k=1;k<=maxWeaponMounts;++k){const auto m=(probeBay+k)%maxWeaponMounts;
+                                    if(economicSnapshot->exploration.probes.launchers[m]){probeBay=m;break;}}
+                            notice="PROBE LAUNCH BAY / "+std::string(weaponMountName(probeBay));noticeTime=5;continue;
+                        }
+                        if (event.key.scancode == SDL_SCANCODE_F12 && (event.key.mod & SDL_KMOD_ALT) &&
+                            !(event.key.mod & (SDL_KMOD_CTRL | SDL_KMOD_SHIFT)) && pilotEnabled &&
+                            !pilot.ship().shrinking && !specimenProbe.active() && !plannerOpen &&
+                            !discoveryOpen && !vesselOpen && !marketOpen && !crewOpen && !crewFlightOpen) {
+                            auto address = nav.selected && nav.selected->kind() >= Kind::Planet
+                                               ? *nav.selected : nav.anchor;
+                            while (address.kind() > Kind::Planet)
+                                address = address.parent();
+                            const auto sites = address.kind() == Kind::Planet
+                                ? geologicalLandmarks(universe, universe.describe(address), 5)
+                                : std::vector<Address>{};
+                            if (sites.empty()) {
+                                notice = "NO REGIONAL LANDMARKS / SELECT A SOLID WORLD";
+                            } else {
+                                const auto current = nav.selected
+                                    ? std::find(sites.begin(), sites.end(), *nav.selected) : sites.end();
+                                const auto index = current == sites.end()
+                                    ? 0 : (size_t(current - sites.begin()) + 1) % sites.size();
+                                activity.clearSelection();
+                                pilot.clearWaypoint();
+                                if (sites[index] == nav.anchor)
+                                    nav.changeFrame(address);
+                                nav.select(sites[index]);
+                                notice = universe.describe(sites[index]).label() + " / " +
+                                         std::to_string(index + 1) + " OF " + std::to_string(sites.size()) +
+                                         " / J APPROACH / F12 SURVEY";
+                            }
+                            noticeTime = 6;
+                            continue;
+                        }
+                        if (event.key.scancode == SDL_SCANCODE_0 && (event.key.mod & SDL_KMOD_ALT) &&
+                            pilotEnabled && !probeViewing && !specimenProbe.active() && !plannerOpen &&
+                            !discoveryOpen && !vesselOpen && !marketOpen && !crewOpen && !crewFlightOpen && !reconOpen) {
+                            if(const auto* b=currentCavern()) {
+                                notice=cavernOrder(EconomicAction::BraceCavern,*b,cavernSelection)?
+                                    "ENGINEER BRACE ORDER SENT / AWAITING SAVED RECEIPT":"BRACE ORDER WAITING / RETRY";
+                                noticeTime=6;continue;
+                            }
+                        }
+                        if (event.key.scancode == SDL_SCANCODE_F12 && (event.key.mod & SDL_KMOD_CTRL) &&
+                            pilotEnabled && !specimenProbe.active() && !plannerOpen && !discoveryOpen && !vesselOpen && !marketOpen && !crewOpen) {
+                            if(const auto* b=currentCavern()) {
+                                notice=cavernOrder(EconomicAction::MarkCavern,*b,cavernSelection)?"CAVERN MARK SENT / AWAITING SAVED RECEIPT":"CAVERN ORDER WAITING / RETRY";
+                                noticeTime=6;continue;
+                            }
+                            if (!economy || !economicSnapshot || economicSnapshot->catchingUp ||
+                                pendingEconomicSequence || pendingCrewSequence || pendingSecuritySequence ||
+                                pendingRecoverySequence || pendingWreck) {
+                                notice = "SEAM ORDER WAITING / FLIGHT COMPUTER BUSY / RETRY CTRL-F12";
+                            } else {
+                                EconomicCommand c;
+                                c.action = pilot.ship().shrinking ? EconomicAction::MarkSeam
+                                                                 : EconomicAction::BeginSeam;
+                                if (pilot.ship().shrinking) {
+                                    if (const auto* seam = currentSeam())
+                                        c.surveyTarget = seam->material;
+                                } else if (const auto* site = selectedProspect(); site && !site->rocks.empty())
+                                    c.surveyTarget = site->rocks.front().address;
+                                else if (nav.selected && nav.selected->kind() == Kind::Rock)
+                                    c.surveyTarget = nav.selected;
+                                c.observer = explorationObserver();
+                                c.sequence = economicSequence =
+                                    std::max(economicSequence, economicSnapshot->player.lastCommand) + 1;
+                                if (economy->command(c)) {
+                                    pendingEconomicSequence = c.sequence;
+                                    pendingEconomicAction = c.action;
+                                    if (c.action == EconomicAction::BeginSeam && c.surveyTarget) {
+                                        activity.clearSelection();
+                                        pilot.clearWaypoint();
+                                        selectSeamSource(nav, *c.surveyTarget);
+                                    }
+                                    notice = "SEAM ORDER SENT / AWAITING SAVED RECEIPT";
+                                }
+                            }
+                            noticeTime = 8;
+                            continue;
+                        }
+                        if (event.key.scancode == SDL_SCANCODE_F12 && (event.key.mod & SDL_KMOD_SHIFT) &&
+                            pilotEnabled && !specimenProbe.active() && !plannerOpen && !discoveryOpen && !vesselOpen && !marketOpen && !crewOpen) {
+                            if(const auto* b=currentCavern()) {
+                                cavernSelection=(cavernSelection+1)%cavernFindCount;
+                                notice="CAVERN DEPOSIT / "+cavernFindName(cavernFinds(*b)[cavernSelection]);noticeTime=5;continue;
+                            }
+                            const auto sites = renderer.prospects();
+                            if (sites.empty()) {
+                                notice =
+                                    "GEOLOGICAL SCAN / SELECT OR APPROACH A SOLID WORLD / RETRY SHIFT-F12";
+                            } else {
+                                size_t next = 0;
+                                const auto selected = selectedProspect();
+                                if (selected)
+                                    next = (size_t(selected - sites.data()) + 1) % sites.size();
+                                else {
+                                    double nearest = 1e100;
+                                    for (size_t i = 0; i < sites.size(); ++i) {
+                                        const auto point = universe.pointRelative(
+                                            sites[i].surface.parent(),
+                                            sites[i].metres /
+                                                std::pow(10., universe.describe(sites[i].surface.parent())
+                                                                  .frame.logRadius),
+                                            nav.anchor, nav.logDistance);
+                                        const auto distance = glm::length(point - nav.cameraPosition());
+                                        if (distance < nearest && (sites[i].easy || !sites[next].easy)) {
+                                            nearest = distance;
+                                            next = i;
+                                        }
+                                    }
+                                }
+                                const auto& site = sites[next];
+                                activity.clearSelection();
+                                pilot.clearWaypoint();
+                                if (site.surface == nav.anchor)
+                                    nav.changeFrame(site.surface.parent());
+                                nav.select(site.surface);
+                                pilot.trackWaypoint(prospectWaypointFor(site));
+                                notice = site.name +
+                                         std::string(site.easy ? " / GENTLE APPROACH"
+                                                               : " / ROUGH GROUND / HOVER") +
+                                         " / J APPROACH / F12 SURVEY";
+                            }
+                            noticeTime = 8;
+                            continue;
+                        }
+                        const bool expeditionKey =
+                            event.key.scancode == SDL_SCANCODE_F11 && (event.key.mod & SDL_KMOD_SHIFT);
+                        if (specimenProbe.active() &&
+                            (expeditionKey || event.key.scancode == SDL_SCANCODE_ESCAPE)) {
+                            leaveSpecimen();
+                            marketOpen = false;
+                            continue;
+                        }
+                        if (expeditionKey && !crewOpen) {
+                            const bool close = marketOpen && marketPage == MarketPage::Expeditions;
+                            marketOpen = !close;
+                            marketPage = MarketPage::Expeditions;
+                            marketGood = 0;
+                            if (economicSnapshot && economicSnapshot->network)
+                                for (size_t i = 0; i < economicSnapshot->expeditions.jobs.size(); ++i)
+                                    if (surveySystem(economicSnapshot->expeditions.jobs[i].source) ==
+                                        economicSnapshot->network->system) {
+                                        marketGood = i;
+                                        break;
+                                    }
+                            crewFlightOpen = false;
+                            overlay = true;
+                            releaseLook();
+                            if (marketOpen)
+                                selectMarket();
+                            continue;
+                        }
+                        if (specimenProbe.active() && event.key.scancode == SDL_SCANCODE_F4 &&
+                            economicSnapshot) {
+                            for (const auto& job : economicSnapshot->expeditions.jobs)
+                                if (specimenProbe.source() == job.source) {
+                                    const auto target = !(job.assays & 1)   ? job.source
+                                                        : !(job.assays & 2) ? job.grain()
+                                                                            : job.lattice();
+                                    if (target != nav.anchor)
+                                        nav.select(target);
+                                    else
+                                        nav.selected.reset();
+                                    notice = "PROBE TARGET / " + std::string(kindName(target.kind())) +
+                                             " / J MAGNIFY / HOLD F12";
+                                    noticeTime = 7;
+                                }
+                            continue;
+                        }
+                        if (specimenProbe.active() && (event.key.scancode == SDL_SCANCODE_J || event.key.scancode == SDL_SCANCODE_RETURN)) {
+                            specimenProbe.focus(universe, nav, pilot, nav.selected.value_or(nav.anchor));
+                            surveyController.reset();
+                            notice = "LAB MAGNIFICATION / " + universe.describe(nav.anchor).label() + " / FULL SIZE SHIP STILL PARKED";
+                            noticeTime = 7;
+                            continue;
+                        }
+                        if (specimenProbe.active()) {
+                            switch (event.key.scancode) {
+                            case SDL_SCANCODE_R:
+                            case SDL_SCANCODE_T:
+                            case SDL_SCANCODE_V:
+                            case SDL_SCANCODE_F:
+                            case SDL_SCANCODE_N:
+                            case SDL_SCANCODE_K:
+                            case SDL_SCANCODE_I:
+                            case SDL_SCANCODE_Y:
+                            case SDL_SCANCODE_L:
+                            case SDL_SCANCODE_F10:
+                            case SDL_SCANCODE_BACKSPACE:
+                            case SDL_SCANCODE_F2:
+                            case SDL_SCANCODE_F6:
+                            case SDL_SCANCODE_F8:
+                                notice = "SPECIMEN PROBE / F4 NEXT STRUCTURE / SHIFT-F11 RETURN TO SHIP";
+                                noticeTime = 5;
+                                continue;
+                            default:
+                                break;
+                            }
+                        }
+                        if (event.key.scancode == SDL_SCANCODE_F11 && !crewOpen) {
+                            const bool close = marketOpen && marketPage == MarketPage::Journal;
+                            marketOpen = !close;
+                            marketPage = MarketPage::Journal;
+                            marketGood = 0;
+                            crewFlightOpen = false;
+                            overlay = true;
+                            releaseLook();
+                            if (marketOpen)
+                                selectMarket();
+                            continue;
+                        }
+                        if(pilotEnabled&&!plannerOpen&&!discoveryOpen&&!vesselOpen&&!marketOpen&&!crewOpen&&!reconOpen&&!probeViewing&&!specimenProbe.active()&&
+                           event.key.scancode==SDL_SCANCODE_SEMICOLON)continue;
+                        if(pilotEnabled&&!plannerOpen&&!discoveryOpen&&!vesselOpen&&!marketOpen&&!crewOpen&&!reconOpen&&!probeViewing&&!specimenProbe.active()&&
+                           (event.key.scancode==SDL_SCANCODE_BACKSLASH||event.key.scancode==SDL_SCANCODE_NONUSBACKSLASH)){
+                            if(event.key.mod&SDL_KMOD_SHIFT){defence.toggleAutomatic();notice=defence.automatic()?"CREW AUTO DECOYS ON":"CREW AUTO DECOYS OFF / MANUAL BURST AVAILABLE";noticeTime=4;}
+                            else issueDefence(event.key.mod&SDL_KMOD_CTRL);
+                            continue;
+                        }
+                        if (pilotEnabled && !plannerOpen && !discoveryOpen && !vesselOpen && !marketOpen && !crewOpen && !crewFlightOpen &&
+                            event.key.scancode == SDL_SCANCODE_9) {
+                            constexpr std::array systems{ShipSystem::Hull, ShipSystem::Engines,
+                                                         ShipSystem::Thrusters, ShipSystem::NoseGun,
+                                                         ShipSystem::LifeSupport};
+                            auto it = std::find(systems.begin(), systems.end(), targetSystem);
+                            targetSystem = systems[(size_t(it - systems.begin()) + systems.size() + ((event.key.mod&SDL_KMOD_SHIFT)?-1:1)) % systems.size()];
+                            notice = "TARGET COMPONENT / " + std::string(shipSystemName(targetSystem));
+                            noticeTime = 5;
+                            continue;
+                        }
+                        if (pilotEnabled && !plannerOpen && !discoveryOpen && !vesselOpen && !marketOpen && !crewOpen &&
+                            (!crewFlightOpen || (event.key.mod & SDL_KMOD_CTRL)) &&
+                            event.key.scancode >= SDL_SCANCODE_6 && event.key.scancode <= SDL_SCANCODE_8) {
+                            fireControl.order(FireOrder(event.key.scancode - SDL_SCANCODE_6));
+                            notice = "CREW GUNNERS / " + std::string(fireOrderName(fireControl.order()));
+                            noticeTime = 6;
+                            continue;
+                        }
+                        if(pilotEnabled&&!plannerOpen&&!discoveryOpen&&!vesselOpen&&!marketOpen&&!crewOpen&&!crewFlightOpen&&!probeViewing&&!specimenProbe.active()&&
+                           event.key.scancode==SDL_SCANCODE_F5&&(!(event.key.mod&SDL_KMOD_CTRL)||!stationControl.active()||reconOpen)){
+                            if(event.key.mod&SDL_KMOD_CTRL){reconOrders.navigator=!reconOrders.navigator;reconOrders.assessment=0;reconNavAnnounced=0;reconOpen=true;}
+                            else if(event.key.mod&SDL_KMOD_ALT){reconOrders.engineer=!reconOrders.engineer;reconOpen=true;}
+                            else if(event.key.mod&SDL_KMOD_SHIFT){if(reconView)cycleReconPoint(reconSelected,*reconView);reconOpen=true;}
+                            else reconOpen=!reconOpen;
+                            reconRefresh=0;if(reconOpen)releaseLook();continue;
+                        }
+                        const bool numberOrder = !crewFlightOpen && event.key.scancode >= SDL_SCANCODE_1 &&
+                                                 event.key.scancode <= SDL_SCANCODE_5;
+                        const bool functionOrder = (event.key.mod & SDL_KMOD_CTRL) &&
+                                                   event.key.scancode >= SDL_SCANCODE_F1 &&
+                                                   event.key.scancode <= SDL_SCANCODE_F5;
+                        if (stationControl.active() && (numberOrder || functionOrder)) {
+                            stationControl.command(HelmOrder(
+                                event.key.scancode - (numberOrder ? SDL_SCANCODE_1 : SDL_SCANCODE_F1)));
+                            notice = "CREW ORDER / " + std::string(helmOrderName(stationControl.order()));
+                            noticeTime = 5;
+                            continue;
+                        }
+                        if (event.key.scancode == SDL_SCANCODE_F10 && pilotEnabled && !crewOpen &&
+                            !marketOpen) {
+                            if (stationControl.requested())
+                                stationControl.returnToHelm(crew);
+                            else {
+                                unsigned gun = noWeaponMount;
+                                if (crewFlightOpen && crewSelected < crew.members().size() &&
+                                    crew.members()[crewSelected].duty == CrewStation::Weapons)
+                                    gun = crew.members()[crewSelected].weaponMount;
+                                else
+                                    for (unsigned i : {1u, 2u, 0u})
+                                        if (crew.gunnerReadiness(i) > 0) {
+                                            gun = i;
+                                            break;
+                                        }
+                                stationControl.request(gun, crew, pilot, nav);
+                            }
+                            notice = stationControl.status();
+                            noticeTime = 7;
+                            mouseX = mouseY = 0;
+                            continue;
+                        }
+                        if (event.key.scancode == SDL_SCANCODE_F9 && pilotEnabled) {
+                            crewFlightOpen = crewOpen || marketOpen || !crewFlightOpen;
+                            crewOpen = marketOpen = false;
+                            crewFeedback.clear();
+                            overlay = true;
+                            continue;
+                        }
+                        if (crewFlightOpen && !crewOpen && !marketOpen && pilotEnabled) {
+                            if (event.key.scancode == SDL_SCANCODE_ESCAPE) {
+                                crewFlightOpen = false;
+                                continue;
+                            }
+                            if (event.key.scancode >= SDL_SCANCODE_1 &&
+                                event.key.scancode <= SDL_SCANCODE_8) {
+                                const auto index = size_t(event.key.scancode - SDL_SCANCODE_1);
+                                if ((event.key.mod & SDL_KMOD_CTRL) && index < maxWeaponMounts) {
+                                    crewFeedback = crew.manWeapon(crewSelected, unsigned(index));
+                                } else if (event.key.mod & SDL_KMOD_ALT) {
+                                    if (index < crewRoomCount)
+                                        crewStation = CrewStation(index);
+                                } else if (index < crew.members().size())
+                                    crewSelected = index;
+                                continue;
+                            }
+                            if (event.key.mod & SDL_KMOD_CTRL) {
+                                std::optional<CrewCommand> command;
+                                switch (event.key.scancode) {
+                                case SDL_SCANCODE_RETURN:
+                                    command = CrewCommand::Assign;
+                                    break;
+                                case SDL_SCANCODE_R:
+                                    command = CrewCommand::Repair;
+                                    break;
+                                case SDL_SCANCODE_F:
+                                    command = CrewCommand::Firefight;
+                                    break;
+                                case SDL_SCANCODE_M:
+                                    command = CrewCommand::Aid;
+                                    break;
+                                case SDL_SCANCODE_T:
+                                    command = CrewCommand::Rest;
+                                    break;
+                                case SDL_SCANCODE_G:
+                                    command = CrewCommand::Return;
+                                    break;
+                                case SDL_SCANCODE_J:
+                                    command = CrewCommand::BestStations;
+                                    break;
+                                case SDL_SCANCODE_H:
+                                    command = CrewCommand::Emergency;
+                                    break;
+                                default:
+                                    break;
+                                }
+                                if (command) {
+                                    crewCommand(*command);
+                                    continue;
+                                }
+                            }
+                        }
+                        if (crewOpen) {
+                            const auto count = crew.members().size();
+                            if ((event.key.mod & SDL_KMOD_CTRL) && event.key.scancode >= SDL_SCANCODE_1 &&
+                                event.key.scancode <= SDL_SCANCODE_3) {
+                                crewFeedback = crew.manWeapon(crewSelected,
+                                                              unsigned(event.key.scancode - SDL_SCANCODE_1));
+                                continue;
+                            }
+                            switch (event.key.scancode) {
+                            case SDL_SCANCODE_ESCAPE:
+                            case SDL_SCANCODE_F8:
+                                crewOpen = false;
+                                break;
+                            case SDL_SCANCODE_UP:
+                                if (count)
+                                    crewSelected = (crewSelected + count - 1) % count;
+                                break;
+                            case SDL_SCANCODE_DOWN:
+                                if (count)
+                                    crewSelected = (crewSelected + 1) % count;
+                                break;
+                            case SDL_SCANCODE_LEFT:
+                                crewStation =
+                                    CrewStation((size_t(crewStation) + crewRoomCount - 1) % crewRoomCount);
+                                break;
+                            case SDL_SCANCODE_RIGHT:
+                                crewStation = CrewStation((size_t(crewStation) + 1) % crewRoomCount);
+                                break;
+                            case SDL_SCANCODE_RETURN:
+                                crewFeedback = crew.assign(crewSelected, crewStation);
+                                break;
+                            case SDL_SCANCODE_R:
+                                crewFeedback = crew.order(crewSelected, CrewOrder::Repair, crewStation);
+                                break;
+                            case SDL_SCANCODE_F:
+                                crewFeedback = crew.order(crewSelected, CrewOrder::Firefight, crewStation);
+                                break;
+                            case SDL_SCANCODE_M:
+                                crewFeedback = crew.order(crewSelected, CrewOrder::Aid, crewStation);
+                                break;
+                            case SDL_SCANCODE_T:
+                                crewFeedback = crew.order(crewSelected, CrewOrder::Rest, CrewStation::Bunks);
+                                break;
+                            case SDL_SCANCODE_V:
+                                crew.vent(crewStation);
+                                break;
+                            case SDL_SCANCODE_D:
+                                crew.recall();
+                                break;
+                            case SDL_SCANCODE_A:
+                                crew.toggleAutomatic();
+                                break;
+                            case SDL_SCANCODE_H:
+                                if (auto port = crewPort()) {
+                                    auto offers = economicCrewOffers(*economicSnapshot, *port);
+                                    if (!offers.empty())
+                                        tradeCrew(EconomicAction::BuyCrew, offers[crewOffer % offers.size()],
+                                                  port);
+                                    else
+                                        crewFeedback = "NO CREW LEFT FOR SALE AT THIS PORT";
+                                } else
+                                    crewFeedback = "BERTH OR LAND AT A PORT TO BUY CREW";
+                                break;
+                            case SDL_SCANCODE_LEFTBRACKET:
+                                if (auto port = crewPort()) {
+                                    auto list = economicCrewOffers(*economicSnapshot, *port);
+                                    if (!list.empty())
+                                        crewOffer = (crewOffer + list.size() - 1) % list.size();
+                                }
+                                break;
+                            case SDL_SCANCODE_RIGHTBRACKET:
+                                ++crewOffer;
+                                break;
+                            case SDL_SCANCODE_F2:
+                                crewOpen = false;
+                                marketOpen = true;
+                                selectMarket();
+                                marketPage = MarketPage::Crew;
+                                marketGood = 0;
+                                break;
+                            case SDL_SCANCODE_S:
+                                submitCrew(ShipService::CrewSupplies);
+                                break;
+                            case SDL_SCANCODE_L:
+                                submitCrew(ShipService::CrewCare);
+                                break;
+                            case SDL_SCANCODE_BACKSPACE:
+                                if (crewSelected < crew.members().size())
+                                    tradeCrew(event.key.mod & SDL_KMOD_SHIFT ? EconomicAction::ReleaseCrew
+                                                                             : EconomicAction::SellCrew,
+                                              crew.members()[crewSelected], crewPort());
+                                break;
+                            default:
+                                break;
+                            }
+                            continue;
+                        }
+                        if (marketOpen) {
+                            switch (event.key.scancode) {
+                            case SDL_SCANCODE_F8:
+                                marketOpen = false;
+                                crewOpen = true;
+                                crewFlightOpen = false;
+                                releaseLook();
+                                break;
+                            case SDL_SCANCODE_ESCAPE:
+                            case SDL_SCANCODE_F2:
+                                marketOpen = false;
+                                break;
+                            case SDL_SCANCODE_UP:
+                                marketGood = (marketGood + marketRows() - 1) % marketRows();
+                                break;
+                            case SDL_SCANCODE_DOWN:
+                                marketGood = (marketGood + 1) % marketRows();
+                                break;
+                            case SDL_SCANCODE_LEFT:
+                                if (marketPage == MarketPage::Incidents)
+                                    incidentResponse = (incidentResponse + 2) % 3;
+                                else if (marketPage == MarketPage::Weapons || marketPage == MarketPage::Survey)
+                                    marketWeaponMount =
+                                        (marketWeaponMount + maxWeaponMounts - 1) % maxWeaponMounts;
+                                else
+                                    marketQuantity = std::max<int64_t>(1, marketQuantity / 10);
+                                break;
+                            case SDL_SCANCODE_RIGHT:
+                                if (marketPage == MarketPage::Incidents)
+                                    incidentResponse = (incidentResponse + 1) % 3;
+                                else if (marketPage == MarketPage::Weapons || marketPage == MarketPage::Survey)
+                                    marketWeaponMount = (marketWeaponMount + 1) % maxWeaponMounts;
+                                else
+                                    marketQuantity = std::min<int64_t>(maxShipPayloadKg, marketQuantity * 10);
+                                break;
+                            case SDL_SCANCODE_F5:
+                                marketPage = MarketPage((unsigned(marketPage) + 1) % (unsigned(MarketPage::Incidents) + 1));
+                                marketGood = 0;
+                                break;
+                            case SDL_SCANCODE_I:
+                                marketPage = marketPage == MarketPage::Incidents ? MarketPage::Jobs : MarketPage::Incidents;
+                                marketGood = 0;
+                                incidentResponse = 0;
+                                break;
+                            case SDL_SCANCODE_RETURN:
+                                if (marketPage == MarketPage::Incidents) {
+                                    if (economicSnapshot)
+                                        if (auto job = economicIncidentJob(*economicSnapshot, marketGood, incidentResponse))
+                                            submitMarket(job->action, &*job);
+                                    break;
+                                }
+                                if (marketPage == MarketPage::Expeditions) {
+                                    if (economicSnapshot)
+                                        if (const auto* job = selectedExpedition(
+                                                economicSnapshot->expeditions, marketGood)) {
+                                            const auto action = job->phase == ExpeditionPhase::Offered
+                                                                    ? EconomicAction::DiagnoseExpedition
+                                                                : job->phase == ExpeditionPhase::Return
+                                                                    ? EconomicAction::RepairExpedition
+                                                                    : EconomicAction::OpenSpecimen;
+                                            submitExpedition(action, *job);
+                                        }
+                                    break;
+                                }
+                                if (marketPage == MarketPage::Journal) {
+                                    submitMarket(EconomicAction::SellSurvey);
+                                    break;
+                                }
+                                if (marketPage == MarketPage::Survey) {
+                                    if (marketGood < 3)
+                                        submitMarket(marketGood == 0   ? EconomicAction::UpgradeScanner
+                                                     : marketGood == 1 ? EconomicAction::FitMiningHead
+                                                                       : EconomicAction::SellMiningHead);
+                                    else if (economicSnapshot) {
+                                        const auto jobs = explorationJobs(*economicSnapshot);
+                                        if (marketGood - 3 < jobs.size())
+                                            submitMarket(
+                                                economicSnapshot->exploration.contracts[jobs[marketGood - 3]]
+                                                            .phase == SurveyPhase::Open
+                                                    ? EconomicAction::AcceptSurvey
+                                                    : EconomicAction::ClaimSurvey);
+                                        else {
+                                            const auto row=marketGood-3-jobs.size();
+                                            submitMarket(row==0?EconomicAction::FitProbeLauncher:
+                                                         row==1?EconomicAction::ReloadProbe:EconomicAction::SellProbeLauncher);
+                                        }
+                                    }
+                                    break;
+                                }
+                                if (marketPage == MarketPage::Crew) {
+                                    tradeMarketCrew(EconomicAction::BuyCrew);
+                                    break;
+                                }
+                                if (marketPage == MarketPage::Jobs) {
+                                    if (auto job = selectedJob()) {
+                                        if (job->working && !job->combat) {
+                                            auto recovery =
+                                                std::find_if(economicSnapshot->recoveries.begin(),
+                                                             economicSnapshot->recoveries.end(),
+                                                             [&](const auto& j) { return j.id == job->id; });
+                                            if (recovery != economicSnapshot->recoveries.end())
+                                                for (size_t k = 0; k < economicSnapshot->outcomes.size(); ++k)
+                                                    if (economicSnapshot
+                                                            ->outcomes[economicSnapshot->outcomes.size() - 1 -
+                                                                       k]
+                                                            .id == recovery->outcome) {
+                                                        marketPage = MarketPage::Outcomes;
+                                                        marketGood = k;
+                                                        break;
+                                                    }
+                                        } else
+                                            submitMarket(job->action, job);
+                                    }
+                                } else if (marketPage == MarketPage::Weapons)
+                                    submitMarket(EconomicAction::FitWeapon);
+                                else if (marketPage == MarketPage::Services)
+                                    submitMarket(marketGood == 0   ? EconomicAction::RepairHull
+                                                 : marketGood == 1 ? EconomicAction::UpgradeCargo
+                                                                   : EconomicAction::DisembarkRescued);
+                                else if (marketPage == MarketPage::Routes)
+                                    targetMarketRoute(false);
+                                else if (marketPage != MarketPage::Outcomes)
+                                    submitMarket(marketPage == MarketPage::Industry ? EconomicAction::Invest
+                                                                                    : EconomicAction::Buy);
+                                break;
+                            case SDL_SCANCODE_BACKSPACE:
+                                if (marketPage == MarketPage::Incidents)
+                                    break;
+                                if (marketPage == MarketPage::Expeditions) {
+                                    if (economicSnapshot)
+                                        if (const auto* job =
+                                                selectedExpedition(economicSnapshot->expeditions, marketGood))
+                                            submitExpedition(EconomicAction::CancelExpedition, *job);
+                                    break;
+                                }
+                                if (marketPage == MarketPage::Journal)
+                                    break;
+                                if (marketPage == MarketPage::Survey) {
+                                    if (economicSnapshot && marketGood >= 3 &&
+                                        marketGood < 3+explorationJobs(*economicSnapshot).size())
+                                        submitMarket(EconomicAction::CancelSurvey);
+                                    break;
+                                }
+                                if (marketPage == MarketPage::Crew) {
+                                    tradeMarketCrew(event.key.mod & SDL_KMOD_SHIFT
+                                                        ? EconomicAction::ReleaseCrew
+                                                        : EconomicAction::SellCrew);
+                                    break;
+                                }
+                                if (marketPage == MarketPage::Weapons)
+                                    submitMarket(EconomicAction::SellWeapon);
+                                else if (marketPage == MarketPage::Jobs) {
+                                    if (auto job = selectedJob();
+                                        job && job->haul && job->action != EconomicAction::AcceptHaul)
+                                        submitMarket(EconomicAction::CancelHaul, job);
+                                } else if (marketPage != MarketPage::Routes &&
+                                           marketPage != MarketPage::Services &&
+                                           marketPage != MarketPage::Outcomes)
+                                    submitMarket(marketPage == MarketPage::Industry
+                                                     ? EconomicAction::CollectDividends
+                                                     : EconomicAction::Sell);
+                                break;
+                            case SDL_SCANCODE_DELETE:
+                                if (marketPage == MarketPage::Survey || marketPage == MarketPage::Journal ||
+                                    marketPage == MarketPage::Expeditions || marketPage == MarketPage::Incidents)
+                                    break;
+                                if (marketPage == MarketPage::Industry)
+                                    submitMarket(EconomicAction::CancelProject);
+                                else if (marketPage != MarketPage::Services &&
+                                         marketPage != MarketPage::Jobs &&
+                                         marketPage != MarketPage::Weapons &&
+                                         marketPage != MarketPage::Outcomes) {
+                                    tradeBuyer.reset();
+                                    tradeHint.clear();
+                                    marketSay("TRADE BOOKMARK CLEARED / F4 SUPPLY CONTRACT");
+                                }
+                                break;
+                            case SDL_SCANCODE_F3:
+                                if (marketPage == MarketPage::Goods)
+                                    submitMarket(EconomicAction::Contract);
+                                break;
+                            case SDL_SCANCODE_F4:
+                                if (marketPage == MarketPage::Incidents) {
+                                    if (economicSnapshot)
+                                        if (auto job = economicIncidentJob(*economicSnapshot, marketGood, incidentResponse)) {
+                                            chooseActivity(job->target);
+                                            marketOpen = false;
+                                            notice = job->action == EconomicAction::RecoverWreck
+                                                ? "DISTRESS CONTACT / J APPROACH / HOLD 0 CLOSE AND SLOW"
+                                                : "INCIDENT PORT TARGETED / J APPROACH / F2 THEN I";
+                                            noticeTime = 6;
+                                        }
+                                    break;
+                                }
+                                if (marketPage == MarketPage::Expeditions) {
+                                    if (economicSnapshot)
+                                        if (const auto* job = selectedExpedition(
+                                                economicSnapshot->expeditions, marketGood)) {
+                                            const bool colony = (event.key.mod & SDL_KMOD_SHIFT) ||
+                                                                job->phase != ExpeditionPhase::Survey;
+                                            if (colony) {
+                                                chooseActivity(job->colony);
+                                                marketPort = job->colony;
+                                            } else {
+                                                activity.clearSelection();
+                                                pilot.clearWaypoint();
+                                                const auto target = job->source.parent().parent();
+                                                if (target != nav.anchor)
+                                                    nav.select(target);
+                                            }
+                                            notice = expeditionObjective(*job);
+                                            noticeTime = 8;
+                                        }
+                                    marketOpen = false;
+                                    break;
+                                }
+                                if (marketPage == MarketPage::Survey || marketPage == MarketPage::Journal) {
+                                    if (marketPage == MarketPage::Survey && economicSnapshot &&
+                                        marketGood >= 3+explorationJobs(*economicSnapshot).size()) {
+                                        notice=approachProbeEntry();noticeTime=7;marketOpen=false;break;
+                                    }
+                                    std::optional<Address> destination;
+                                    if (event.key.mod & SDL_KMOD_SHIFT) {
+                                        if (marketPort)
+                                            chooseActivity(*marketPort);
+                                    } else if (economicSnapshot && marketPage == MarketPage::Journal) {
+                                        const auto& records = economicSnapshot->exploration.journal;
+                                        if (!records.empty())
+                                            destination = records[records.size() - 1 -
+                                                                  std::min(marketGood, records.size() - 1)]
+                                                              .address;
+                                    } else if (economicSnapshot && marketGood >= 3) {
+                                        const auto jobs = explorationJobs(*economicSnapshot);
+                                        if (marketGood - 3 < jobs.size())
+                                            destination =
+                                                economicSnapshot->exploration.contracts[jobs[marketGood - 3]]
+                                                    .target;
+                                    } else if (marketPort)
+                                        chooseActivity(*marketPort);
+                                    if (destination) {
+                                        activity.clearSelection();
+                                        pilot.clearWaypoint();
+                                        if (*destination != nav.anchor)
+                                            nav.select(*destination);
+                                        else
+                                            nav.selected.reset();
+                                    }
+                                    marketOpen = false;
+                                    notice = "EXPLORATION DESTINATION / J APPROACH / F12 SCAN / Z SHRINK FOR "
+                                             "MATERIALS";
+                                    noticeTime = 7;
+                                    break;
+                                }
+                                if (marketPage == MarketPage::Outcomes) {
+                                    if (economicSnapshot && !economicSnapshot->outcomes.empty()) {
+                                        const auto k =
+                                            std::min(marketGood, economicSnapshot->outcomes.size() - 1);
+                                        const auto& o =
+                                            economicSnapshot
+                                                ->outcomes[economicSnapshot->outcomes.size() - 1 - k];
+                                        chooseActivity(economicSnapshot->network->sites[o.site].id);
+                                        marketOpen = false;
+                                    }
+                                    break;
+                                }
+                                if (marketPage == MarketPage::Services || marketPage == MarketPage::Weapons) {
+                                    if (marketPort) {
+                                        chooseActivity(*marketPort);
+                                        marketOpen = false;
+                                        notice = "SERVICE PORT TARGETED / J APPROACH / F2 SERVICES";
+                                        noticeTime = 6;
+                                    }
+                                    break;
+                                }
+                                if (marketPage == MarketPage::Jobs) {
+                                    targetJob(event.key.mod & SDL_KMOD_SHIFT);
+                                    break;
+                                }
+                                if (marketPage == MarketPage::Routes && !(event.key.mod & SDL_KMOD_SHIFT)) {
+                                    targetMarketRoute(true);
+                                    break;
+                                }
+                                if (!(event.key.mod & SDL_KMOD_SHIFT) && targetActiveHaul())
+                                    break;
+                                if (!(event.key.mod & SDL_KMOD_SHIFT) && targetSecuritySystem())
+                                    break;
+                                if (!(event.key.mod & SDL_KMOD_SHIFT) && targetTradeBuyer())
+                                    break;
+                                if (economicSnapshot)
+                                    if (auto id = economicSnapshot->contractDestination()) {
+                                        marketOpen = false;
+                                        chooseActivity(*id);
+                                        notice = "SUPPLY CONTRACT DESTINATION / J APPROACH / F2 MARKET";
+                                        noticeTime = 5;
+                                    }
+                                break;
+                            default:
+                                break;
+                            }
+                            continue;
+                        }
+                        // These commands require the captain's helm. B always
+                        // takes it back immediately, even during a handover.
+                        if (stationControl.requested()) {
+                            switch (event.key.scancode) {
+                            case SDL_SCANCODE_B:
+                            case SDL_SCANCODE_X:
+                            case SDL_SCANCODE_N:
+                            case SDL_SCANCODE_Z:
+                            case SDL_SCANCODE_COMMA:
+                            case SDL_SCANCODE_PERIOD:
+                            case SDL_SCANCODE_V:
+                            case SDL_SCANCODE_BACKSPACE:
+                            case SDL_SCANCODE_R:
+                            case SDL_SCANCODE_T:
+                            case SDL_SCANCODE_F:
+                            case SDL_SCANCODE_F2:
+                            case SDL_SCANCODE_F8:
+                            case SDL_SCANCODE_L:
+                            case SDL_SCANCODE_RETURN:
+                                stationControl.returnToHelm(crew);
+                                break;
+                            case SDL_SCANCODE_ESCAPE:
+                                stationControl.returnToHelm(crew);
+                                notice = stationControl.status();
+                                noticeTime = 5;
+                                continue;
+                            default:
+                                break;
+                            }
+                        }
+                        switch (event.key.scancode) {
+                        case SDL_SCANCODE_F8:
+                            if (pilotEnabled) {
+                                crewOpen = true;
+                                crewFlightOpen = false;
+                                marketOpen = false;
+                                releaseLook();
+                            }
+                            break;
+                        case SDL_SCANCODE_ESCAPE:
+                            if (looking) {
+                                releaseLook();
+                                notice = "Mouse released / C to resume flight, Escape to save and quit";
+                                noticeTime = 4;
+                            } else
+                                running = false;
+                            break;
+                        case SDL_SCANCODE_C:
+                            mouseFlight = !mouseFlight;
+                            captureLook();
+                            opt.tour = false;
+                            break;
+                        case SDL_SCANCODE_EQUALS:
+                        case SDL_SCANCODE_KP_PLUS:
+                        case SDL_SCANCODE_RIGHTBRACKET:
+                            if (pilotEnabled)
+                                pilot.adjustDrive(1);
+                            else
+                                nav.adjustSpeed(1);
+                            break;
+                        case SDL_SCANCODE_MINUS:
+                        case SDL_SCANCODE_KP_MINUS:
+                        case SDL_SCANCODE_LEFTBRACKET:
+                            if (pilotEnabled)
+                                pilot.adjustDrive(-1);
+                            else
+                                nav.adjustSpeed(-1);
+                            break;
+                        case SDL_SCANCODE_F:
+                            activity.clearSelection();
+                            pilotEnabled = false;
+                            pilot.resetMotion();
+                            nav.focus();
+                            opt.tour = false;
+                            break;
+                        case SDL_SCANCODE_F4:
+                            if(reconOpen){reconRoute();break;}
+                            if (!(event.key.mod & SDL_KMOD_SHIFT) && targetActiveHaul())
+                                break;
+                            if (!(event.key.mod & SDL_KMOD_SHIFT) && targetTradeBuyer())
+                                break;
+                            if (economicSnapshot)
+                                if (auto id = economicSnapshot->contractDestination()) {
+                                    chooseActivity(*id);
+                                    notice = "SUPPLY CONTRACT DESTINATION / J APPROACH / F2 MARKET";
+                                    noticeTime = 5;
+                                }
+                            break;
+                        case SDL_SCANCODE_F2:
+                            if (pilotEnabled && economy) {
+                                selectMarket();
+                                marketOpen = true;
+                                pilot.brake();
+                                releaseLook();
+                            }
+                            break;
+                        case SDL_SCANCODE_F1:
+                            if (pilotEnabled)
+                                renderer.toggleCockpitHelp();
+                            break;
+                        case SDL_SCANCODE_F7:
+                            renderer.setCockpitMotionEnabled(!renderer.cockpitMotionEnabled());
+                            notice = renderer.cockpitMotionEnabled() ? "Cockpit motion ON / F7 toggles"
+                                                                     : "Cockpit motion OFF / F7 toggles";
+                            noticeTime = 4;
+                            break;
+                        case SDL_SCANCODE_BACKSPACE:
+                            activity.clearSelection();
+                            pilotEnabled = false;
+                            pilot.resetMotion();
+                            nav.parent();
+                            opt.tour = false;
+                            break;
+                        case SDL_SCANCODE_V:
+                            pilotEnabled = !pilotEnabled;
+                            pilot.resetMotion();
+                            if (pilotEnabled)
+                                pilot.brake();
+                            if (pilotEnabled && nav.anchor.kind() >= Kind::Rock && !pilot.ship().shrinking)
+                                pilot.fitToView();
+                            opt.tour = false;
+                            notice = pilotEnabled
+                                         ? "Pilot helm / assist ON / W-S throttle / B recover"
+                                         : "Explorer camera / existing WASD controls / V returns to ship";
+                            noticeTime = 5;
+                            break;
+                        case SDL_SCANCODE_B:
+                            if (pilotEnabled)
+                                pilot.brake();
+                            break;
+                        case SDL_SCANCODE_X:
+                            if (pilotEnabled) {
+                                pilot.toggleAssist();
+                                notice = pilot.ship().assist
+                                             ? "Flight assist ON / release helm to arrest rotation"
+                                             : "INERTIAL / spin persists / B recovers / X restores assist";
+                                noticeTime = 6;
+                            }
+                            break;
+                        case SDL_SCANCODE_N:
+                            if (pilotEnabled) {
+                                if (event.key.mod & SDL_KMOD_SHIFT)
+                                    pilot.selectNextStar();
+                                else {
+                                    if (event.key.mod & SDL_KMOD_CTRL) {
+                                        if (nav.selected) {
+                                            auto target = *nav.selected;
+                                            while (target.kind() > Kind::Planet)
+                                                target = target.parent();
+                                            pilot.warpTo(target);
+                                            notice = pilot.instruments().phase;
+                                        } else
+                                            notice = "SELECT A WORLD OR STAR / CTRL-N WARP";
+                                    } else {
+                                        pilot.toggleCruise();
+                                        notice = pilot.instruments().phase;
+                                    }
+                                    noticeTime = 5;
+                                }
+                            }
+                            break;
+                        case SDL_SCANCODE_G:
+                            if (pilotEnabled)
+                                pilot.toggleGear();
+                            break;
+                        case SDL_SCANCODE_Z:
+                            if (pilotEnabled) {
+                                if (event.key.mod & SDL_KMOD_SHIFT)
+                                    pilot.restoreFullSize();
+                                else
+                                    pilot.toggleShrink();
+                            }
+                            break;
+                        case SDL_SCANCODE_COMMA:
+                            if (pilotEnabled)
+                                pilot.adjustSize(-1);
+                            break;
+                        case SDL_SCANCODE_PERIOD:
+                            if (pilotEnabled)
+                                pilot.adjustSize(1);
+                            break;
+                        case SDL_SCANCODE_Y:
+                            if (pilotEnabled) {
+                                if (event.key.mod & SDL_KMOD_CTRL) {
+                                    if (auto world =
+                                            nextLivingWorld(renderer.celestialContacts(), nav.selected)) {
+                                        activity.clearSelection();
+                                        pilot.selectPlanet(*world);
+                                        notice = "LIFE DETECTED / " + universe.describe(*world).label() +
+                                                 " / J APPROACH";
+                                    } else {
+                                        const auto contacts = renderer.celestialContacts();
+                                        const bool scanning =
+                                            std::any_of(contacts.begin(), contacts.end(), [](const auto& c) {
+                                                return c.life == LifeDetection::Scanning ||
+                                                       (c.address.kind() == Kind::Planet &&
+                                                        c.life == LifeDetection::Unknown);
+                                            });
+                                        notice = scanning ? "SURFACE LIFE SCAN IN PROGRESS"
+                                                          : "NO SURFACE LIFE DETECTED IN THIS SYSTEM";
+                                    }
+                                    noticeTime = 6;
+                                } else {
+                                    activity.clearSelection();
+                                    if (event.key.mod & SDL_KMOD_SHIFT)
+                                        pilot.selectNextMoon();
+                                    else
+                                        pilot.selectNextPlanet();
+                                }
+                            }
+                            break;
+                        case SDL_SCANCODE_K:
+                            if (pilotEnabled) {
+                                const bool debrisScan = (event.key.mod & SDL_KMOD_ALT) != 0;
+                                const bool portsOnly = (event.key.mod & SDL_KMOD_SHIFT) != 0;
+                                std::vector<ActivityContact> contacts;
+                                for (const auto& c : renderer.activityContacts())
+                                    if (debrisScan ? isOrbitalDebris(c.body.id) && !c.occluded &&
+                                                         (!portsOnly || landableDebris(c.body))
+                                                   : !isOrbitalDebris(c.body.id) &&
+                                                         (!portsOnly || c.body.kind == ActivityKind::SurfacePort))
+                                        contacts.push_back(c);
+                                if (debrisScan)
+                                    std::sort(contacts.begin(), contacts.end(),
+                                              [](const auto& a, const auto& b) { return a.body.id < b.body.id; });
+                                if (!contacts.empty()) {
+                                    auto it =
+                                        std::find_if(contacts.begin(), contacts.end(), [&](const auto& c) {
+                                            return activity.selected && c.body.id == *activity.selected;
+                                        });
+                                    size_t next = it == contacts.end()
+                                        ? 0 : (size_t(it - contacts.begin()) + 1) % contacts.size();
+                                    if (debrisScan && it == contacts.end())
+                                        next = size_t(std::min_element(contacts.begin(), contacts.end(),
+                                            [](const auto& a, const auto& b) { return a.distance < b.distance; }) -
+                                            contacts.begin());
+                                    chooseActivity(contacts[next].body.id);
+                                    notice = hailActivity(*activityBody());
+                                    noticeTime = 6;
+                                } else if (debrisScan) {
+                                    notice = portsOnly ? "NO LANDABLE FRAGMENTS IN SENSOR RANGE" :
+                                        "NO DEBRIS IN SENSOR RANGE / APPROACH A RING OR IMPACTED WORLD";
+                                    noticeTime = 6;
+                                } else if (portsOnly) {
+                                    notice = "No surface ports detected / approach a suitable solid world / "
+                                             "F6 shows activity";
+                                    noticeTime = 6;
+                                }
+                            }
+                            break;
+                        case SDL_SCANCODE_I:
+                            if (pilotEnabled && (event.key.mod & SDL_KMOD_SHIFT) &&
+                                !(event.key.mod & (SDL_KMOD_ALT | SDL_KMOD_CTRL))) {
+                                if (const auto* contact = arrivals.select(activity.selected)) {
+                                    chooseActivity(contact->target);
+                                    notice = contact->title + " / " + contact->detail;
+                                } else notice = "NO ARRIVAL CALLS / K TRAFFIC";
+                                noticeTime = 9;
+                            } else if (pilotEnabled && (event.key.mod & SDL_KMOD_ALT)) {
+                                const auto& demand = npcCombat.demand();
+                                if (!demand || activity.seconds >= demand->until || !activity.enabled ||
+                                    pilot.ship().landed || pilot.instruments().fieldActive || specimenProbe.active()) {
+                                    notice = "NO ACTIVE RAIDER DEMAND";
+                                } else if (!economy || !economicSnapshot || economicSnapshot->catchingUp ||
+                                           pendingEconomicSequence || pendingCrewSequence || pendingSecuritySequence ||
+                                           pendingRecoverySequence || pendingWreck) {
+                                    notice = "LEDGER BUSY / TRY AGAIN";
+                                } else {
+                                    EconomicCommand c;
+                                    c.port = demand->id;
+                                    c.action = EconomicAction::RaiderTribute;
+                                    c.combatPresent = true;
+                                    c.targetDistance = demand->range;
+                                    c.impactSeconds = activity.seconds;
+                                    c.workSeconds = demand->until;
+                                    c.limitCents = demand->restitution;
+                                    if (c.limitCents) {
+                                        if (const auto* hit = weapons.hunterOffence(c.port.home.parent(), activity.seconds))
+                                            c.wreck = *hit;
+                                    } else if (const auto offer = raidCargoDemand(economicSnapshot->player)) {
+                                        c.good = offer->first;
+                                        c.kg = offer->second;
+                                    }
+                                    c.sequence = economicSequence =
+                                        std::max(economicSequence, economicSnapshot->player.lastCommand) + 1;
+                                    if (economy->command(c)) {
+                                        pendingEconomicSequence = c.sequence;
+                                        pendingEconomicAction = c.action;
+                                        notice = "DEMAND ACCEPTED / AWAITING RECEIPT";
+                                    } else {
+                                        notice = "LEDGER BUSY / TRY AGAIN";
+                                    }
+                                }
+                                noticeTime = 5;
+                            } else if (pilotEnabled && npcCombat.demand()) {
+                                notice = npcCombat.demand()->reason + " / ALT-I ACCEPT";
+                                noticeTime = 5;
+                            } else if (pilotEnabled)
+                                if (auto body = activityBody()) {
+                                    notice = hailActivity(*body);
+                                    noticeTime = 8;
+                                }
+                            break;
+                        case SDL_SCANCODE_H: {
+                            if(event.key.mod&SDL_KMOD_CTRL){
+                                activity.clearSelection();targeting.reset();notice="COMBAT LOCK CLEARED / FLIGHT COURSE PRESERVED";noticeTime=3;break;
+                            }
+                            if((event.key.mod&SDL_KMOD_ALT)&&(event.key.mod&SDL_KMOD_SHIFT)){
+                                const auto attacker=awareness.attacker();
+                                const auto contacts=renderer.activityContacts();
+                                const auto found=std::find_if(contacts.begin(),contacts.end(),[&](const auto& c){return attacker&&c.body.id==*attacker&&!c.occluded&&c.body.hostile&&!c.body.disabled;});
+                                if(found!=contacts.end()){activity.select(found->body.id,true);notice="ATTACKER SELECTED / FLIGHT COURSE PRESERVED";}
+                                else notice="ATTACKER OBSCURED OR UNIDENTIFIED / FOLLOW BEARING";
+                                noticeTime=4;break;
+                            }
+                            const auto mode=event.key.mod&SDL_KMOD_ALT?HostileSelection::Crosshair:
+                                event.key.mod&SDL_KMOD_SHIFT?HostileSelection::Previous:HostileSelection::Next;
+                            const auto selected=selectHostile(renderer.activityContacts(),activity.selected,mode);
+                            if(selected){activity.select(*selected,true);notice="HOSTILE SELECTED / HOLD IN SEEKER / H NEXT / SHIFT-H PREVIOUS";noticeTime=3;}
+                            else{notice=mode==HostileSelection::Crosshair?"NO VISIBLE HOSTILE NEAR CROSSHAIR":"NO HOSTILE CONTACT IN SENSOR RANGE";noticeTime=3;}
+                            break;
+                        }
+                        case SDL_SCANCODE_F6:
+                            activity.enabled = !activity.enabled;
+                            if (!activity.enabled) {
+                                activity.clearSelection();
+                                pilot.clearWaypoint();
+                            }
+                            notice = activity.enabled ? "LOCAL ACTIVITY ON / K CONTACTS / I HAIL"
+                                                      : "LOCAL ACTIVITY HIDDEN / F6 RETURNS";
+                            noticeTime = 5;
+                            break;
+                        case SDL_SCANCODE_J:
+                            if (pilotEnabled) {
+                                if ((event.key.mod & SDL_KMOD_CTRL) && !specimenProbe.active()) {
+                                    notice=approachProbeEntry();noticeTime=7;
+                                } else if ((event.key.mod & SDL_KMOD_SHIFT) && currentSeam() && !specimenProbe.active()) {
+                                    notice = returnToSeamEntry();
+                                    noticeTime = 8;
+                                } else
+                                    navigateSelected();
+                            }
+                            break;
+                        case SDL_SCANCODE_L:
+                            if (pilotEnabled) {
+                                const auto body = activityBody();
+                                if (body && isOrbitalDebris(body->id)) {
+                                    const bool landing = pilot.landOnDebris(*body);
+                                    notice = landing ? "DEBRIS LANDING / ALIGNING TO THE ROTATING FACE"
+                                           : landableDebris(*body) ? "J MATCH COURSE / L LAND WITHIN 1.5 KM"
+                                                                   : "FRAGMENT TOO SMALL TO LAND";
+                                    noticeTime = 5;
+                                    break;
+                                }
+                                const bool surface = body && body->kind == ActivityKind::SurfacePort;
+                                const bool harbour = body && body->kind == ActivityKind::Harbour;
+                                const bool acceptRisk = event.key.mod & SDL_KMOD_SHIFT;
+                                const bool landing =
+                                    harbour ? pilot.dock()
+                                    : surface ? pilot.landAt(body->id.home, glm::normalize(body->position),acceptRisk)
+                                            : pilot.land(acceptRisk);
+                                if (landing && !harbour)
+                                    activity.clearSelection();
+                                notice =
+                                    harbour
+                                        ? (landing
+                                               ? "Arrival cleared / follow the berth lights / B takes the "
+                                                 "helm"
+                                               : "Select a healthy harbour at full ship size / J approaches")
+                                    : landing
+                                        ? acceptRisk ? "SURFACE RISK ACCEPTED / ASSISTED APPROACH / B ABORT"
+                                                     : "Landing site acquired on existing terrain / assisted approach"
+                                    : pilot.instruments().phase.starts_with("LANDING HOLD /")
+                                        ? pilot.instruments().phase + " / SHIFT-L ACCEPT RISK"
+                                    : surface
+                                        ? "J approaches the surface port / L lands when nearby"
+                                        : pilot.instruments().phase=="CAVERN EXPLORATION"
+                                            ? "CAVERN / G GEAR / MANUAL SLOW DESCENT TO LAND"
+                                            : "Approach a planet in ship mode before selecting a landing site";
+                                noticeTime = 5;
+                            }
+                            break;
+                        case SDL_SCANCODE_RETURN:
+                            if (pilotEnabled) {
+                                if (pilot.ship().landed || pilot.instruments().docking.docked)
+                                    pilot.launch();
+                                else
+                                    navigateSelected();
+                            }
+                            break;
+                        case SDL_SCANCODE_TAB:
+                            if(event.key.mod&SDL_KMOD_CTRL){contactsExpanded=!contactsExpanded;overlay=true;
+                                if(contactsExpanded){crewFlightOpen=false;reconOpen=false;}
+                                if(contactsExpanded&&noticeTime>0)noticeTime=std::max(noticeTime,30.);break;}
+                            overlay = !overlay;
+                            if (!overlay)
+                                crewFlightOpen = false;
+                            break;
+                        case SDL_SCANCODE_R:
+                            activity.clearSelection();
+                            if (pilotEnabled)
+                                pilot.startInSystem();
+                            else {
+                                nav.reset();
+                                pilot.resetMotion();
+                            }
+                            opt.tour = false;
+                            break;
+                        case SDL_SCANCODE_M:
+                            persistence.mark(nav.anchor,
+                                             "Discovered " + universe.describe(nav.anchor).label());
+                            notice = "Discovery saved / " + nav.anchor.str();
+                            noticeTime = 4;
+                            break;
+                        case SDL_SCANCODE_P: {
+                            auto file =
+                                (data / ("capture-" + std::to_string(SDL_GetTicks()) + ".ppm")).string();
+                            renderer.screenshot(file);
+                            notice = "Screenshot saved / " + file;
+                            noticeTime = 4;
+                            break;
+                        }
+                        case SDL_SCANCODE_T:
+                            pilotEnabled = false;
+                            pilot.resetMotion();
+                            releaseLook();
+                            nav.reset();
+                            opt.tour = true;
+                            tourStage = 0;
+                            stable = 0;
+                            returning = false;
+                            visited.clear();
+                            notice =
+                                "Guided journey / all positions and materials come from this universe seed";
+                            noticeTime = 5;
+                            break;
+                        default:
+                            break;
+                        }
+                    }
+                }
+                if (!running)
+                    break;
+                if(!pilotEnabled||opt.tour||probeViewing||specimenProbe.active()||plannerOpen||discoveryOpen||vesselOpen||marketOpen||crewOpen||crewFlightOpen)reconOpen=false;
+                if (!opt.smoke && (!economy || economicSnapshot)) activity.advance(dt);
+                pilot.setDebrisClock(activity.seconds);
+                if (economy) {
+                    auto system = specimenProbe.active() ? specimenProbe.parkedFrame() : nav.anchor;
+                    while (system.kind() > Kind::System)
+                        system = system.parent();
+                    if (system.kind() == Kind::System)
+                        economy->request(system, activity.seconds);
+                    auto nextSnapshot = economy->snapshot();
+                    if (!opt.smoke && economicSnapshot && nextSnapshot && nextSnapshot != economicSnapshot) {
+                        const bool sameSystem = economicSnapshot->network && nextSnapshot->network &&
+                            economicSnapshot->network->system == nextSnapshot->network->system;
+                        if (!sameSystem)
+                            incidentComms.clear();
+                        else {
+                            if (auto call = economicIncidentRadio(*economicSnapshot, *nextSnapshot); !call.empty())
+                                incidentComms = std::move(call);
+                            if (marketOpen && marketPage == MarketPage::Incidents) {
+                                if (const auto* selected = selectedIncident(*economicSnapshot, marketGood)) {
+                                    const auto& incidents = nextSnapshot->incidents;
+                                    const auto match = std::find_if(incidents.rbegin(), incidents.rend(), [&](const auto& i) {
+                                        return i.flight == selected->flight;
+                                    });
+                                    if (match != incidents.rend())
+                                        marketGood = size_t(match - incidents.rbegin());
+                                }
+                            }
+                        }
+                    }
+                    if (marketOpen && marketPage == MarketPage::Jobs && economicSnapshot && nextSnapshot &&
+                        nextSnapshot != economicSnapshot && marketGood < economicSnapshot->jobs.size() &&
+                        economicSnapshot->network && nextSnapshot->network &&
+                        economicSnapshot->network->system == nextSnapshot->network->system) {
+                        const auto& selected = economicSnapshot->jobs[marketGood];
+                        const auto& jobs = nextSnapshot->jobs;
+                        const auto match = std::find_if(jobs.begin(), jobs.end(), [&](const auto& job) {
+                            return job.id == selected.id && job.haul == selected.haul &&
+                                   job.recovery == selected.recovery && job.combat == selected.combat &&
+                                   job.distress == selected.distress;
+                        });
+                        marketGood = match == jobs.end() ? (jobs.empty() ? 0 : std::min(marketGood, jobs.size() - 1))
+                                                        : size_t(match - jobs.begin());
+                    }
+                    economicSnapshot = std::move(nextSnapshot);
+                    if (economicSnapshot) {
+                        if (!opt.smoke) {
+                            for (const auto& event : economicSnapshot->events) {
+                                constexpr std::string_view prefix = "RAIDER TRUCE ";
+                                if (!event.text.starts_with(prefix))
+                                    continue;
+                                std::istringstream receipt(event.text.substr(prefix.size()));
+                                std::string actor;
+                                double paidAt, until;
+                                if (receipt >> actor >> paidAt >> until && until > activity.seconds)
+                                    npcCombat.acceptTruce(ActivityId::parse(actor), paidAt, until);
+                            }
+                            crew.reconcile(economicSnapshot->player.crew);
+                            crew.reconcileEngineering(economicSnapshot->player.engineering);
+                            crew.reconcileMarket(economicSnapshot->player.crewRevision,
+                                                 economicSnapshot->player.crewTitles,
+                                                 economicSnapshot->player.crewBoarding);
+                        }
+                        if (pendingCrewSequence &&
+                            economicSnapshot->player.lastCommand >= pendingCrewSequence) {
+                            crewFeedback = economicSnapshot->message;
+                            pendingCrewSequence = 0;
+                        }
+                        if (!opt.economyTest) {
+                            weapons.setLoadout(economicSnapshot->player.weaponLoadout());
+                            crew.setWeaponLevels(
+                                economicSnapshot->exploration.stationLoadout(economicSnapshot->player));
+                        }
+                        if (pendingWreck && economicSnapshot->player.lastCommand >= pendingWreck)
+                            pendingWreck = 0;
+                        if (!pendingWreck && !economicSnapshot->catchingUp && economicSnapshot->network && !opt.smoke)
+                            for (const auto& damage : weapons.damage()) {
+                                const auto& id = damage.id;
+                                if (id.slot < 100 || id.slot >= 300 || id.home.kind() != Kind::Planet ||
+                                    id.home.parent() != economicSnapshot->network->system ||
+                                    (damage.hull > 0 && damage.systems[size_t(ShipSystem::Engines)] > 0))
+                                    continue;
+                                EconomicCommand c;
+                                c.port = id;
+                                c.impactSeconds = damage.hitSeconds;
+                                const bool registered = std::any_of(economicSnapshot->wrecks.begin(), economicSnapshot->wrecks.end(),
+                                    [&](const auto& w) { return w.id == id; });
+                                if (!registered && economicSnapshot->wrecks.size() < 128 && !economicSnapshot->sites.empty()) {
+                                    c.action = EconomicAction::RegisterWreck;
+                                    c.combatTarget = id;
+                                    c.wreck = damage;
+                                } else {
+                                    if (std::none_of(economicSnapshot->flights.begin(), economicSnapshot->flights.end(),
+                                            [&](const auto& f) { return f.id == id && f.disabledAt < 0; }))
+                                        continue;
+                                    c.action = EconomicAction::DisableVessel;
+                                }
+                                c.sequence = economicSequence =
+                                    std::max(economicSequence, economicSnapshot->player.lastCommand) + 1;
+                                if (economy->command(c))
+                                    pendingWreck = c.sequence;
+                                break;
+                            }
+                        if (!specimenProbe.active())
+                            pilot.applyPortRepairs(economicSnapshot->player.repairPoints);
+                        if (pendingEconomicSequence &&
+                            economicSnapshot->player.lastCommand >= pendingEconomicSequence) {
+                            if(surveyDeliveryAwaiting&&pendingEconomicAction==EconomicAction::ClaimSurvey){
+                                if(economicSnapshot->message.starts_with("CAVERN ASSAY COMPLETE")){
+                                    plannerChoice.contract=surveyDeliveryAwaiting;plannerChoice.tracking=false;plannerChoice.details=false;
+                                    plannerOpen=true;marketOpen=crewOpen=crewFlightOpen=probeViewing=false;overlay=true;releaseLook();plannerRefresh=0;
+                                }
+                                surveyDeliveryAwaiting=0;
+                            }
+                            if(plannerPending==pendingEconomicSequence){plannerFeedback=economicSnapshot->message;plannerFeedbackSeconds=8;plannerPending=0;plannerRefresh=0;}
+                            pendingCargoKg = 0;
+                            if (!economicSnapshot->outcomes.empty() &&
+                                economicSnapshot->outcomes.back().command == pendingEconomicSequence) {
+                                marketPage = MarketPage::Outcomes;
+                                marketGood = 0;
+                                marketOpen = true;
+                            }
+                            pendingEconomicSequence = 0;
+                            marketSay(economicSnapshot->message);
+                            if (pendingEconomicAction >= EconomicAction::ScanSurvey&&
+                                !(pendingEconomicAction==EconomicAction::SupplyEngineering&&pendingAutomaticEngineering)) {
+                                notice = economicSnapshot->message;
+                                noticeTime = 6;
+                            }
+                            if (pendingEconomicAction == EconomicAction::Sell &&
+                                pendingEconomicGood == tradeGood && tradeBuyer &&
+                                economicSnapshot->message.starts_with("SOLD") &&
+                                economicSnapshot->player.cargo[size_t(tradeGood)] == 0) {
+                                tradeBuyer.reset();
+                                tradeHint.clear();
+                            }
+                        }
+                        if (pendingSpecimen &&
+                            economicSnapshot->player.lastCommand >= pendingSpecimenSequence) {
+                            const auto it =
+                                std::find_if(economicSnapshot->expeditions.jobs.begin(),
+                                             economicSnapshot->expeditions.jobs.end(),
+                                             [&](const auto& job) { return job.id == pendingSpecimen; });
+                            if (it != economicSnapshot->expeditions.jobs.end() && it->lab &&
+                                economicSnapshot->message.starts_with("SPECIMEN LAB READY")) {
+                                const auto lab = economicSnapshot->siteIndex(*it->lab);
+                                if (lab && economicTradeAccess(universe, nav, pilot,
+                                                               economicSnapshot->network->sites[*lab])) {
+                                    stationControl.returnToHelm(crew);
+                                    parkedSelection = activity.selected;
+                                    parkedCombatSelection = activity.combatSelection;
+                                    parkedActivityEnabled = activity.enabled;
+                                    if (specimenProbe.enter(universe, nav, pilot, *it)) {
+                                        activity.clearSelection();
+                                        activity.enabled = false;
+                                        renderer.setActivity(nullptr);
+                                        renderer.setSpecimen(it->source);
+                                        renderer.setWeapons(nullptr);
+                                        renderer.setNpcCombat(nullptr);
+                                        marketOpen = false;
+                                        pilotEnabled = true;
+                                        opt.tour = false;
+                                        surveyController.reset();
+                                        miningController.reset();
+                                        notice = "SPECIMEN PROBE / SHIP PARKED / F12 ROCK ASSAY / F4 NEXT / "
+                                                 "SHIFT-F11 EXIT";
+                                        noticeTime = 10;
+                                    }
+                                }
+                            }
+                            pendingSpecimen = pendingSpecimenSequence = 0;
+                        }
+                        if (!specimenProbe.active())
+                            pilot.setCargoMass(std::min<int64_t>(
+                                maxShipPayloadKg, economicSnapshot->player.massKg() + pendingCargoKg +
+                                                      economicSnapshot->player.rescued.size() * 80));
+                        if (pendingRecoverySequence &&
+                            economicSnapshot->player.lastCommand >= pendingRecoverySequence) {
+                            recoveryMessage = economicSnapshot->message;
+                            notice = recoveryMessage;
+                            noticeTime = 7;
+                            pendingRecoverySequence = 0;
+                            if(vesselTransferPending){
+                                vesselOperations.acknowledge(recoveryMessage.starts_with("FIELD REPAIR COMPLETE")||recoveryMessage.starts_with("RECOVERED"));
+                                vesselTransferPending=false;
+                            }
+                        }
+                    }
+                    if (tradeBuyer && economicSnapshot && economicSnapshot->network &&
+                        !economicSnapshot->siteIndex(*tradeBuyer)) {
+                        tradeBuyer.reset();
+                        tradeHint.clear();
+                    }
+                    if (marketOpen) {
+                        if (!marketPort || (economicSnapshot && !economicSnapshot->siteIndex(*marketPort)))
+                            selectMarket();
+                        marketGood = std::min(marketGood, marketRows() - 1);
+                        marketView =
+                            economicMarketView(economicSnapshot.get(), marketPort, marketGood, marketQuantity,
+                                               connectedMarket(), marketPage, marketContext());
+                        if (marketPage == MarketPage::Crew)
+                            marketGood = marketView.selected;
+                        if (marketPage == MarketPage::Goods && tradeBuyer)
+                            marketView.summary = tradeHint;
+                        marketFeedbackSeconds = std::max(0., marketFeedbackSeconds - dt);
+                        if (marketFeedbackSeconds > 0)
+                            marketView.message = marketFeedback;
+                    }
+                    if (!marketOpen) {
+                        marketView.open = false;
+                        if (economicSnapshot) {
+                            marketView.credits = economicSnapshot->player.credits;
+                            marketView.cargoKg = economicSnapshot->player.massKg();
+                            marketView.cargoLitres = economicSnapshot->player.volumeLitres();
+                            marketView.activeJob =
+                                !economicSnapshot->player.rescued.empty()
+                                    ? "RESCUED " + std::to_string(economicSnapshot->player.rescued.size()) +
+                                          " / F2 SERVICES"
+                                : economicSnapshot->player.haul      ? "F4 HAUL"
+                                : economicSnapshot->player.combatJob ? "F4 SECURITY TARGET"
+                                                                     : "SHIFT-F11 EXPEDITIONS";
+                        }
+                    }
+                    renderer.setEconomy(economicSnapshot, &marketView);
+                }
+                if (!specimenProbe.active() && pilotEnabled && activity.selected && !activity.combatSelection && !pilot.debrisManeuver())
+                    if (auto body = activityBody())
+                        pilot.trackWaypoint(waypointFor(*body));
+                auto surfaceFrame = nav.anchor;
+                while (surfaceFrame.kind() > Kind::Planet)
+                    surfaceFrame = surfaceFrame.parent();
+                pilot.setSurfaceWorld(
+                    surfaceFrame.kind() == Kind::Planet ? renderer.surfaceWorld(surfaceFrame) : nullptr);
+                if (economicSnapshot)
+                    pilot.setExcavations(std::shared_ptr<const MiningProbeState>(economicSnapshot,
+                        &economicSnapshot->exploration.probes),activity.seconds);
+                if (probeAwaitingLaunch && economicSnapshot &&
+                    economicSnapshot->player.lastCommand >= probeAwaitingLaunch) {
+                    if (const auto* b=currentProbe();b && b->id!=probePreviousId) {
+                        probeViewing=true;probeLook={};mouseX=mouseY=0;plannerOpen=marketOpen=crewOpen=false;pilot.brake();
+                        if(plannerView.contract&&b->planet==plannerView.world){plannerChoice.bore=b->id;plannerChoice.newSite=false;plannerRefresh=0;}
+                    }
+                    probeAwaitingLaunch=0;
+                }
+                pilot.setSystemAuthority(crew.systemHealth(ShipSystem::Engines) / 100.*crew.plant().authority(PlantBus::Helm),
+                                         crew.systemHealth(ShipSystem::Thrusters) / 100.*crew.plant().authority(PlantBus::Helm));
+                weapons.setBusPower(crew.plant().authority(PlantBus::Weapons));
+                if(!opt.smoke&&!specimenProbe.active()&&pilot.ship().cruise&&crew.plant().authority(PlantBus::Drive)<.35){
+                    pilot.toggleCruise();notice="WARP DROP / ENGINEERING POWER OR HEAT LIMIT";noticeTime=6;}
+                if(!opt.smoke&&!specimenProbe.active()&&activity.seconds>lastEngineeringSupply+6){
+                    lastEngineeringSupply=activity.seconds;supplyEngineering(true);}
+                const bool* keys = SDL_GetKeyboardState(nullptr);
+                if(!keys[SDL_SCANCODE_SPACE])radioConsumedFire=false;
+                else if(discoveryOpen)radioConsumedFire=true;
+                if(pilotEnabled&&!specimenProbe.active()&&!uiProof){
+                    auto system=nav.anchor;while(system.kind()>Kind::System)system=system.parent();
+                    if(system.kind()==Kind::System)discoveries.page(discoveryCache.request(universe,system));
+                    else discoveries.page({});
+                    pilot.setDiscoveries(discoveries.catalog());
+                }else pilot.setDiscoveries({});
+                const bool stationWasRequested = stationControl.requested();
+                const bool stationWasActive = stationControl.active();
+                if (stationControl.requested() && (discoveryOpen || vesselOpen || plannerOpen || crewOpen || marketOpen || !pilotEnabled || opt.tour))
+                    stationControl.returnToHelm(crew);
+                stationControl.synchronize(crew, pilot, nav);
+                if ((stationWasRequested && !stationControl.requested()) ||
+                    (!stationWasActive && stationControl.active())) {
+                    notice = stationControl.status();
+                    noticeTime = 7;
+                    mouseX = mouseY = 0;
+                }
+                flight.observeGalaxy(renderer.galaxySamples());
+                if (!opt.smoke && (!economy || economicSnapshot) && (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS)) {
+                    const glm::dvec3 axes{static_cast<double>(keys[SDL_SCANCODE_D]) - keys[SDL_SCANCODE_A],
+                                          static_cast<double>(keys[SDL_SCANCODE_E]) - keys[SDL_SCANCODE_Q],
+                                          static_cast<double>(keys[SDL_SCANCODE_S]) - keys[SDL_SCANCODE_W]};
+                    if (glm::length(axes) > 0)
+                        opt.tour = false;
+                    if (!opt.tour && pilotEnabled) {
+                        HelmInput helm;
+                        helm.throttle = -axes.z;
+                        helm.strafe = axes.x;
+                        helm.lift = axes.y;
+                        helm.pitch = double(keys[SDL_SCANCODE_UP]) - keys[SDL_SCANCODE_DOWN];
+                        helm.yaw = double(keys[SDL_SCANCODE_RIGHT]) - keys[SDL_SCANCODE_LEFT];
+                        helm.roll = double(keys[SDL_SCANCODE_O]) - keys[SDL_SCANCODE_U];
+                        helm.boost = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT];
+                        helm.precision = keys[SDL_SCANCODE_LCTRL] || keys[SDL_SCANCODE_RCTRL];
+                        helm.brake = keys[SDL_SCANCODE_B];
+                        if (plannerOpen || discoveryOpen || vesselOpen || marketOpen || crewOpen || probeViewing)
+                            helm = {};
+                        if(reconOpen){const bool braking=helm.brake;helm={};helm.brake=braking;}
+                        if (stationControl.active()) {
+                            stationControl.aim(helm.pitch, helm.yaw, {mouseX, mouseY}, dt);
+                            stationControl.fly(pilot, crew, universe, nav, activityBody(), dt,
+                                               renderer.submittedGeometry(nav.anchor));
+                        } else {
+                            helm = resolveHelmInput(
+                                helm, plannerOpen || discoveryOpen || vesselOpen || marketOpen || crewOpen ? glm::dvec2(0) : glm::dvec2(mouseX, mouseY), dt,
+                                keys[SDL_SCANCODE_LALT] || keys[SDL_SCANCODE_RALT]);
+                            pilot.update(helm, dt, renderer.submittedGeometry(nav.anchor));
+                        }
+                    } else if (!opt.tour)
+                        flight.update(axes, dt, keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT],
+                                      keys[SDL_SCANCODE_LCTRL] || keys[SDL_SCANCODE_RCTRL],
+                                      renderer.submittedGeometry(nav.anchor));
+                }
+                if (!opt.smoke && (!economy || economicSnapshot) && !opt.tour && pilotEnabled && pilot.ship().cruise &&
+                    !(SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS))
+                    pilot.update({}, dt, renderer.submittedGeometry(nav.anchor));
+                if(pilot.instruments().environmentalStrike!=seenEnvironmentalStrike){
+                    seenEnvironmentalStrike=pilot.instruments().environmentalStrike;
+                    renderer.cockpitImpulse(CockpitImpulse::Damage,.65);
+                }
+                if (specimenProbe.active()) {
+                    const auto source = *specimenProbe.source();
+                    if (!specimenProbe.contains(nav.anchor))
+                        nav.changeFrame(source);
+                    if (nav.selected && !specimenProbe.contains(*nav.selected))
+                        nav.selected.reset();
+                    const auto n = universe.describe(source);
+                    const auto eye = universe.pointRelative(
+                        nav.anchor,
+                        nav.cameraPosition() *
+                            std::pow(10., nav.logDistance - universe.describe(nav.anchor).frame.logRadius),
+                        source, n.frame.logRadius);
+                    if (glm::length(eye) > 8) {
+                        nav.changeFrame(source);
+                        nav.setRenderScale(n.frame.logRadius);
+                        nav.offset = glm::normalize(eye) * 7.5 - nav.orientation * glm::dvec3(0, 0, 1);
+                        nav.stopMotion();
+                        pilot.brake();
+                        pilot.setVelocity({});
+                    }
+                }
+                double cutterDrive = 0, cutterStrain = 0;
+                bool iceWarningCue = false, iceFallCue = false, cuttingFault = false;
+                if (!opt.smoke) {
+                    weapons.advance(dt);
+                    stationControl.prepareWeapons(weapons, crew);
+                    const bool controlHeld = keys[SDL_SCANCODE_LCTRL] || keys[SDL_SCANCODE_RCTRL];
+                    const bool workAllowed = pilotEnabled && !probeViewing && !opt.tour && !plannerOpen && !discoveryOpen && !vesselOpen && !marketOpen && !crewOpen && !crewFlightOpen && !reconOpen &&
+                                             (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS);
+                    const auto* occupiedCavern = pilotEnabled && !probeViewing && !opt.tour && pilot.ship().hull > 0
+                        ? currentCavern() : nullptr;
+                    const auto* workingCavern = workAllowed ? occupiedCavern : nullptr;
+                    const auto fault = occupiedCavern ? iceFault(*occupiedCavern) : std::nullopt;
+                    bool cavernExtracted = false;
+                    const auto scanContact=activityBody();
+                    const bool shipScan=scanContact&&(scanContact->kind==ActivityKind::Raider||scanContact->kind==ActivityKind::Freighter||scanContact->kind==ActivityKind::Ferry||scanContact->kind==ActivityKind::Patrol||scanContact->kind==ActivityKind::Survey);
+                    const bool scanButton = workAllowed && !shipScan && keys[SDL_SCANCODE_F12] &&
+                                          !controlHeld &&
+                                          !(keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT] ||
+                                            keys[SDL_SCANCODE_LALT] || keys[SDL_SCANCODE_RALT]);
+                    const auto* landedFragment = pilot.landedDebris();
+                    const bool scanHeld=scanButton&&!workingCavern&&!landedFragment;
+                    const bool mineButton=workAllowed&&controlHeld&&keys[SDL_SCANCODE_SPACE]&&!radioConsumedFire;
+                    const bool mineHeld = mineButton&&!workingCavern;
+                    SurveyObserver observer;
+                    if (scanHeld || mineHeld)
+                        observer = explorationObserver();
+                    std::optional<Address> target;
+                    if (!landedFragment && (scanHeld || mineHeld)) {
+                        if (nav.anchor.kind() >= Kind::Surface)
+                            target = nav.anchor;
+                        else if (nav.anchor.kind() == Kind::Planet && pilot.instruments().altitude < 1000) {
+                            target = nav.anchor.child(
+                                Kind::Surface, encodeTile(tileAt(glm::normalize(observer.position), 7)));
+                        } else if (nav.selected && nav.selected->kind() >= Kind::Planet)
+                            target = nav.selected;
+                        else if (nav.anchor.kind() == Kind::Planet)
+                            target = nav.anchor;
+                    }
+                    if (!landedFragment && (scanHeld || mineHeld) && !specimenProbe.active() && !pilot.ship().shrinking)
+                        if (const auto* site = selectedProspect();
+                            site && surveyAccess(universe, observer, site->surface))
+                            target = site->surface;
+                    if (!landedFragment && (scanHeld || mineHeld) && !specimenProbe.active()) {
+                        if (pilot.ship().shrinking && nav.selected && nav.selected->kind() >= Kind::Rock &&
+                            (!target || nav.selected->kind() >= target->kind() ||
+                             !nav.selected->ancestorOf(*target)) &&
+                            surveyAccess(universe, observer, *nav.selected))
+                            target = nav.selected;
+                        if (mineHeld && nav.selected && economicSnapshot &&
+                            markedSeam(economicSnapshot->exploration, *nav.selected))
+                            target = nav.selected;
+                        // Automatic frame changes may clear the original selection on the return trip.
+                        // Recover the nearby saved mark without overriding a different chosen outcrop.
+                        if (mineHeld && !pilot.ship().shrinking && economicSnapshot &&
+                            economicSnapshot->exploration.miningLevel)
+                            if (const auto* seam = currentSeam(); seam && seam->marked &&
+                                (!nav.selected || nav.selected->kind() < Kind::Rock ||
+                                 seam->source.ancestorOf(*nav.selected))) {
+                                const auto* selected = selectedProspect();
+                                if ((!selected || selected->surface == seam->source.parent().parent()) &&
+                                    miningAccess(universe, observer, seam->source,
+                                                 economicSnapshot->exploration.miningMount,
+                                                 renderer.weaponTargets(), seam).allowed)
+                                    target = seam->source;
+                            }
+                    }
+                    if (specimenProbe.active() && nav.selected && specimenProbe.contains(*nav.selected) &&
+                        surveyAccess(universe, observer, *nav.selected))
+                        target = nav.selected;
+                    if (scanHeld && !specimenProbe.active() && economicSnapshot && target && target->kind() >= Kind::Surface) {
+                        const auto region = prospectAddress(universe, *target);
+                        for (const auto& job : economicSnapshot->exploration.contracts)
+                            if (job.target.kind() == Kind::Surface && job.phase == SurveyPhase::Accepted &&
+                                region == job.target && surveyAccess(universe, observer, job.target)) {
+                                target = job.target;
+                                break;
+                            }
+                    }
+                    const auto* mission = economicSnapshot && economicSnapshot->network
+                                              ? activeExpedition(economicSnapshot->expeditions,
+                                                                 economicSnapshot->network->system)
+                                              : nullptr;
+                    const bool loanCore =
+                        !specimenProbe.active() && mission && mission->phase == ExpeditionPhase::Survey &&
+                        target &&
+                        !(economicSnapshot && markedSeam(economicSnapshot->exploration, *target)) &&
+                        prospectAddress(universe, *target) == prospectAddress(universe, mission->source) &&
+                        glm::length(universe.pointRelative(mission->source, {}, observer.reference, 0) -
+                                    observer.position) <= 80;
+                    const auto* exploration = economicSnapshot ? &economicSnapshot->exploration : nullptr;
+                    const bool canSubmit = economy && economicSnapshot && economicSnapshot->network &&
+                                           (landedFragment
+                                                ? landedFragment->home.parent() == economicSnapshot->network->system
+                                                : target && economicSnapshot->network->system.ancestorOf(*target)) &&
+                                           !economicSnapshot->catchingUp &&
+                                           !pendingEconomicSequence && !pendingCrewSequence &&
+                                           !pendingSecuritySequence && !pendingRecoverySequence &&
+                                           !pendingWreck;
+                    const bool scanComplete = surveyController.update(
+                        universe, observer, target, exploration ? exploration->scannerLevel : 1,
+                        crew.efficiency(CrewStation::Navigation), dt, scanHeld, canSubmit);
+                    MiningAccess access;
+                    double readiness = 0;
+                    if (mineHeld && target && loanCore) {
+                        access = miningAccess(universe, observer, *target, 0, renderer.weaponTargets());
+                        readiness = std::max(.25, crew.efficiency(CrewStation::Engineering));
+                    } else if (mineHeld && (target || landedFragment) && !specimenProbe.active() && exploration &&
+                               exploration->miningLevel) {
+                        access = landedFragment
+                            ? debrisMiningAccess(universe, observer, *landedFragment)
+                            : miningAccess(universe, observer, *target, exploration->miningMount,
+                                           renderer.weaponTargets(), markedSeam(*exploration, *target));
+                        const auto mount = exploration->miningMount;
+                        const bool captain = mount == (stationControl.active() ? stationControl.mount() : 0);
+                        readiness = (captain ? 1. : crew.gunnerReadiness(mount)) *
+                                    crew.systemHealth(ShipSystem(unsigned(ShipSystem::NoseGun) + mount)) /
+                                    100. * (.6 + .4 * crew.efficiency(CrewStation::Engineering));
+                        const auto& bay = crew.rooms()[size_t(CrewStation::Weapons)];
+                        if (bay.fire >= 25 || bay.oxygen < 18 || bay.integrity <= 0)
+                            readiness = 0;
+                    }
+                    readiness*=pilot.instruments().surfaceScanQuality*crew.plant().authority(PlantBus::Industry);
+                    if(crew.plant().authority(PlantBus::Industry)<.15)readiness=0;
+                    // Submit one operation per frame without discarding the other one's work.
+                    const bool miningSubmissionReady = canSubmit && !scanComplete;
+                    const bool extracted =
+                        miningController.update(access,
+                                                loanCore      ? 1
+                                                : exploration ? exploration->miningLevel
+                                                              : 0,
+                                                readiness, dt, mineHeld, miningSubmissionReady);
+                    if (mineHeld && miningSubmissionReady && access.allowed && readiness > 0 &&
+                        miningController.progress() > 0 && miningController.heat() < 100)
+                        weapons.utilityBeam(access.ray, access.endpoint,
+                                            loanCore ? 0 : exploration->miningMount);
+                    if ((scanComplete || extracted) && canSubmit && (target || landedFragment)) {
+                        EconomicCommand c;
+                        c.action = landedFragment ? EconomicAction::ExtractOrbitalDebris
+                                 : scanComplete ? (specimenProbe.active() ? EconomicAction::AssaySpecimen
+                                                                          : EconomicAction::ScanSurvey)
+                                                : (loanCore ? EconomicAction::RecoverCore
+                                                            : EconomicAction::ExtractProspect);
+                        if (mission && (specimenProbe.active() || loanCore)) {
+                            c.contract = mission->id;
+                            c.specimenLab = mission->lab;
+                        }
+                        c.surveyTarget = target;
+                        if (landedFragment)
+                            c.port = *landedFragment;
+                        c.observer = observer;
+                        c.workSeconds = scanComplete ? 8 : 6;
+                        c.serviceUnits =
+                            unsigned(std::clamp(crew.efficiency(CrewStation::Navigation) * 100, 0., 150.));
+                        c.weaponMount = exploration ? exploration->miningMount : 0;
+                        c.combatPresent = access.allowed;
+                        c.sequence = economicSequence =
+                            std::max(economicSequence, economicSnapshot->player.lastCommand) + 1;
+                        if (economy->command(c)) {
+                            pendingEconomicSequence = c.sequence;
+                            pendingEconomicAction = c.action;
+                            if (extracted)
+                                pendingCargoKg = std::min<int64_t>(
+                                    loanCore ? 1 : 10 * exploration->miningLevel,
+                                    economicSnapshot->player.capacityKg - economicSnapshot->player.massKg());
+                        }
+                    }
+                    if(workingCavern) {
+                        const auto observer=explorationObserver();
+                        const auto find=cavernFinds(*workingCavern)[cavernSelection];
+                        if(!scanButton&&!mineButton)cavernWorkStatus.clear();
+                        if(cavernScanHole!=workingCavern->id||cavernScanFind!=cavernSelection) {
+                            cavernScanProgress=0;cavernScanSubmitted=false;cavernMiner.reset();cavernRecoveryProgress=0;
+                            cavernScanHole=workingCavern->id;cavernScanFind=cavernSelection;
+                        }
+                        if(scanButton&&!cavernScanSubmitted) {
+                            if(cavernSurveyAccess(universe,observer,*workingCavern,find,false)) {
+                                const bool close=cavernSurveyAccess(universe,observer,*workingCavern,find,true);
+                                const double skill=std::max(.2,crew.efficiency(CrewStation::Navigation));
+                                cavernScanProgress=std::min(1.,cavernScanProgress+dt*(.6+.4*skill)/(close?6.:3.));
+                                cavernWorkStatus=std::string(close?"CLOSE ASSAY ":"OVERVIEW SCAN ")+std::to_string(int(cavernScanProgress*100))+"%";
+                                if(cavernScanProgress>=1&&cavernOrder(EconomicAction::ScanCavern,*workingCavern,cavernSelection,8)) {
+                                    cavernScanSubmitted=true;cavernWorkStatus="CAVERN SCAN / AWAITING SAVED RECEIPT";
+                                }
+                            } else {cavernScanProgress=0;cavernWorkStatus="FACE THE SELECTED DEPOSIT / STOP NEAR THE WALL";}
+                        } else if(!scanButton){cavernScanProgress=0;cavernScanSubmitted=false;}
+                        MiningAccess cavernAccess;double quality=0;
+                        const auto& x=economicSnapshot->exploration;
+                        if(mineButton&&x.miningLevel&&workingCavern->finds[cavernSelection].marked) {
+                            cavernAccess=cavernMiningAccess(universe,observer,*workingCavern,find,x.miningMount,renderer.weaponTargets());
+                            const bool captain=x.miningMount==(stationControl.active()?stationControl.mount():0);
+                            quality=(captain?1.:crew.gunnerReadiness(x.miningMount))*(.6+.4*crew.efficiency(CrewStation::Engineering))*
+                                crew.systemHealth(ShipSystem(unsigned(ShipSystem::NoseGun)+x.miningMount))/100.;
+                            const auto& bay=crew.rooms()[size_t(CrewStation::Weapons)];
+                            if(bay.fire>=25||bay.oxygen<18||bay.integrity<=0)quality=0;
+                            quality*=crew.plant().authority(PlantBus::Industry);
+                            if(crew.plant().authority(PlantBus::Industry)<.15)quality=0;
+                            if(keys[SDL_SCANCODE_LALT]||keys[SDL_SCANCODE_RALT])quality*=.5;
+                        }
+                        const bool ready=economy&&economicSnapshot&&!economicSnapshot->catchingUp&&!pendingEconomicSequence&&
+                            !pendingCrewSequence&&!pendingSecuritySequence&&!pendingRecoverySequence&&!pendingWreck;
+                        const bool weakFace = fault && fault->face.index == cavernSelection;
+                        const auto& faceState=workingCavern->excavation[cavernSelection];
+                        const bool falling=(weakFace && iceStress.bore == workingCavern->id && iceStress.falling()) ||
+                            (faceState.lastFall>=0&&observer.seconds<faceState.lastFall+2.4);
+                        const bool careful=keys[SDL_SCANCODE_LALT]||keys[SDL_SCANCODE_RALT];
+                        if(excavationWork.bore==workingCavern->id&&excavationWork.face==cavernSelection&&
+                           excavationWork.careful!=careful)cavernMiner.reset();
+                        const double previousWork = cavernMiner.progress();
+                        const double previousStrain=excavationStrain(*workingCavern,find,previousWork/6.,careful);
+                        cavernExtracted = cavernMiner.update(cavernAccess, x.miningLevel, quality, dt,
+                                                            mineButton && !falling, ready);
+                        // Careful feed needs twice as much real tool work for the same yield.
+                        // Readiness is scaled before the controller in the block above.
+                        excavationWork={workingCavern->id,cavernSelection,
+                            cavernExtracted?1.:cavernMiner.progress()/6.,careful};
+                        const bool cutting = cavernExtracted || cavernMiner.progress() > previousWork;
+                        iceWarningCue=previousStrain<.5&&excavationStrain(*workingCavern,find,excavationWork.progress,careful)>=.5;
+                        if(mineButton) {
+                            cavernWorkStatus=!workingCavern->finds[cavernSelection].marked ? "SHRINK / CLOSE ASSAY AND CTRL-F12 MARK FIRST"
+                                : !x.miningLevel ? "FIT A MINING HEAD AT AN EMPTY BAY / F2 SURVEY" : cavernMiner.status();
+                            if (cutting) {
+                                weapons.utilityBeam(cavernAccess.ray,cavernAccess.endpoint,x.miningMount);
+                                cuttingFault = false; // Excavation damage now drives cutting failures for every mineral.
+                                cutterDrive = .55 + .15 * x.miningLevel;
+                                cutterStrain = std::max(cavernMiner.heat() * .002,
+                                    excavationStrain(*workingCavern,find,excavationWork.progress,careful));
+                            }
+                        }
+                        const bool recovering=keys[SDL_SCANCODE_0]&&!careful&&!mineButton&&!scanButton&&ready&&
+                            !falling&&observer.size>=.99&&glm::length(observer.velocity)<=3&&
+                            cavernSurveyAccess(universe,observer,*workingCavern,find,false);
+                        if(recovering&&(faceState.looseKg||faceState.buriedKits)) {
+                            const double engineer=crew.efficiency(CrewStation::Engineering);
+                            cavernRecoveryProgress+=dt*(.5+.5*std::clamp(engineer,0.,1.5));
+                            cavernWorkStatus="RECOVERING LOOSE ORE / "+std::to_string(int(std::min(1.,cavernRecoveryProgress/6.)*100))+"%";
+                            if(cavernRecoveryProgress>=6&&cavernOrder(EconomicAction::RecoverCavern,*workingCavern,cavernSelection,6))
+                                cavernRecoveryProgress=0;
+                        } else cavernRecoveryProgress=0;
+                    } else {cavernScanProgress=0;cavernScanSubmitted=false;cavernMiner.reset();cavernWorkStatus.clear();excavationWork={};cavernRecoveryProgress=0;}
+                    if(occupiedCavern) {
+                        if(seenCollapseBore!=occupiedCavern->id){seenCollapseBore=occupiedCavern->id;
+                            for(unsigned i=0;i<cavernFindCount;++i)seenCollapses[i]=occupiedCavern->excavation[i].collapses;}
+                        for(const auto& find:cavernFinds(*occupiedCavern)) {
+                            const auto& state=occupiedCavern->excavation[find.index];
+                            if(state.collapses>seenCollapses[find.index]&&activity.seconds<state.lastFall+2.4) {
+                                iceFallCue=true;
+                                const auto observer=explorationObserver();
+                                const auto eye=observer.reference==occupiedCavern->planet?observer.position:
+                                    universe.pointRelative(observer.reference,observer.position/std::pow(10.,universe.describe(observer.reference).frame.logRadius),occupiedCavern->planet,0);
+                                const double distance=glm::length(eye-cavernFindPoint(*occupiedCavern,find));
+                                const double damage=(1.8+2*excavationProfile(*occupiedCavern,find).weakness)*std::clamp(1-distance/12.,0.,1.);
+                                if(damage>0){pilot.applyCombatDamage(damage);renderer.cockpitImpulse(CockpitImpulse::Damage,.4+damage*.25);}
+                            }
+                            seenCollapses[find.index]=state.collapses;
+                        }
+                    } else seenCollapseBore=0;
+                    if (fault) {
+                        const auto& bore = *occupiedCavern;
+                        const auto observer = explorationObserver();
+                        const auto eye = observer.reference == bore.planet ? observer.position : universe.pointRelative(observer.reference,
+                            observer.position / std::pow(10., universe.describe(observer.reference).frame.logRadius),
+                            bore.planet, 0);
+                        const auto localEye = glm::inverse(tangentFrame(glm::normalize(bore.entry))) * (eye - bore.entry);
+                        const bool warned = iceStress.bore == bore.id && iceStress.warning();
+                        const double speed = workAllowed && !observer.field ? glm::length(observer.velocity) : 0.;
+                        const double damage = iceStress.update(bore.id, *fault, localEye, speed, observer.size,
+                                                               cuttingFault, dt);
+                        iceWarningCue |= iceStress.warning() && !warned;
+                        iceFallCue |= iceStress.fallAge == 0;
+                        if (cuttingFault)
+                            cutterStrain = std::max(cutterStrain, iceStress.load);
+                        if (iceFallCue)
+                            cavernMiner.reset();
+                        if (damage > 0) {
+                            pilot.applyCombatDamage(damage);
+                            renderer.cockpitImpulse(CockpitImpulse::Damage, .3 + damage * .25);
+                        }
+                    } else {
+                        iceStress = {};
+                    }
+                    if (cavernExtracted && !iceFallCue)
+                        cavernOrder(EconomicAction::ExtractCavern, *workingCavern, cavernSelection, 6);
+                    const bool inhibit = specimenProbe.active() || (economy && !economicSnapshot) || !pilotEnabled || plannerOpen || discoveryOpen || vesselOpen || marketOpen || crewOpen || reconOpen ||
+                                         pilot.instruments().fieldActive || pilot.ship().landed ||
+                                         pilot.ship().hull <= 0 ||
+                                         std::abs(pilot.ship().logSize - pilot.ship().targetLogSize) > .01;
+                    const unsigned controlledMount=stationControl.active()?stationControl.mount():0;
+                    const unsigned seekerMount=targetingMount(weapons,controlledMount,stationControl.active());
+                    auto targetingRay=stationControl.ray(nav,pilot,activity.seconds);
+                    const auto targetingGeometry=renderer.submittedGeometry(nav.anchor);
+                    targeting.update(universe,targetingRay,pilot.ship().velocity,activity.selected,weapons,seekerMount,
+                                     renderer.weaponTargets(),dt,inhibit||probeViewing||!(SDL_GetWindowFlags(window)&SDL_WINDOW_INPUT_FOCUS),
+                                     crew.efficiency(CrewStation::Navigation),targetingGeometry.get());
+                    if(targeting.view().cue)cutterAudio.targetLock(targeting.view().cue>0);
+
+                    const bool probeWeapon=economicSnapshot && economicSnapshot->exploration.probes.launchers[controlledMount];
+                    const bool fireHeld=keys[SDL_SCANCODE_SPACE] && !controlHeld && !radioConsumedFire;
+                    if (!inhibit && !probeViewing && !opt.tour && fireHeld && probeWeapon && !probeTriggerHeld) {
+                        probeBay=controlledMount;notice=launchProbe();noticeTime=7;
+                    }
+                    probeTriggerHeld=fireHeld;
+                    if (!inhibit && !probeViewing && !probeWeapon && !opt.tour && (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) &&
+                        fireHeld && !(keys[SDL_SCANCODE_LCTRL] || keys[SDL_SCANCODE_RCTRL])) {
+                        auto ray = stationControl.ray(nav, pilot, activity.seconds);
+                        ray.targetSystem = targetSystem;
+                        ray.seekerControlled=true;ray.guidedTarget=targeting.lockedTarget();
+                        const auto geometry = renderer.submittedGeometry(nav.anchor);
+                        const auto fired = stationControl.active()
+                                               ? (weapons.fireMount(stationControl.mount(), universe, ray,
+                                                                    renderer.weaponTargets(), geometry.get())
+                                                      ? 1u << stationControl.mount()
+                                                      : 0u)
+                                               : weapons.fireBattery(universe, ray, renderer.weaponTargets(),
+                                                                     geometry.get());
+                        if (fired) {
+                            double kick = 0;
+                            for (unsigned mount = 0; mount < maxWeaponMounts; ++mount)
+                                if (fired & (1u << mount)) {
+                                    const auto level = weapons.mount(mount).level;
+                                    kick += level == missileLauncher ? .95 : level == ionDisruptor ? .66 :
+                                            .46 + level * .12;
+                                }
+                            renderer.cockpitImpulse(CockpitImpulse::Recoil, kick);
+                        }
+                    }
+                    if (!opt.tour && !specimenProbe.active()) {
+                        auto ray = stationControl.ray(nav, pilot, activity.seconds);
+                        ray.targetSystem = targetSystem;
+                        fireControl.subsystemLock(activity.selected && vesselOperations.confirmed(*activity.selected,activity.seconds) ? activity.selected : std::nullopt);
+                        const auto fired = fireControl.update(
+                            universe, ray, nav.orientation, activity.selected,
+                            stationControl.active() ? stationControl.mount() : 0, crew, weapons,
+                            renderer.weaponTargets(), dt,
+                            inhibit || !(SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS),
+                            renderer.submittedGeometry(nav.anchor).get());
+                        if (fired)
+                            renderer.cockpitImpulse(CockpitImpulse::Recoil, .18);
+                    }
+                }
+                nav.update((opt.benchmark ? 1.0 / 60 : dt) * (opt.tour ? 3 : 1));
+                if (economicSnapshot && !specimenProbe.active()) {
+                    for (const auto& b:economicSnapshot->exploration.probes.holes)
+                        if (b.blastTime()>probeBlastClock && b.blastTime()<=activity.seconds) {
+                            const auto ship=universe.pointRelative(nav.anchor,
+                                nav.cameraPosition()*std::pow(10.,nav.logDistance-universe.describe(nav.anchor).frame.logRadius),b.planet,0);
+                            const double hit=probeBlastDamage(b,ship);
+                            if(hit>0)pilot.applyCombatDamage(hit);
+                        }
+                    probeBlastClock=activity.seconds;
+                }
+                if (!opt.smoke) {
+                    if (!specimenProbe.active())
+                        crew.observeHull(pilot.ship().hull);
+                    NpcPlayer player;
+                    player.reference = nav.anchor;
+                    player.position = nav.cameraPosition() * std::pow(10., nav.logDistance);
+                    player.velocity = universe.relative(pilot.ship().frame, nav.anchor, 0).orientation *
+                                      pilot.ship().velocity;
+                    player.forward = nav.orientation * glm::dvec3(0, 0, -1);
+                    player.orientation = nav.orientation;
+                    player.size = pilot.sizeRatio();
+                    player.hull = pilot.ship().hull;
+                    player.seconds = activity.seconds;
+                    player.landed = pilot.ship().landed;
+                    player.driveDisabled = crew.systemHealth(ShipSystem::Engines) <= 0;
+                    player.valuableCargo = economicSnapshot && raidCargoDemand(economicSnapshot->player).has_value();
+                    player.field = pilot.instruments().fieldActive || opt.tour || !pilotEnabled ||
+                                   !activity.enabled || specimenProbe.active() ||
+                                   !(SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS);
+                    std::optional<ActivityId> escort;
+                    if (economicSnapshot)
+                        for (const auto& job : economicSnapshot->combatContracts)
+                            if (job.phase == CombatJobPhase::Accepted && job.kind == CombatJobKind::Escort)
+                                escort = job.target;
+                    npcCombat.setEscort(escort);
+                    defenceObserver=player;
+                    if(economicSnapshot&&defence.reconcile(*economicSnapshot,player,weapons))cutterAudio.decoy();
+                    const auto cover=defenceCover(renderer.activityContacts());
+                    radioShip.reset();
+                    if(const auto id=discoveries.shipContact())
+                        for(const auto& body:renderer.combatBodies())if(body.id==*id){radioShip=damagedBody(body);break;}
+                    const bool internalFocus=keys[SDL_SCANCODE_F12]&&!plannerOpen&&!marketOpen&&!crewOpen&&!crewFlightOpen&&!probeViewing&&!reconOpen&&!discoveryOpen&&
+                        !(keys[SDL_SCANCODE_LCTRL]||keys[SDL_SCANCODE_RCTRL]||keys[SDL_SCANCODE_LALT]||keys[SDL_SCANCODE_RALT]||keys[SDL_SCANCODE_LSHIFT]||keys[SDL_SCANCODE_RSHIFT]);
+                    const bool radioScan=discoveryOpen&&keys[SDL_SCANCODE_S];
+                    const bool radioJam=(discoveryOpen&&keys[SDL_SCANCODE_X])||
+                        (keys[SDL_SCANCODE_SEMICOLON]&&!plannerOpen&&!discoveryOpen&&!vesselOpen&&!marketOpen&&!crewOpen&&!crewFlightOpen&&!reconOpen&&!probeViewing);
+                    auto emissionTarget=internalFocus?activityBody():radioShip;
+                    shipSignalsController.update(universe,player,emissionTarget,internalFocus||radioScan,radioJam,
+                        radioShip.has_value(),crew.plant().authority(PlantBus::Helm),crew.efficiency(CrewStation::Navigation),
+                        dt,renderer.weaponTargets(),renderer.submittedGeometry(nav.anchor).get());
+                    const auto combat = npcCombat.update(universe, player, renderer.combatBodies(), weapons,
+                                                         dt, renderer.submittedGeometry(nav.anchor).get(),cover,
+                                                         shipSignalsController.jammer(),shipSignalsController.radiating());
+                    for (const auto& launch : combat.missileLaunches)
+                        weapons.launchHostileMissile(launch);
+                    defencePointDefenceArmed=fireControl.order()!=FireOrder::Hold&&!discoveryOpen&&!vesselOpen&&!marketOpen&&!crewOpen&&!plannerOpen;
+                    const auto missileDamage = weapons.updateMissiles(
+                        universe, player, renderer.weaponTargets(), renderer.submittedGeometry(nav.anchor).get(),
+                        dt, defencePointDefenceArmed,
+                        stationControl.active() ? stationControl.mount() : 0,cover,shipSignalsController.jammer());
+                    awareness.update(universe,player,combat.threats,weapons.missileThreat(),weapons.defenceEvents(),dt);
+                    const bool defender=std::max(crew.efficiency(CrewStation::Navigation),crew.efficiency(CrewStation::Weapons))>.2;
+                    if(economicSnapshot&&defence.automaticBurst(*economicSnapshot,player,weapons,defender,stationControl.active()?stationControl.mount():0,defencePointDefenceArmed))issueDefence(false,true);
+                    if (missileDamage > 0) {
+                        if (!player.field)
+                            cutterAudio.impact(true);
+                        pilot.applyCombatDamage(missileDamage);
+                        crew.observeCombatHit(pilot.ship().hull, ShipSystem::Hull, missileDamage);
+                    }
+                    for (const auto& body : combat.civilianHits)
+                        weapons.receiveNpcDamage(body, 4., activity.seconds);
+                    if (!combat.playerHits.empty() && !player.field)
+                        cutterAudio.impact(false);
+                    for (const auto& [system, damage] : combat.playerHits) {
+                        pilot.applyCombatDamage(damage);
+                        crew.observeCombatHit(pilot.ship().hull, system, damage);
+                    }
+                    if (economicSnapshot && economy && !economicSnapshot->catchingUp && !opt.smoke &&
+                        economicSnapshot->player.combatJob && economicSnapshot->network &&
+                        economicSnapshot->player.combatJob->system == economicSnapshot->network->system) {
+                        if (economicSnapshot->player.lastCommand >= pendingSecuritySequence)
+                            pendingSecuritySequence = 0;
+                        if (!pendingSecuritySequence && !pendingEconomicSequence && !pendingCrewSequence &&
+                            !pendingWreck && activity.seconds - lastSecurityReport >= 1.) {
+                            const auto id = economicSnapshot->player.combatJob->id;
+                            auto it = std::find_if(economicSnapshot->combatContracts.begin(),
+                                                   economicSnapshot->combatContracts.end(),
+                                                   [&](const auto& c) { return c.id == id; });
+                            if (it != economicSnapshot->combatContracts.end() &&
+                                it->phase == CombatJobPhase::Accepted) {
+                                auto body =
+                                    damagedBody(sampleCombatActivity(universe, it->target, activity.seconds));
+                                const auto point = universe.pointRelative(
+                                    body.id.home,
+                                    body.position /
+                                        std::pow(10., universe.describe(body.id.home).frame.logRadius),
+                                    nav.anchor, nav.logDistance);
+                                EconomicCommand c;
+                                c.action = EconomicAction::ReportCombat;
+                                c.port = economicSnapshot->network->sites[it->site].id;
+                                c.contract = it->id;
+                                c.combatTarget = it->target;
+                                c.targetHull = body.hull;
+                                c.targetDistance = glm::length(point - nav.cameraPosition()) *
+                                                   std::pow(10., nav.logDistance);
+                                c.impactSeconds = activity.seconds;
+                                c.serviceUnits = unsigned(std::ceil(pilot.ship().hull));
+                                c.combatPresent = !player.field && !player.landed &&
+                                                  pilot.sizeRatio() >= .99 && !pilot.ship().cruise;
+                                if (it->kind == CombatJobKind::Bounty) {
+                                    const auto receipt = std::find_if(
+                                        weapons.damage().begin(), weapons.damage().end(), [&](const auto& d) {
+                                            return d.id == it->target && d.hull <= 0 &&
+                                                   d.hitSeconds >= it->acceptedSeconds;
+                                        });
+                                    c.combatPresent = receipt != weapons.damage().end();
+                                }
+                                c.sequence = economicSequence =
+                                    std::max(economicSequence, economicSnapshot->player.lastCommand) + 1;
+                                if (economy->command(c))
+                                    pendingSecuritySequence = c.sequence;
+                                lastSecurityReport = activity.seconds;
+                            }
+                        }
+                    }
+                    // Durable repair receipts can be replayed after a restart, but never heal a later hit.
+                    if(economicSnapshot) for(const auto& receipt:economicSnapshot->wrecks) if(receipt.fieldRepairAt>=0){
+                        const auto damage=std::find_if(weapons.damage().begin(),weapons.damage().end(),[&](const auto& d){return d.id==receipt.id;});
+                        if(npcCombat.agents().contains(receipt.id)&&damage!=weapons.damage().end()&&damage->hitSeconds<=receipt.fieldRepairAt&&damage->hull>0){
+                            if(damage->systems[size_t(ShipSystem::Engines)]<=0){
+                                auto body=sampleCombatActivity(universe,receipt.id,activity.seconds);
+                                npcCombat.apply(body);weapons.apply(body);
+                                const auto live=std::find_if(renderer.weaponTargets().begin(),renderer.weaponTargets().end(),[&](const auto& b){return b.id==receipt.id;});
+                                if(live!=renderer.weaponTargets().end())body=*live;
+                                npcCombat.rejoin(body,body);
+                            }
+                            weapons.fieldRepair(receipt.id,receipt.fieldRepairAt);
+                            npcCombat.fieldService(receipt.id,receipt.fieldRepairAt);
+                        }
+                    }
+                    auto recoveryTarget = activityBody();
+                    if(recoveryTarget){
+                        const auto* eng=npcCombat.engineering(recoveryTarget->id);
+                        if(eng&&eng->surrendered&&recoveryTarget->hull>0&&npcCombat.agents().contains(recoveryTarget->id)&&!npcCombat.agents().at(recoveryTarget->id).mooring&&weapons.secureVessel(*recoveryTarget,activity.seconds))recoveryTarget=activityBody();
+                    }
+                    const bool scanFocus=shipSignalsController.scanning();
+                    const auto* engineering=recoveryTarget?npcCombat.engineering(recoveryTarget->id):nullptr;
+                    const auto scanBody=discoveryOpen?radioShip:recoveryTarget;
+                    vesselOperations.observe(universe,player,scanBody,scanBody?npcCombat.engineering(scanBody->id):nullptr,dt,scanFocus,crew.efficiency(CrewStation::Navigation),renderer.weaponTargets(),renderer.submittedGeometry(nav.anchor).get());
+                    const bool holdingRecovery = keys[SDL_SCANCODE_0] && !currentCavern() && !plannerOpen && !discoveryOpen && !vesselOpen && !marketOpen && !crewOpen && !reconOpen &&
+                                                 !crewFlightOpen &&
+                                                 (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS);
+                    const bool recovered = recovery.update(
+                        universe, player, recoveryTarget, dt, holdingRecovery,
+                        renderer.submittedGeometry(nav.anchor).get(), renderer.weaponTargets());
+                    const auto vesselResult=vesselOperations.advance(universe,player,recoveryTarget,engineering,crew,dt,renderer.weaponTargets(),renderer.submittedGeometry(nav.anchor).get());
+                    if(vesselResult&&economicSnapshot&&economy&&!economicSnapshot->catchingUp&&!pendingRecoverySequence&&!pendingEconomicSequence&&!pendingCrewSequence&&!pendingSecuritySequence&&!pendingWreck){
+                        const auto receipt=std::find_if(economicSnapshot->wrecks.begin(),economicSnapshot->wrecks.end(),[&](const auto& w){return w.id==vesselResult->id;});
+                        if(receipt!=economicSnapshot->wrecks.end()){
+                            if(vesselResult->task==VesselTask::Repair&&receipt->fieldRepairAt>=0)vesselOperations.acknowledge(true);
+                            else{
+                                EconomicCommand c;c.port=vesselResult->id;c.combatTarget=vesselResult->id;
+                                c.action=vesselResult->task==VesselTask::Repair?EconomicAction::FieldRepairVessel:EconomicAction::RecoverWreck;
+                                c.serviceUnits=vesselResult->task==VesselTask::Evacuate?1:2;
+                                c.targetDistance=std::max(0.,recovery.range()-recoveryTarget->radius);c.relativeSpeed=recovery.relativeSpeed();
+                                c.combatPresent=!player.field&&!player.landed&&player.size>=.99&&player.hull>0;
+                                c.crewAboard=unsigned(crew.living());c.crewId=vesselResult->crew;c.workSeconds=12;c.impactSeconds=activity.seconds;
+                                const auto person=std::find_if(crew.members().begin(),crew.members().end(),[&](const auto& m){return m.id==c.crewId;});
+                                if(person!=crew.members().end())c.engineering=unsigned(100*crew.stationFit(size_t(person-crew.members().begin()),CrewStation::Engineering));
+                                const auto d=std::find_if(weapons.damage().begin(),weapons.damage().end(),[&](const auto& hit){return hit.id==c.port;});
+                                if(d!=weapons.damage().end())c.wreck=*d;
+                                c.sequence=economicSequence=std::max(economicSequence,economicSnapshot->player.lastCommand)+1;
+                                if(economy->command(c)){pendingRecoverySequence=c.sequence;vesselTransferPending=true;}
+                                else vesselOperations.acknowledge(false);
+                            }
+                        }else vesselOperations.acknowledge(false);
+                    }
+                    if ((holdingRecovery || (vesselOpen && recoveryTarget && (recoveryTarget->disabled || recoveryTarget->systems[size_t(ShipSystem::Engines)]<=0))) && recoveryTarget && economicSnapshot && economy &&
+                        !economicSnapshot->catchingUp && !pendingRecoverySequence &&
+                        !pendingEconomicSequence && !pendingCrewSequence && !pendingSecuritySequence &&
+                        !pendingWreck) {
+                        if (recovered)
+                            weapons.secureIonTarget(*recoveryTarget, activity.seconds);
+                        const auto wreck = std::find_if(
+                            weapons.damage().begin(), weapons.damage().end(), [&](const auto& d) {
+                                return d.id == recoveryTarget->id &&
+                                       (d.hull <= 0 || d.systems[size_t(ShipSystem::Engines)] <= 0);
+                            });
+                        const auto receipt =
+                            std::find_if(economicSnapshot->wrecks.begin(), economicSnapshot->wrecks.end(),
+                                         [&](const auto& w) { return w.id == recoveryTarget->id; });
+                        if (wreck != weapons.damage().end() &&
+                            (receipt == economicSnapshot->wrecks.end() || (recovered&&!vesselOpen))) {
+                            EconomicCommand c;
+                            c.port = recoveryTarget->id;
+                            c.combatTarget = recoveryTarget->id;
+                            c.wreck = *wreck;
+                            c.action = receipt == economicSnapshot->wrecks.end()
+                                           ? EconomicAction::RegisterWreck
+                                           : EconomicAction::RecoverWreck;
+                            c.targetDistance = std::max(0., recovery.range() - recoveryTarget->radius);
+                            c.relativeSpeed = recovery.relativeSpeed();
+                            c.combatPresent = !player.field && !player.landed && player.size >= .99 &&
+                                              player.hull > 0 && !pilot.ship().cruise;
+                            c.crewAboard = unsigned(crew.living());
+                            c.sequence = economicSequence =
+                                std::max(economicSequence, economicSnapshot->player.lastCommand) + 1;
+                            if (economy->command(c)) {
+                                pendingRecoverySequence = c.sequence;
+                                if (recovered)
+                                    recovery.reset();
+                            }
+                        }
+                    }
+                    PlantDemand demand;
+                    demand.throttle=std::abs(pilot.ship().throttle);demand.boost=pilot.ship().boost;
+                    demand.turn=std::min(1.,glm::length(pilot.ship().angularThrusters));
+                    demand.drill=cutterDrive;demand.drive=pilot.ship().cruise?1.:0.;demand.shrink=pilot.ship().shrinking?1.:0.;
+                    demand.externalHeat=pilot.instruments().environmentalHeat;
+                    crew.setPlantDemand(demand);
+                    if ((SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) && !pendingCrewSequence)
+                        crew.advance(dt, specimenProbe.active() ? 0 : pilot.instruments().properG,
+                                     !specimenProbe.active() && std::any_of(
+                                         npcCombat.shots().begin(), npcCombat.shots().end(),
+                                         [](const auto& shot) { return shot.age <= .16; }),
+                                     !specimenProbe.active() && weapons.firingMask() != 0,
+                                     specimenProbe.active() ? 0 : weapons.firingMask());
+                }
+                if (flightProof)
+                    flightProof->advance(flight, renderer);
+                if (streamingProof)
+                    streamingProof->advance(flight, renderer);
+                if (pilotProof)
+                    pilotProof->advance(renderer, activity);
+                if (economyProof)
+                    economyProof->advance(renderer);
+                if (npcProof)
+                    npcProof->advance(renderer);
+                if (crewProof)
+                    crewProof->advance(renderer);
+                if (crewTradeProof)
+                    crewTradeProof->advance(renderer);
+                if (crewFlightProof)
+                    crewFlightProof->advance(renderer);
+                if (crewGunsProof)
+                    crewGunsProof->advance(renderer);
+                if (stationSwapProof)
+                    stationSwapProof->advance(renderer);
+                if (combatOperationsProof)
+                    combatOperationsProof->advance(renderer);
+                if (prospectingProof)
+                    prospectingProof->advance();
+                if (seamProof)
+                    seamProof->advance();
+                if (microFlightProof)
+                    microFlightProof->advance();
+                if (probeProof)
+                    probeProof->advance();
+                if (expeditionProof)
+                    expeditionProof->advance();
+                if (explorationProof)
+                    explorationProof->advance(renderer);
+                if (dockingProof)
+                    dockingProof->advance(renderer);
+                if (uiProof)
+                    uiProof->advance(renderer);
+                if (polarProof)
+                    polarProof->advance(renderer);
+                if (cloudProof)
+                    cloudProof->advance(renderer);
+                if (celestialProof)
+                    celestialProof->advance(renderer);
+                if (landingLightProof)
+                    landingLightProof->advance(renderer);
+                if (weatherProof)
+                    weatherProof->advance(renderer);
+                if (stellarDiversityProof)
+                    stellarDiversityProof->advance(renderer);
+                if (diversityProof)
+                    diversityProof->advance(renderer);
+                auto cockpit = pilot.instruments();
+                cockpit.contactsExpanded=contactsExpanded;
+                if (pilot.debrisManeuver() && nav.logDistance > 3.) {
+                    nav.setRenderScale(3.);
+                    cockpit.logMetres = nav.logDistance;
+                }
+                if (!probeViewing && !specimenProbe.active() && pilotEnabled && activity.selected &&
+                    isOrbitalDebris(*activity.selected) && !pilot.ship().shrinking && !pilot.ship().cruise &&
+                    cockpit.range > 0 && cockpit.range < 24000) {
+                    // Keep the physical fragment outside the projection near plane during rendezvous.
+                    const double localLog = std::log10(std::max(400., cockpit.range * 1.5));
+                    if (localLog < nav.logDistance) {
+                        nav.setRenderScale(localLog);
+                        cockpit.logMetres = nav.logDistance;
+                    }
+                }
+                cockpit.explorationActive =
+                    keys[SDL_SCANCODE_F12] ||
+                    ((keys[SDL_SCANCODE_LCTRL] || keys[SDL_SCANCODE_RCTRL]) && keys[SDL_SCANCODE_SPACE]&&!radioConsumedFire);
+                const bool miningDisplay =
+                    (keys[SDL_SCANCODE_LCTRL] || keys[SDL_SCANCODE_RCTRL]) && keys[SDL_SCANCODE_SPACE]&&!radioConsumedFire;
+                if (cockpit.explorationActive)
+                    cockpit.exploration = {
+                        miningDisplay ? "GEOLOGICAL EXTRACTION" : "EXPLORATION SCANNER",
+                        miningDisplay ? miningController.status() : surveyController.status(),
+                        economicSnapshot
+                            ? "JOURNAL " + std::to_string(economicSnapshot->exploration.journal.size()) +
+                                  " / MINED " + std::to_string(economicSnapshot->exploration.minedKg) + " KG"
+                            : "EXPLORATION LEDGER LOADING",
+                        pendingEconomicSequence && pendingEconomicAction >= EconomicAction::ScanSurvey
+                            ? "AWAITING DURABLE RECEIPT"
+                            : "F11 JOURNAL / F2 SURVEY EQUIPMENT"};
+                if (economicSnapshot && economicSnapshot->network) {
+                    if (const auto* job = activeExpedition(economicSnapshot->expeditions,
+                                                           economicSnapshot->network->system)) {
+                        cockpit.explorationActive = true;
+                        if (!keys[SDL_SCANCODE_F12] && !miningDisplay)
+                            cockpit.exploration = {specimenProbe.active() ? "SPECIMEN PROBE / SHIP PARKED"
+                                                                          : "COLONY MATERIAL EXPEDITION",
+                                                   expeditionObjective(*job),
+                                                   job->carrying() ? "SEALED CORE / 1 KG / SOURCE ID " +
+                                                                         std::to_string(job->descriptor)
+                                                                   : job->colonyName,
+                                                   specimenProbe.active()
+                                                       ? "F4 NEXT / J MAGNIFY / F12 ASSAY / SHIFT-F11 EXIT"
+                                                       : "SHIFT-F11 EXPEDITION / F4 DESTINATION"};
+                    }
+                    if (specimenProbe.active()) {
+                        cockpit.destination = "PROBE / " + universe.describe(nav.selected.value_or(nav.anchor)).label();
+                        cockpit.phase = "SPECIMEN INSPECTION";
+                        cockpit.weapon = "PROBE / NO WEAPONS";
+                    }
+                }
+                if (!cockpit.explorationActive && !cockpit.landing.body &&
+                    !plannerOpen && !discoveryOpen && !vesselOpen && !marketOpen && !crewOpen && !crewFlightOpen &&
+                    !specimenProbe.active() && !pilot.ship().shrinking && cockpit.altitude >= 0 &&
+                    cockpit.altitude < 50000 && !renderer.prospects().empty()) {
+                    const auto* site = selectedProspect();
+                    if (!site)
+                        site = &renderer.prospects().front();
+                    const auto point = universe.pointRelative(
+                        site->surface.parent(),
+                        site->metres /
+                            std::pow(10., universe.describe(site->surface.parent()).frame.logRadius),
+                        nav.anchor, nav.logDistance);
+                    const auto distance =
+                        glm::length(point - nav.cameraPosition()) * std::pow(10., nav.logDistance);
+                    cockpit.explorationActive = true;
+                    cockpit.exploration = {"GEOLOGICAL PROSPECT / " + site->name,
+                                           std::to_string(int(distance / 1000)) + " KM / " +
+                                               (site->easy ? "GENTLE GROUND" : "ROUGH / HOVER TO SAMPLE") +
+                                               " / SLOPE " + std::to_string(int(site->slopeDegrees)) + " DEG",
+                                           "F12 SURVEY / CTRL-F12 BEGIN SEAM EXPEDITION",
+                                           "SHIFT-F12 NEXT / J APPROACH / CTRL-SPACE MINE AT FULL SIZE"};
+                }
+                if (!plannerOpen && !discoveryOpen && !vesselOpen && !marketOpen && !crewOpen && !crewFlightOpen && !specimenProbe.active())
+                    if (const auto* seam = currentSeam()) {
+                        cockpit.explorationActive = true;
+                        if (!keys[SDL_SCANCODE_F12] && !miningDisplay) {
+                            std::string objective = !seam->material
+                                ? (pilot.ship().shrinking ? "FLY CLOSE TO ROCK FACE / BRAKE / HOLD F12"
+                                                         : "Z SHRINK / J APPROACH / F12 CLOSE SURVEY")
+                                : !seam->marked ? "CLOSE SURVEY READY / CTRL-F12 MARK MATERIAL"
+                                : pilot.ship().shrinking ? "MATERIAL MARKED / SHIFT-J RETURN TO ENTRY"
+                                : "MARKED SEAM READY / CTRL-SPACE MINE AT THE OUTCROP";
+                            cockpit.exploration = {
+                                "SEAM EXPEDITION / " + std::string(seam->material ? resourceName(seam->resource)
+                                                                              : "UNMAPPED"),
+                                objective,
+                                pilot.ship().shrinking
+                                    ? "FRAGILE HULL / " + std::to_string(int(std::lround(shipDamageMultiplier(pilot.sizeRatio())))) +
+                                          "X DAMAGE / SLOW DOWN BEFORE CONTACT"
+                                    : "RECOVERED " + std::to_string(seam->minedKg) +
+                                          " KG / MARK AND ENTRY BEACON SAVED",
+                                "SHIFT-J ENTRY / SHIFT-Z FULL SIZE / F11 JOURNAL"};
+                        }
+                    }
+                if (crewProof) {
+                    crewView = crewProof->view();
+                    renderer.setCrew(&crewView);
+                } else if (!opt.smoke) {
+                    crewView = crew.view(crewSelected, crewStation);
+                    crewSelected = crewView.selected;
+                    crewView.open = crewOpen;
+                    crewView.flightOpen = crewFlightOpen && pilotEnabled;
+                    crewView.message = crewFeedback;
+                    for (unsigned i = 0; i < maxWeaponMounts; ++i)
+                        if (!fireControl.status()[i].empty())
+                            crewView.gunStatus[i] = fireControl.status()[i] + " / " + crewView.gunStatus[i];
+                    if (economicSnapshot && economicSnapshot->exploration.miningLevel) {
+                        const auto mount = economicSnapshot->exploration.miningMount;
+                        crewView.gunStatus[mount] =
+                            "MINING HEAD " + std::to_string(economicSnapshot->exploration.miningLevel) +
+                            " / CTRL-SPACE / " + crew.gunnerStatus(mount);
+                    }
+                    crewView.pending = pendingCrewSequence != 0;
+                    if (crewOpen) {
+                        if (auto i = crewPort()) {
+                            crewView.connected = true;
+                            crewView.port = economicSnapshot->network->sites[*i].name + " / " +
+                                            std::to_string(economicSnapshot->player.credits / 100) + " CR";
+                            auto describe = [&](ShipService service, std::string label) {
+                                auto q = economicServiceQuote(*economicSnapshot, *i, service, 1);
+                                return label + " / " + std::to_string(q.totalCents() / 100) + " CR / " +
+                                       q.status;
+                            };
+                            auto offers = economicCrewOffers(*economicSnapshot, *i);
+                            if (!offers.empty()) {
+                                const auto& person = offers[crewOffer % offers.size()];
+                                const auto q = economicCrewQuote(*economicSnapshot, *i, person, true,
+                                                                 crew.living() +
+                                                                     economicSnapshot->player.rescued.size());
+                                crewView.recruit = "H BUY " + person.name + " / " + crewMoney(q.buyCents) +
+                                                   " CR / BRACKETS CYCLE / " + q.status;
+                            } else
+                                crewView.recruit = "PORT CREW STOCK EMPTY";
+                            if (crewView.selected < crew.members().size()) {
+                                const auto& person = crew.members()[crewView.selected];
+                                const auto q =
+                                    economicCrewQuote(*economicSnapshot, *i, person, false, crew.living());
+                                crewView.sell = "BACKSPACE SELL " + person.name + " / " +
+                                                crewMoney(q.sellCents) + " CR / " + q.status;
+                            }
+                            crewView.supply =
+                                describe(ShipService::CrewSupplies, "S +10 SPARES / +5 MEDICAL");
+                            crewView.care = describe(ShipService::CrewCare, "L SHORE CLINIC / SURVIVORS");
+                        } else
+                            crewView.port = "PORT SERVICES OFFLINE / BERTH OR LAND / FULL SIZE AND STOPPED";
+                    }
+                    renderer.setCrew(&crewView);
+                }
+                if (crewTradeProof) {
+                    crewTradeProof->observe(renderer, opt.captures);
+                    if (crewTradeProof->finished())
+                        running = false;
+                }
+                if (crewFlightProof) {
+                    crewView = crewFlightProof->view();
+                    renderer.setCrew(&crewView);
+                    crewFlightProof->observe(renderer, opt.captures);
+                    if (crewFlightProof->finished())
+                        running = false;
+                }
+                if (crewGunsProof) {
+                    crewGunsProof->observe(renderer, opt.captures);
+                    if (crewGunsProof->finished())
+                        running = false;
+                }
+                if (stationSwapProof) {
+                    stationSwapProof->observe(renderer, opt.captures);
+                    if (stationSwapProof->finished())
+                        running = false;
+                }
+                npcCombat.annotate(cockpit);
+                if (!opt.smoke && pilotEnabled && !specimenProbe.active() && activity.enabled) {
+                    const bool arrivalCall = arrivals.update(universe, pilot.instruments(), economicSnapshot.get(),
+                                    renderer.activityContacts(), activity.seconds, &nav.anchor);
+                    if (arrivalCall && (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS))
+                        cutterAudio.arrival();
+                    arrivals.annotate(cockpit);
+                }
+                if (const auto& demand = npcCombat.demand(); demand && economicSnapshot) {
+                    const std::string timer = " / " +
+                        std::to_string(int(std::ceil(demand->until - activity.seconds))) + "S";
+                    if (demand->restitution) {
+                        const auto cents = demand->restitution % 100;
+                        cockpit.combatStatus = "ALT-I PAY " + std::to_string(demand->restitution / 100) +
+                            (cents < 10 ? ".0" : ".") + std::to_string(cents) + " CR / I DETAILS" + timer;
+                    } else if (const auto offer = raidCargoDemand(economicSnapshot->player))
+                        cockpit.combatStatus = "ALT-I YIELD " + std::to_string(offer->second) + " KG " +
+                                               std::string(goodInfo(offer->first).name) + timer;
+                }
+                if (const auto& threat = weapons.missileThreat(); threat.count) {
+                    cockpit.localMissile = threat.localDirection;
+                    const auto d = threat.localDirection;
+                    const std::string bearing = std::abs(d.y) > .8 ? (d.y > 0 ? "ABOVE" : "BELOW")
+                        : std::abs(d.x) > .4 ? (d.x < 0 ? "PORT" : "STBD")
+                        : d.z > 0 ? "AFT" : "AHEAD";
+                    cockpit.combatStatus = std::to_string(threat.count) +
+                        (threat.count == 1 ? " MISSILE / " : " MISSILES / ") + bearing +
+                        (std::abs(d.x) > .4 && d.z > .35 && std::abs(d.y) <= .8 ? " AFT" : "") +
+                        (threat.seconds < 0 ? " / OPENING" : threat.seconds > 20 ? " / CLOSING"
+                            : " / " + std::to_string(int(std::ceil(threat.seconds))) + "S");
+                }
+
+                if(!uiProof){
+                    auto view=std::make_shared<CombatAwarenessView>(awareness.view());
+                    const bool ready=std::max(crew.efficiency(CrewStation::Navigation),crew.efficiency(CrewStation::Weapons))>.2;
+                    defence.annotate(*view,economicSnapshot.get(),defenceObserver,weapons,ready);
+                    view->pointDefenceArmed=defencePointDefenceArmed;
+                    cockpit.awareness=std::move(view);
+                }
+                cockpit.crewFire =
+                    "GUNNERS " + std::string(fireOrderName(fireControl.order())) +
+                    (crewFlightOpen ? " / CTRL6 HOLD 7 DEF 8 FOCUS" : " / 6 HOLD 7 DEF 8 FOCUS");
+                if (economicSnapshot) {
+                    for (const auto& c : economicSnapshot->combatContracts)
+                        if (c.phase == CombatJobPhase::Accepted || c.phase == CombatJobPhase::Claimable)
+                            cockpit.combatMission = c.phase == CombatJobPhase::Claimable
+                                                        ? "SECURITY COMPLETE / F2 JOBS / F4 CLAIM PORT"
+                                                    : c.kind == CombatJobKind::Escort
+                                                        ? "ESCORT " +
+                                                              std::to_string(int(c.protectedSeconds)) +
+                                                              "/90S / STAY WITHIN 5KM"
+                                                        : "NAMED BOUNTY ACTIVE / F2 JOBS / F4 HOSTILE";
+                }
+                const bool weaponsInhibited = cockpit.fieldActive || cockpit.landed || plannerOpen ||
+                    discoveryOpen || vesselOpen || marketOpen || crewOpen ||
+                    std::abs(pilot.ship().logSize - pilot.ship().targetLogSize) > .01;
+                weapons.annotate(cockpit, weaponsInhibited);
+                const unsigned activeMount = stationControl.active() ? stationControl.mount() : 0;
+                const auto activeLevel = weapons.mount(activeMount).level;
+                stationControl.annotate(cockpit, crew, weapons);
+                if (!weaponsInhibited && isPulseLaser(activeLevel)) {
+                    cockpit.weaponStatus = weapons.pulseStatus(activeMount, pilot.sizeRatio());
+                    cockpit.pulseHeat = weapons.mount(activeMount).heat;
+                }
+                const auto vesselBody=activityBody();
+                cockpit.vessel=std::make_shared<VesselView>(vesselOperations.view(vesselBody,vesselBody?npcCombat.engineering(vesselBody->id):nullptr,vesselOpen));
+                cockpit.recoveryStatus = pendingRecoverySequence ? "RECOVERY TRANSFER PENDING"
+                                         : crewFlightOpen && !recovery.status().empty()
+                                             ? "CLOSE F9 / HOLD 0 TO RECOVER"
+                                             : recovery.status();
+                cockpit.systemFault =
+                    "ENG " + std::to_string(int(crew.systemHealth(ShipSystem::Engines))) + " / RCS " +
+                    std::to_string(int(crew.systemHealth(ShipSystem::Thrusters))) + " / O2 " +
+                    std::to_string(int(crew.systemHealth(ShipSystem::LifeSupport)));
+                if (const auto* id = pilot.landedDebris(); id && !specimenProbe.active()) {
+                    const auto world = universe.describe(id->home);
+                    const auto fragment = sampleActivity(world, id->slot, activity.seconds);
+                    const auto deposit = debrisDeposit(world, fragment);
+                    auto remaining = std::accumulate(deposit.capacity.begin(), deposit.capacity.end(), int64_t(0));
+                    const bool fitted = economicSnapshot && economicSnapshot->exploration.miningLevel;
+                    if (economicSnapshot)
+                        for (const auto& record : economicSnapshot->exploration.debris)
+                            if (record.id == *id) {
+                                remaining -= std::accumulate(record.extracted.begin(), record.extracted.end(), int64_t(0));
+                                break;
+                            }
+                    cockpit.destination = fragment.name;
+                    cockpit.explorationActive = true;
+                    cockpit.exploration = {
+                        fragment.name + " / " + std::string(material(deposit.mineral).name),
+                        std::to_string(remaining) + " KG RECOVERABLE / " +
+                            fragment.status.substr(0, fragment.status.find(" / ")),
+                        remaining == 0 ? "FRAGMENT DEPLETED"
+                          : !fitted ? "FIT A MINING HEAD AT A PORT / F2 SURVEY"
+                          : miningDisplay ? miningController.status() : "CTRL-SPACE CUT",
+                        "ENTER LIFT OFF"};
+                }
+                if(!uiProof){
+                    auto view=std::make_shared<TargetingView>(targeting.view());
+                    view->direction=glm::inverse(nav.orientation)*view->direction;
+                    view->intercept=glm::inverse(nav.orientation)*view->intercept;
+                    if(view->target&&(activity.combatSelection||view->state!=TargetLock::Disabled))cockpit.targeting=std::move(view);
+                }
+                if (auto body = activityBody(); body && !isOrbitalDebris(body->id)) {
+                    cockpit.systemTarget = "9 TARGET " + std::string(shipSystemName(targetSystem)) + " " +
+                                           (targetSystem != ShipSystem::Hull && !vesselOperations.confirmed(body->id,activity.seconds)
+                                                ? std::string("?") : std::to_string(int(targetSystem == ShipSystem::Hull
+                                                                  ? body->hull : body->systems[size_t(targetSystem)]))) + "%";
+                    const auto point =
+                        body->position + body->orientation * (systemOffset(targetSystem) * body->radius);
+                    const auto relative = universe.pointRelative(
+                        body->id.home,
+                        point / std::pow(10., universe.describe(body->id.home).frame.logRadius), nav.anchor,
+                        0);
+                    if (weapons.ionDisabled(body->id))
+                        cockpit.systemTarget = body->status.substr(0, body->status.find(" / "));
+                    if(body->kind!=ActivityKind::Harbour&&body->kind!=ActivityKind::SurfacePort)
+                        cockpit.systemTarget+=vesselOperations.confirmed(body->id,activity.seconds)?" / INTERNAL LOCK / CTRL-0 OPS":" / F12 SCAN / CTRL-0 OPS";
+                    cockpit.localSystemTarget =
+                        glm::inverse(nav.orientation) *
+                        (relative - nav.cameraPosition() * std::pow(10., nav.logDistance));
+                    if (!weapons.ionDisabled(body->id) && isPulseLaser(activeLevel)) {
+                        const auto centre = universe.pointRelative(
+                            body->id.home, body->position /
+                                std::pow(10., universe.describe(body->id.home).frame.logRadius), nav.anchor, 0);
+                        const double range = glm::length(centre - nav.cameraPosition() *
+                                                          std::pow(10., nav.logDistance));
+                        const double reach = weaponSpec(activeLevel).rangeMetres * pilot.sizeRatio();
+                        cockpit.systemTarget += " / " + flightQuantity(range) +
+                            (range - body->radius <= reach ? " IN RANGE" : " OUT OF RANGE");
+                    }
+                }
+                if(npcProof)npcProof->annotate(cockpit);
+                if (combatOperationsProof) {
+                    combatOperationsProof->annotate(cockpit);
+                    combatOperationsProof->observe(renderer, opt.captures);
+                    if (combatOperationsProof->finished())
+                        running = false;
+                }
+                if (prospectingProof)
+                    prospectingProof->annotate(cockpit);
+                if (seamProof)
+                    seamProof->annotate(cockpit);
+                if (microFlightProof)
+                    microFlightProof->annotate(cockpit);
+                if (probeProof)
+                    probeProof->annotate(cockpit);
+                if (expeditionProof)
+                    expeditionProof->annotate(cockpit);
+                if (explorationProof)
+                    explorationProof->annotate(cockpit);
+                const Navigation* renderNavigation=&nav;
+                if (economicSnapshot && !probeViewing) {
+                    const unsigned mount=stationControl.active()?stationControl.mount():0;
+                    if(economicSnapshot->exploration.probes.launchers[mount]) {
+                        cockpit.weapon="MINING PROBE LAUNCHER / "+std::string(weaponMountName(mount));
+                        cockpit.weaponStatus=std::to_string(economicSnapshot->exploration.probes.rounds[mount])+" PROBES / SPACE LAUNCH / ALT-P CAMERA";
+                    }
+                    if (!cockpit.explorationActive && economicSnapshot->exploration.probes.launchers[probeBay]) {
+                        cockpit.explorationActive=true;
+                        cockpit.exploration={"MINING PROBE / "+std::string(weaponMountName(probeBay)),
+                            std::to_string(economicSnapshot->exploration.probes.rounds[probeBay])+" ROUNDS / CTRL-P LAUNCH / SHIFT-P BAY",
+                            "DEPTH "+std::to_string(int(probeLaunchDepth))+" M / ALT-[ ] ADJUST",
+                            "ALT-P CAMERA / CTRL-J BORE ENTRY / F2 SURVEY RELOAD"};
+                    }
+                }
+                if (!probeViewing) {
+                    if (const auto* b = currentCavern()) {
+                        annotateCavern(cockpit, universe, nav, *b, cavernSelection, cavernWorkStatus);
+                        annotateExcavation(cockpit,*b,cavernFinds(*b)[cavernSelection],excavationWork,
+                            crew.efficiency(CrewStation::Engineering),activity.seconds);
+                        if (iceStress.bore == b->id)
+                            annotateIceStress(cockpit, iceStress, cuttingFault,
+                                              crew.efficiency(CrewStation::Engineering) > 0);
+                    }
+                }
+                if (probeViewing) {
+                    if (const auto* b=currentProbe()) {
+                        probeLook.x=std::clamp(probeLook.x+(double(keys[SDL_SCANCODE_LEFT])-keys[SDL_SCANCODE_RIGHT])*dt*.8,-1.25,1.25);
+                        probeLook.y=std::clamp(probeLook.y+(double(keys[SDL_SCANCODE_UP])-keys[SDL_SCANCODE_DOWN])*dt*.8,-.8,.8);
+                        frameProbeCamera(probeNav,universe,*b,activity.seconds,probeLook);
+                        renderNavigation=&probeNav;cockpit.logMetres=probeNav.logDistance;
+                        const double density = material(universe.describe(b->planet).environment.mineral).density;
+                        annotateDrillCamera(cockpit,*b,activity.seconds,density);
+                        const auto cutter = probeVisual(*b, activity.seconds, density);
+                        if (cutter.phase == ProbePhase::Boring) {
+                            cutterDrive = std::clamp(cutter.rpm / 420., .3, 1.);
+                            cutterStrain = .4 * cutter.load + .6 * cutter.heat;
+                        }
+                    } else probeViewing=false;
+                }
+                const bool soundFocused = SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS;
+                for (unsigned mount = 0; mount < maxWeaponMounts; ++mount) {
+                    const auto& gun = weapons.mount(mount);
+                    if (soundFocused && gun.shotsFired > audibleShots[mount])
+                        cutterAudio.fire(gun.level);
+                    audibleShots[mount] = gun.shotsFired;
+                }
+                if (soundFocused && dt > 0)
+                    for (const auto& shot : weapons.shots())
+                        if (!shot.utility && shot.hit && shot.age == 0 && !shot.enemy)
+                            cutterAudio.impact(shot.level == missileLauncher || shot.disabled);
+                const bool warpSound = pilotEnabled && !probeViewing && !specimenProbe.active() &&
+                    (cockpit.warp == WarpPhase::Manual || cockpit.warp == WarpPhase::Route);
+                cutterAudio.threat(soundFocused&&cockpit.awareness&&cockpit.awareness->locking,
+                                   soundFocused&&cockpit.awareness&&cockpit.awareness->missiles);
+                cutterAudio.updateWarp(warpSound, cockpit.speed, soundFocused);
+                cutterAudio.update(soundFocused ? cutterDrive : 0, cutterStrain,
+                                   soundFocused && iceWarningCue, soundFocused && iceFallCue);
+                renderer.setProbeView(probeViewing,activity.seconds);
+                if (microFlightProof)
+                    renderer.setProbeView(false, microFlightProof->clock());
+                renderer.setIceStress(iceStress);
+                renderer.setExcavationWork(excavationWork);
+                renderer.setShipNavigation(&nav);
+                if (probeProof) {
+                    renderNavigation=&probeProof->view();
+                    renderer.setProbeView(probeProof->remote(),probeProof->clock());
+                }
+                if (uiProof)
+                    uiProof->apply(cockpit, renderer);
+                if(!opt.smoke) {
+                    plannerFeedbackSeconds=std::max(0.,plannerFeedbackSeconds-dt);plannerRefresh-=dt;
+                    if(plannerOpen||plannerRefresh<=0){refreshPlanner();plannerRefresh=.1;}
+                    renderer.setExpeditionPlan(plannerView.open||plannerView.tracking?&plannerView:nullptr);
+                }
+                if(plannerProof)plannerProof->apply(cockpit);
+                if(!opt.smoke&&pilotEnabled&&!probeViewing&&!specimenProbe.active()&&!opt.tour&&
+                   (reconOpen||reconOrders.navigator||reconOrders.engineer)){
+                    reconRefresh-=dt;reconElapsed+=dt;reconCallCooldown=std::max(0.,reconCallCooldown-dt);
+                    if(reconRefresh<=0){
+                        ReconInput input;input.open=reconOpen;input.observer=explorationObserver();input.selected=reconSelected;
+                        input.economy=economicSnapshot.get();input.crew=&crew;input.exposure=pilot.ship().exposure;input.iceLoad=iceStress.load;
+                        std::shared_ptr<const SurfaceMap> map;
+                        auto planet=nav.anchor;while(planet.kind()>Kind::Planet)planet=planet.parent();
+                        std::shared_ptr<const SurfaceWorld> world;
+                        if(planet.kind()==Kind::Planet&&cockpit.altitude>=-10000&&cockpit.altitude<50000){
+                            const auto node=universe.describe(planet);
+                            const auto eye=universe.pointRelative(nav.anchor,input.observer.position/std::pow(10.,universe.describe(nav.anchor).frame.logRadius),planet,0);
+                            map=reconMaps.request(universe,node,eye);world=renderer.surfaceWorld(planet);input.world=world.get();
+                        }
+                        auto next=std::make_shared<SurfaceReconView>(describeSurfaceRecon(universe,std::move(map),input,reconOrders,reconElapsed));
+                        reconSelected=next->selected;reconView=std::move(next);reconRefresh=.25;reconElapsed=0;
+                    }
+                    if(reconView){auto view=std::make_shared<SurfaceReconView>(*reconView);view->open=reconOpen;
+                        const auto* target=view->target();
+                        const bool holding=reconOpen&&keys[SDL_SCANCODE_0]&&!plannerOpen&&!discoveryOpen&&!vesselOpen&&!marketOpen&&!crewOpen&&!crewFlightOpen&&
+                            (SDL_GetWindowFlags(window)&SDL_WINDOW_INPUT_FOCUS);
+                        if(holding&&target&&target->actionable&&target->site&&economicSnapshot&&economicSnapshot->network){
+                            const auto site=economicSnapshot->siteIndex(*target->site);std::string why;
+                            const auto observer=explorationObserver();
+                            if(site&&fieldServiceAccess(universe,economicSnapshot->network->sites[*site],observer,why)){
+                                const double quality=.35+.65*std::clamp(crew.efficiency(CrewStation::Engineering),0.,1.);
+                                const double duration=target->phase==RecoveryPhase::Open?2.:8.;
+                                reconOrders.work=std::min(duration,reconOrders.work+dt*quality);view->workProgress=reconOrders.work/duration;
+                                view->action="FIELD RESPONSE / "+std::to_string(int(view->workProgress*100))+"% / HOLD 0";
+                                const bool ready=economy&&!economicSnapshot->catchingUp&&!pendingEconomicSequence&&!pendingCrewSequence&&
+                                    !pendingSecuritySequence&&!pendingRecoverySequence&&!pendingWreck;
+                                if(reconOrders.work>=duration&&ready){EconomicCommand c;c.action=EconomicAction::RespondFieldIncident;
+                                    c.port=*target->site;c.contract=target->recovery;c.observer=observer;c.workSeconds=8;
+                                    c.serviceUnits=unsigned(quality*100);c.sequence=economicSequence=std::max(economicSequence,economicSnapshot->player.lastCommand)+1;
+                                    if(economy->command(c)){pendingEconomicSequence=c.sequence;pendingEconomicAction=c.action;reconOrders.work=0;reconRefresh=0;}
+                                }
+                                if(pendingEconomicSequence)view->action="FIELD RESPONSE / AWAITING SAVED RECEIPT";
+                            }else{reconOrders.work=0;view->action=why;}
+                        }else reconOrders.work=0;
+                        if(view->navWatching&&reconOrders.assessment>=1&&reconNavAnnounced!=view->selected){
+                            notice=view->navigator;noticeTime=5;reconNavAnnounced=view->selected;
+                        }
+                        if(view->engineerWatching&&(view->engineer.starts_with("ENG EST / DAMAGE")||iceStress.warning())&&
+                            view->engineer!=reconLastCall&&reconCallCooldown<=0){
+                            notice=view->engineer;noticeTime=5;reconLastCall=view->engineer;reconCallCooldown=10;
+                        }
+                        cockpit.recon=std::move(view);
+                    }
+                }
+                if(pilotEnabled&&!specimenProbe.active()&&!uiProof){
+                    if(activity.seconds>=radioTrafficAt+.5||radioTrafficAt<0){
+                        radioTrafficAt=activity.seconds;
+                        const auto& catalog=discoveries.catalog();
+                        std::vector<SignalSource> signals;
+                        if(economicSnapshot&&economicSnapshot->network&&catalog&&economicSnapshot->network->system==catalog->system)
+                            signals=trafficSignals(universe,*economicSnapshot,weapons.damage(),activity.seconds);
+                        if(catalog){
+                            std::vector<ActivityBody> physical;physical.reserve(renderer.combatBodies().size());
+                            for(const auto& body:renderer.combatBodies())physical.push_back(damagedBody(body));
+                            NpcPlayer observer;observer.reference=nav.anchor;observer.position=nav.cameraPosition()*std::pow(10.,nav.logDistance);observer.seconds=activity.seconds;
+                            for(auto& source:shipSignals(universe,observer,physical,npcCombat,vesselOperations)){
+                                if(signals.size()==32)break;
+                                signals.push_back(std::move(source));
+                            }
+                        }
+                        discoveries.traffic(std::move(signals));
+                    }
+                    ReceiverObserver observer;observer.reference=nav.anchor;
+                    observer.position=nav.cameraPosition()*std::pow(10.,nav.logDistance);
+                    observer.forward=nav.orientation*glm::dvec3(0,0,-1);observer.size=pilot.sizeRatio();observer.seconds=activity.seconds;
+                    observer.speed=glm::length(pilot.ship().velocity);observer.field=cockpit.fieldActive;observer.landed=pilot.ship().landed;
+                    observer.interference=std::max(cockpit.weatherSeverity,shipSignalsController.jammer()?.55:0.);
+                    const bool listening=((discoveryOpen&&keys[SDL_SCANCODE_SPACE])||(!discoveryOpen&&discoveries.monitoring()))&&(SDL_GetWindowFlags(window)&SDL_WINDOW_INPUT_FOCUS);
+                    discoveries.update(universe,observer,dt,listening,crew.efficiency(CrewStation::Navigation));
+                    auto view=std::make_shared<DiscoveryView>(discoveries.view(discoveryOpen));
+                    if(view->decoded&&view->active&&shipSignalId(*view->active)){
+                        auto details=std::make_shared<ShipSignalView>(shipSignalsController.view(radioShip,vesselOperations,radioShip?npcCombat.engineering(radioShip->id):nullptr,activity.seconds));
+                        if(const auto* source=discoveries.source())details->tactical=source->kind==SignalKind::Tactical;
+                        view->ship=std::move(details);
+                    }
+                    view->bearing=glm::inverse(nav.orientation)*view->bearing;
+                    cutterAudio.receiver(view->quality,view->frequency,view->pulse,listening&&!observer.field);
+                    cockpit.discovery=std::move(view);
+                }else cutterAudio.receiver(0,100,0,false);
+                renderer.setCockpit(pilotEnabled ? &cockpit : nullptr);
+                if (motionProof)
+                    motionProof->apply(renderer);
+                if (pointLightProof)
+                    pointLightProof->apply(renderer);
+                auto stats =
+                    renderer.render(*renderNavigation, cache,
+                                    overlay && !opt.polarTest && !opt.cloudTest && !opt.celestialTest &&
+                                        !opt.landingLightTest && !opt.weatherTest && !opt.diversityTest,
+                                    fps, persistence.markerCount(),
+                                    uiProof ? uiProof->notice()
+                                            : (contactsExpanded||noticeTime>0) && !opt.starStabilityTest ? notice : "", looking);
+                if (pointLightProof) {
+                    pointLightProof->observe(stats, cache, renderer, opt.captures);
+                    if (pointLightProof->finished())
+                        running = false;
+                }
+                if (npcProof) {
+                    npcProof->observe(stats, renderer, opt.captures);
+                    if (npcProof->finished())
+                        running = false;
+                }
+                if (crewProof) {
+                    crewProof->observe(renderer, opt.captures);
+                    if (crewProof->finished())
+                        running = false;
+                }
+                if (flightProof) {
+                    flightProof->observe(stats, renderer, opt.captures);
+                    if (flightProof->finished())
+                        running = false;
+                }
+                if (streamingProof) {
+                    streamingProof->observe(stats, renderer, opt.captures);
+                    if (streamingProof->finished())
+                        running = false;
+                }
+                if (terrainProof) {
+                    terrainProof->observe(stats, renderer, opt.captures);
+                    if (terrainProof->finished())
+                        running = false;
+                }
+                if (planetProof) {
+                    planetProof->observe(stats, cache, renderer, opt.captures);
+                    if (planetProof->finished())
+                        running = false;
+                }
+                if (uiProof) {
+                    uiProof->observe(stats, cache, renderer, opt.captures);
+                    if (uiProof->finished())
+                        running = false;
+                }
+                if (polarProof) {
+                    polarProof->observe(stats, cache, renderer, opt.captures);
+                    if (polarProof->finished())
+                        running = false;
+                }
+                if (celestialProof) {
+                    celestialProof->observe(stats, cache, renderer, opt.captures);
+                    if (celestialProof->finished())
+                        running = false;
+                }
+                if (landingLightProof) {
+                    landingLightProof->observe(stats, cache, renderer, opt.captures);
+                    if (landingLightProof->finished())
+                        running = false;
+                }
+                if (cloudProof) {
+                    cloudProof->observe(stats, cache, renderer, opt.captures);
+                    if (cloudProof->finished())
+                        running = false;
+                }
+                if (surfaceProof) {
+                    surfaceProof->observe(stats, cache, renderer, opt.captures);
+                    if (surfaceProof->finished())
+                        running = false;
+                }
+                if (weatherProof) {
+                    weatherProof->observe(stats, cache, renderer, opt.captures);
+                    if (weatherProof->finished())
+                        running = false;
+                }
+                if (stellarDiversityProof) {
+                    stellarDiversityProof->observe(stats, cache, renderer, opt.captures);
+                    if (stellarDiversityProof->finished())
+                        running = false;
+                }
+                if (diversityProof) {
+                    diversityProof->observe(stats, cache, renderer, opt.captures);
+                    if (diversityProof->finished())
+                        running = false;
+                }
+                noticeTime -= dt;
+                if (noticeTime <= 0 && !incidentComms.empty() && !marketOpen && !plannerOpen && !crewOpen && !probeViewing) {
+                    notice = std::move(incidentComms);
+                    incidentComms.clear();
+                    noticeTime = 6;
+                }
+                ++frame;
+                if (frame > 10)
+                    frameTimes.push_back(wall * 1000);
+                if (economyProof) {
+                    economyProof->observe(stats, renderer, opt.captures);
+                    if (economyProof->finished())
+                        running = false;
+                }
+                if (pilotProof) {
+                    pilotProof->observe(stats, renderer, activity, opt.captures);
+                    if (pilotProof->finished())
+                        running = false;
+                }
+                if (motionProof) {
+                    motionProof->observe(stats, cache, renderer, opt.captures);
+                    if (motionProof->finished())
+                        running = false;
+                }
+                auto gen = cache.stats();
+                if (prospectingProof) {
+                    prospectingProof->observe(stats, cache, opt.captures);
+                    if (prospectingProof->finished())
+                        running = false;
+                }
+                if (seamProof) {
+                    seamProof->observe(stats, cache, opt.captures);
+                    if (seamProof->finished())
+                        running = false;
+                }
+                if (microFlightProof) {
+                    microFlightProof->observe(stats, cache, opt.captures);
+                    if (microFlightProof->finished())
+                        running = false;
+                }
+                if (probeProof) {
+                    probeProof->observe(stats,cache,opt.captures,wall*1000);
+                    if(probeProof->finished())running=false;
+                }
+                if(plannerProof){plannerProof->observe(stats,cache,opt.captures);if(plannerProof->finished())running=false;}
+                if (expeditionProof) {
+                    expeditionProof->observe(stats, cache, opt.captures);
+                    if (expeditionProof->finished())
+                        running = false;
+                }
+                if (explorationProof) {
+                    explorationProof->observe(stats, cache, renderer, opt.captures);
+                    if (explorationProof->finished())
+                        running = false;
+                }
+                if (dockingProof) {
+                    dockingProof->observe(stats, cache, renderer, opt.captures);
+                    if (dockingProof->finished())
+                        running = false;
+                }
+                if (!gen.error.empty())
+                    throw std::runtime_error(gen.error);
+                if (profile)
+                    profile << frame << ',' << kindName(nav.anchor.kind()) << ',' << nav.logDistance << ','
+                            << wall * 1000 << ',' << stats.cpuMs << ',' << stats.gpuMs << ','
+                            << stats.drawCalls << ',' << stats.visibleObjects << ',' << stats.atoms << ','
+                            << gen.bytes << ',' << stats.gpuBytes << ',' << gen.pending << ','
+                            << stats.lodTransitions << ',' << stats.sections << ',' << stats.submitMs << ','
+                            << stats.vertices << ',' << stats.triangles << ',' << stats.particles << ','
+                            << stats.uploadBytes << ',' << nav.transitioning << ',' << gen.queued << ','
+                            << gen.cancelled << ',' << gen.evicted << ',' << stats.atomTriangles << ','
+                            << stats.uploadDeferred << ',' << renderModeName(renderer.mode()) << ','
+                            << stats.effectBytes << ',' << stats.terrainTiles << ',' << stats.rootCells << ','
+                            << stats.activityBodies << ',' << stats.activityVisible << ','
+                            << stats.activityTriangles << ',' << stats.activityBytes << ','
+                            << stats.materialBytes << ',' << stats.surfaceSites << ','
+                            << stats.surfaceBuildings << ',' << stats.surfaceResidents << ','
+                            << stats.surfaceTriangles << ',' << stats.surfaceBytes << ','
+                            << stats.surfaceGpuBytes << ',' << stats.surfacePending << ','
+                            << stats.weatherCells << ',' << stats.weatherParticles << ',' << stats.shadowBytes
+                            << ',' << stats.shadowActive << ',' << stats.shadowUpdates << ','
+                            << stats.weatherPending << ',' << stats.weatherCacheBytes << ','
+                            << stats.weatherGpuBytes << ',' << stats.weatherVolumes << ','
+                            << stats.prospectSites << ',' << stats.prospectRocks << ','
+                            << stats.prospectMarkers << ',' << stats.probeCpuMs << ',' << stats.probeLightUploads << ',' << stats.hiddenExterior << '\n';
+                if (opt.tour) {
+                    if (!nav.transitioning && stats.visibleObjects > 0 && gen.pending == 0 &&
+                        gen.queued == 0 && stats.surfacePending == 0 && stats.weatherPending == 0 &&
+                        stats.lodTransitions == 0 && stats.uploadDeferred == 0)
+                        ++stable;
+                    else
+                        stable = 0;
+                    if (captureHold > 0)
+                        --captureHold;
+                    if (stable >= 35 && captureHold == 0) {
+                        if (opt.presentationTest) {
+                            auto geometry = renderer.submittedGeometry(nav.anchor);
+                            if (!geometry)
+                                throw std::runtime_error("Missing comparison geometry");
+                            auto hash = geometryFingerprint(*geometry);
+                            if (!captureQueued) {
+                                compareHash = hash;
+                                compareCamera = nav.serialize();
+                                compareGeneration = gen;
+                            } else if (hash != compareHash || nav.serialize() != compareCamera ||
+                                       gen.completed != compareGeneration.completed ||
+                                       gen.misses != compareGeneration.misses)
+                                throw std::runtime_error(
+                                    "Rendering mode changed scene, camera or generation state");
+                            if (!captureQueued) {
+                                if (!opt.captures.empty())
+                                    renderer.screenshot(
+                                        (std::filesystem::path(opt.captures) /
+                                         (std::to_string(tourStage) + "-" +
+                                          std::string(kindName(nav.anchor.kind())) + "-" +
+                                          std::string(renderModeName(renderer.mode())) + ".ppm"))
+                                            .string());
+                                captureQueued = true;
+                                captureHold = 4;
+                            } else {
+                                std::cout << "PRESENTATION_PROOF " << nav.anchor.str() << " geometry=" << hash
+                                          << " camera=identical generation=unchanged renderer=HYPERION\n";
+                                captureQueued = false;
+                                stable = 0;
+                            }
+                            if (captureQueued)
+                                continue;
+                        }
+                        if (!opt.presentationTest && !opt.captures.empty() && !captureQueued) {
+                            renderer.screenshot(
+                                (std::filesystem::path(opt.captures) /
+                                 (std::to_string(tourStage) + "-" +
+                                  std::to_string(static_cast<int>(nav.anchor.kind())) + ".ppm"))
+                                    .string());
+                            captureQueued = true;
+                            captureHold = 4;
+                        } else {
+                            stable = 0;
+                            auto node = universe.describe(nav.anchor);
+                            captureQueued = false;
+                            if (proof)
+                                proof->observe(node, renderer.submittedGeometry(nav.anchor));
+                            std::cout << "TOUR " << tourStage << " " << kindName(nav.anchor.kind()) << " "
+                                      << nav.anchor.str() << " scale=" << nav.logDistance
+                                      << " draws=" << stats.drawCalls << " atoms=" << stats.atoms
+                                      << " mineral=" << static_cast<unsigned>(node.environment.mineral)
+                                      << '\n'
+                                      << std::flush;
+                            ++tourStage;
+                            if (!returning) {
+                                visited.emplace_back(nav.anchor, node.seed);
+                                ++tourVisited;
+                                if (nav.selected)
+                                    nav.focus();
+                                else
+                                    returning = true;
+                            }
+                            if (returning) {
+                                auto found = std::find_if(visited.begin(), visited.end(),
+                                                          [&](auto& v) { return v.first == nav.anchor; });
+                                if (found == visited.end() || found->second != node.seed)
+                                    throw std::runtime_error("Tour revisit identity mismatch");
+                                if (nav.anchor.kind() ==
+                                    (opt.presentationTest ? Kind::Cosmic : Kind::Galaxy)) {
+                                    tourPassed = true;
+                                    opt.tour = false;
+                                    notice = "Journey complete / the same galaxy, star, planet, rock and "
+                                             "material survived the return";
+                                    noticeTime = 7;
+                                    if (opt.smoke)
+                                        running = false;
+                                } else
+                                    nav.parent();
+                            }
+                        }
+                    }
+                }
+                if (opt.frames > 0 && frame >= opt.frames)
+                    running = false;
+                if (opt.smoke &&
+                    std::chrono::duration<double>(now - start).count() >
+                        (opt.microExpeditionTest ? 600
+                         : opt.crewTest || opt.crewTradeTest || opt.crewFlightTest || opt.crewGunsTest ||
+                                 opt.stationSwapTest || opt.starStabilityTest || opt.combatOperationsTest ||
+                                 opt.explorationTest || opt.dockingTest
+                             ? 240
+                         : opt.npcTest                                   ? 180
+                         : opt.economyTest                               ? 330
+                         : opt.diversityTest || opt.stellarDiversityTest ? 360
+                         : opt.celestialTest || opt.weatherTest || opt.cloudTest || opt.polarTest ||
+                                 opt.surfaceTest
+                             ? 210
+                         : opt.pilotTest ? 180
+                                         : 100))
+                    throw std::runtime_error("Native GPU tour timed out before completion");
+                if (SDL_GetWindowFlags(window) & SDL_WINDOW_MINIMIZED)
+                    std::this_thread::sleep_for(std::chrono::milliseconds(25));
+            }
+            if (!opt.profile.empty()) {
+                profile.flush();
+                if (!profile)
+                    throw std::runtime_error("Could not finish profiling CSV (check free disk space)");
+            }
+            if (economy)
+                economy->flush();
+            if (!opt.smoke) {
+                persistence.saveState(specimenProbe.active() ? specimenProbe.parkedNavigation()
+                                                             : nav.serialize());
+                auto saveText = [&](const char* name, const std::string& text) {
+                    auto path = data / name, pending = path;
+                    pending += ".pending";
+                    {
+                        std::ofstream out(pending);
+                        out << text << '\n';
+                        out.flush();
+                        if (!out)
+                            throw std::runtime_error("Unable to save flight settings");
+                    }
+                    std::filesystem::rename(pending, path);
+                };
+                saveText(("ship-" + std::to_string(universe.seed()) + ".txt").c_str(),
+                         specimenProbe.active() ? specimenProbe.parkedShip() : pilot.serialize());
+                if (specimenProbe.active()) {
+                    activity.selected = parkedSelection;
+                activity.combatSelection = parkedCombatSelection;
+                    activity.enabled = parkedActivityEnabled;
+                }
+                saveText(("activity-" + std::to_string(universe.seed()) + ".txt").c_str(),
+                         activity.serialize());
+                saveText(("combat-" + std::to_string(universe.seed()) + ".txt").c_str(), weapons.serialize());
+                saveText(("fire-control-" + std::to_string(universe.seed()) + ".txt").c_str(),
+                         fireControl.serialize());
+                saveText(("defence-"+std::to_string(universe.seed())+".txt").c_str(),defence.serialize());
+                saveText(("discovery-"+std::to_string(universe.seed())+".txt").c_str(),discoveries.serialize(universe.seed()));
+                saveText(("ship-signals-"+std::to_string(universe.seed())+".txt").c_str(),shipSignalsController.serialize(universe.seed()));
+                saveText(("vessels-" + std::to_string(universe.seed()) + ".txt").c_str(),vesselOperations.serialize(universe.seed()));
+                saveText(("npc-combat-" + std::to_string(universe.seed()) + ".txt").c_str(),
+                         npcCombat.serialize(universe.seed()));
+                saveText(("crew-" + std::to_string(universe.seed()) + ".txt").c_str(), crew.serialize());
+                // Rendering is fixed to Hyperion; historical display.txt preferences are ignored.
+                saveText("cockpit-motion.txt", renderer.cockpitMotionEnabled() ? "1" : "0");
+                plannerChoice.depth=probeLaunchDepth;plannerChoice.bay=probeBay;
+                saveText(("expedition-plan-"+std::to_string(universe.seed())+".txt").c_str(),plannerChoice.serialize());
+            }
+            cache.wait();
+            if (proof)
+                proof->finish();
+            if (!frameTimes.empty()) {
+                std::sort(frameTimes.begin(), frameTimes.end());
+                std::cout << "FRAME median_ms=" << frameTimes[frameTimes.size() / 2]
+                          << " p95_ms=" << frameTimes[static_cast<size_t>(frameTimes.size() * .95)]
+                          << " frames=" << frame << " cache_bytes=" << cache.stats().bytes << '\n';
+            }
+#if defined(__APPLE__) || defined(__linux__)
+            struct rusage usage{};
+            getrusage(RUSAGE_SELF, &usage);
+#if defined(__APPLE__)
+            std::cout << "peak_rss_bytes=" << usage.ru_maxrss << '\n';
+#else
+            std::cout << "peak_rss_bytes=" << usage.ru_maxrss * 1024 << '\n';
+#endif
+#endif
+            if(opt.plannerTest){
+                if(!plannerProof->finished())throw std::runtime_error("Native expedition planner validation incomplete");
+            } else if (opt.probeTest) {
+                if (!probeProof->finished()) throw std::runtime_error("Native mining probe validation incomplete");
+            } else if (opt.microExpeditionTest) {
+                if (!microFlightProof->finished())
+                    throw std::runtime_error("Native flight-controlled micro expedition incomplete");
+            } else if (opt.seamTest) {
+                if (!seamProof->finished())
+                    throw std::runtime_error("Native shrinking seam expedition incomplete");
+            } else if (opt.prospectingTest) {
+                if (!prospectingProof->finished())
+                    throw std::runtime_error("Native prospecting incomplete");
+            } else if (opt.expeditionTest) {
+                if (!expeditionProof->finished())
+                    throw std::runtime_error("Native material expedition incomplete");
+            } else if (opt.dockingTest) {
+                if (!dockingProof->finished())
+                    throw std::runtime_error("Native docking incomplete");
+            } else if (opt.explorationTest) {
+                if (!explorationProof->finished())
+                    throw std::runtime_error("Native exploration incomplete");
+            } else if (opt.starStabilityTest) {
+                if (!pointLightProof->finished())
+                    throw std::runtime_error("Native star stability validation incomplete");
+            } else if (opt.combatOperationsTest) {
+                if (!combatOperationsProof->finished())
+                    throw std::runtime_error("Native combat operations incomplete");
+            } else if (opt.stationSwapTest) {
+                if (!stationSwapProof->finished())
+                    throw std::runtime_error("Native station swap validation incomplete");
+            } else if (opt.crewGunsTest) {
+                if (!crewGunsProof->finished())
+                    throw std::runtime_error("Native crewed guns validation incomplete");
+            } else if (opt.crewFlightTest) {
+                if (!crewFlightProof->finished())
+                    throw std::runtime_error("Native crew flight validation incomplete");
+            } else if (opt.crewTradeTest) {
+                if (!crewTradeProof->finished())
+                    throw std::runtime_error("Native crew trading incomplete");
+            } else if (opt.crewTest) {
+                if (!crewProof->finished())
+                    throw std::runtime_error("Native crew validation incomplete");
+            } else if (opt.npcTest) {
+                if (!npcProof->finished())
+                    throw std::runtime_error("Native NPC combat validation incomplete");
+            } else if (opt.cockpitMotionTest) {
+                if (!motionProof->finished())
+                    throw std::runtime_error("Native cockpit motion validation incomplete");
+            } else if (opt.stellarDiversityTest) {
+                if (!stellarDiversityProof->finished())
+                    throw std::runtime_error("Stellar diversity gallery incomplete");
+            } else if (opt.diversityTest) {
+                if (!diversityProof->finished())
+                    throw std::runtime_error("Planet diversity fixture incomplete");
+            } else if (opt.weatherTest) {
+                if (!weatherProof->finished())
+                    throw std::runtime_error("Weather visibility fixture incomplete");
+            } else if (opt.landingLightTest) {
+                if (!landingLightProof->finished())
+                    throw std::runtime_error("Landing-light fixture incomplete");
+            } else if (opt.celestialTest) {
+                if (!celestialProof->finished())
+                    throw std::runtime_error("Celestial graphics fixture incomplete");
+            } else if (opt.cloudTest) {
+                if (!cloudProof->finished())
+                    throw std::runtime_error("Native cloud validation incomplete");
+            } else if (opt.polarTest) {
+                if (!polarProof->finished())
+                    throw std::runtime_error("Native polar optics validation incomplete");
+            } else if (opt.uiFitTest) {
+                if (!uiProof->finished())
+                    throw std::runtime_error("Native UI fit validation incomplete");
+            } else if (opt.planetTest) {
+                if (!planetProof->finished())
+                    throw std::runtime_error("Native planet stability validation incomplete");
+            } else if (opt.surfaceTest) {
+                if (!surfaceProof->finished())
+                    throw std::runtime_error("Native surface life validation incomplete");
+            } else if (opt.terrainTest) {
+                if (!terrainProof->finished())
+                    throw std::runtime_error("Native terrain validation incomplete");
+            } else if (opt.economyTest) {
+                if (!economyProof->finished())
+                    throw std::runtime_error("Native economic validation incomplete");
+            } else if (opt.pilotTest) {
+                if (!pilotProof->finished())
+                    throw std::runtime_error("Native piloting test incomplete");
+            } else if (opt.streamingTest) {
+                if (!streamingProof->finished())
+                    throw std::runtime_error("Native streaming test incomplete");
+            } else if (opt.flightTest) {
+                if (!flightProof->finished())
+                    throw std::runtime_error("Native automatic flight incomplete");
+            } else if (opt.smoke) {
+                if (proof)
+                    std::cout << "PROOF recipe=" << generationRecipeVersion << " objects=" << proof->objects()
+                              << " revisits=" << proof->revisits() << " digest=" << proof->digest()
+                              << " (all LODs, descriptors, materials and atomic sites)\n";
+                if (!tourPassed || tourVisited != (opt.presentationTest ? 9 : 8))
+                    throw std::runtime_error("Native GPU tour incomplete");
+                std::cout << "PASS: native GPU journey visited " << tourVisited
+                          << " scales and returned with matching identities.\n";
+            }
+        }
+        SDL_DestroyWindow(window);
+        window = nullptr;
+        SDL_Quit();
+        return 0;
+    } catch (const std::exception& e) {
+        std::cerr << "Infinity: " << e.what() << '\n';
+        if (window)
+            SDL_DestroyWindow(window);
+        SDL_Quit();
+        return 1;
+    }
+}

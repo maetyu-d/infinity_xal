@@ -1,0 +1,483 @@
+#include "infinity/Economy.hpp"
+#include <algorithm>
+#include <numeric>
+namespace infinity {
+namespace {
+int64_t total(const Stock& s) {
+    return std::accumulate(s.begin(), s.end(), int64_t(0));
+}
+bool waiting(HaulPhase p) {
+    return p == HaulPhase::Open || p == HaulPhase::Reserved;
+}
+bool active(HaulPhase p) {
+    return waiting(p) || p == HaulPhase::InTransit;
+}
+} // namespace
+int64_t EconomyPlayer::sealedKg() const {
+    return haul && haul->onboard ? haul->kg : 0;
+}
+int64_t EconomyPlayer::availableCargo(Good good) const {
+    return cargo.at(size_t(good)) - (haul && haul->onboard && haul->good == good ? haul->kg : 0);
+}
+std::string_view EconomyPlayer::carrierRank() const {
+    const auto onTime = deliveries - lateDeliveries;
+    return onTime >= 50   ? "VETERAN CARRIER"
+           : onTime >= 20 ? "TRUSTED CARRIER"
+           : onTime >= 5  ? "COURIER"
+                          : "NEW CARRIER";
+}
+bool Economy::reconcilePlayer(EconomyPlayer& player) const {
+    if (!reconcileCombat(player))
+        return false;
+    for (const auto& market : crewMarkets_)
+        for (const auto& m : market.offers)
+            if (crewOwned(player, m.id))
+                return false;
+    const auto owned = std::count_if(hauls_.begin(), hauls_.end(), [](const auto& h) {
+        return h.phase == HaulPhase::Reserved || h.phase == HaulPhase::InTransit;
+    });
+    if (!player.haul || player.haul->system != network_->system)
+        return owned == 0;
+    auto& p = *player.haul;
+    auto h = std::find_if(hauls_.begin(), hauls_.end(), [&](const auto& x) { return x.id == p.id; });
+    if (h == hauls_.end()) {
+        if (!p.onboard && p.id < nextHaul_ && tick_ > p.deadline && owned == 0) {
+            player.haul.reset();
+            player.returnedHauls++;
+            return true;
+        }
+        return false;
+    }
+    if (p.source != network_->sites[h->source].id || p.destination != network_->sites[h->destination].id ||
+        p.good != h->good || p.kg != h->kg || p.deadline != h->deadline)
+        return false;
+    if (!p.onboard && (h->phase == HaulPhase::Expired || h->phase == HaulPhase::Cancelled)) {
+        player.haul.reset();
+        player.returnedHauls++;
+        return owned == 0;
+    }
+    return owned == 1 && (p.onboard ? h->phase == HaulPhase::InTransit && player.cargo[size_t(p.good)] >= p.kg
+                                    : h->phase == HaulPhase::Reserved);
+}
+void Economy::haulOffers() {
+    for (auto& h : hauls_) {
+        const auto* incident = h.interruptedFlight && h.phase == HaulPhase::Open ? incidentFor(h.interruptedFlight) : nullptr;
+        const bool covered = incident && !incident->remainingKg();
+        if (covered || (waiting(h.phase) && tick_ > h.deadline)) {
+            sites_[h.source].reserved[size_t(h.good)] -= h.kg;
+            sites_[h.destination].cash += h.escrow;
+            h.escrow = 0;
+            h.phase = covered ? HaulPhase::Cancelled : HaulPhase::Expired;
+            event(covered ? "RELAY WITHDRAWN / SHIPMENT ALREADY COVERED"
+                          : "HAUL EXPIRED / stock released and buyer escrow refunded");
+        } else if (h.phase == HaulPhase::InTransit && tick_ == h.deadline + 1)
+            event("HAUL OVERDUE / cargo remains sealed / late fee reduced");
+    }
+    std::erase_if(hauls_, [&](const auto& h) {
+        return !active(h.phase) && tick_ > h.deadline + 24 &&
+               (!h.interruptedFlight || tick_ * economyTickSeconds - freight_[h.interruptedFlight - 1].disabledAt > 720);
+    });
+    if (tick_ % 12 || sites_.empty())
+        return;
+    // At most eight funded waiting offers, 32 retained records and two new offers per batch.
+    size_t open = std::count_if(hauls_.begin(), hauls_.end(), [](const auto& h) { return waiting(h.phase); });
+    if (open >= 8 || hauls_.size() >= 32)
+        return;
+    std::vector<Stock> inbound(sites_.size());
+    std::vector<std::array<unsigned, goodCount>> interruptions;
+    std::array<bool, 4096> relayed{};
+    for (const auto& h : hauls_)
+        if (h.interruptedFlight)
+            relayed[h.interruptedFlight - 1] = true;
+    for (size_t i = 0; i < freight_.size(); ++i) {
+        const auto& f = freight_[i];
+        if (f.phase != FreightPhase::Idle && f.disabledAt < 0)
+            inbound[f.destination][size_t(f.good)] += f.kg;
+        const double age = tick_ * economyTickSeconds - f.disabledAt;
+        if (f.disabledAt < 0 || age < 0 || age > 720 || relayed[i] || f.kg < 10 ||
+            (f.phase != FreightPhase::Transit && f.phase != FreightPhase::Holding))
+            continue;
+        const auto* status = incidentFor(unsigned(i + 1));
+        if (status && status->remainingKg() < 10)
+            continue;
+        if (interruptions.empty())
+            interruptions.resize(sites_.size());
+        auto& incident = interruptions[f.destination][size_t(f.good)];
+        if (!incident)
+            incident = unsigned(i + 1);
+    }
+    for (const auto& h : hauls_)
+        if (active(h.phase) && tick_ <= h.deadline)
+            inbound[h.destination][size_t(h.good)] += h.kg;
+    std::array<std::vector<size_t>, goodCount> sellers;
+    for (size_t g = 0; g < goodCount; g++) {
+        for (size_t i = 0; i < sites_.size(); i++)
+            if (sites_[i].stock[g] - sites_[i].reserved[g] - network_->sites[i].target[g] >= 10)
+                sellers[g].push_back(i);
+        std::stable_sort(sellers[g].begin(), sellers[g].end(), [&](size_t a, size_t b) {
+            return unitPrice(a, Good(g), sites_[a].stock[g] - sites_[a].reserved[g], true) <
+                   unitPrice(b, Good(g), sites_[b].stock[g] - sites_[b].reserved[g], true);
+        });
+        if (sellers[g].size() > 4)
+            sellers[g].resize(4);
+    }
+    for (unsigned offered = 0; offered < 2 && open < 8 && hauls_.size() < 32; offered++) {
+        double best = 0;
+        HaulContract chosen;
+        for (size_t b = 0; b < sites_.size(); b++)
+            for (size_t g = 0; g < goodCount; g++) {
+                auto need = network_->sites[b].target[g] - sites_[b].stock[g] - inbound[b][g];
+                if (need < 10)
+                    continue;
+                const auto interruption = interruptions.empty() ? 0 : interruptions[b][g];
+                if (interruption) {
+                    need = std::min(need, freight_[interruption - 1].kg);
+                    if (const auto* status = incidentFor(interruption))
+                        need = std::min(need, status->remainingKg());
+                }
+                std::array<size_t, 10> lane;
+                for (auto a : economicLaneSources(network_->sites[b], g, sellers[g], lane)) {
+                    if (a == b)
+                        continue;
+                    const auto surplus =
+                        sites_[a].stock[g] - sites_[a].reserved[g] - network_->sites[a].target[g];
+                    const auto unit = unitPrice(a, Good(g), sites_[a].stock[g] - sites_[a].reserved[g], true);
+                    const int64_t baseFee = 30 + int64_t(travelTicks(a, b)) * 2;
+                    const int64_t fee = baseFee + (interruption ? baseFee / 2 : 0);
+                    auto kg =
+                        std::min({maxShipPayloadKg, surplus, need,
+                                  economicCapacity(network_->sites[b], sites_[b]) - total(sites_[b].stock),
+                                  sites_[b].cash / (unit * 2 + fee)});
+                    if (kg < 10)
+                        continue;
+                    const double score = double(need) * economicLaneWeight(network_->sites[b], g, a) /
+                                         (1 + travelTicks(a, b));
+                    if ((!interruption && chosen.interruptedFlight) ||
+                        (bool(interruption) == bool(chosen.interruptedFlight) && score <= best))
+                        continue;
+                    // Integrate the locked source price; reduce until the buyer can fund it.
+                    auto cost = quote(a, Good(g), kg).buyCents;
+                    while (kg >= 10 && cost + kg * fee > sites_[b].cash) {
+                        kg /= 2;
+                        cost = kg >= 10 ? quote(a, Good(g), kg).buyCents : 0;
+                    }
+                    if (kg < 10)
+                        continue;
+                    best = score;
+                    chosen.source = unsigned(a);
+                    chosen.destination = unsigned(b);
+                    chosen.good = Good(g);
+                    chosen.kg = kg;
+                    chosen.cost = cost;
+                    chosen.fee = kg * fee;
+                    chosen.interruptedFlight = interruption;
+                }
+            }
+        if (!chosen.kg)
+            break;
+        chosen.id = nextHaul_++;
+        const auto travel = travelTicks(chosen.source, chosen.destination);
+        chosen.deadline = tick_ + (chosen.interruptedFlight ? std::max<uint64_t>(72, travel * 3)
+                                                          : std::max<uint64_t>(144, travel * 4));
+        chosen.escrow = chosen.cost + chosen.fee;
+        sites_[chosen.source].reserved[size_t(chosen.good)] += chosen.kg;
+        sites_[chosen.destination].cash -= chosen.escrow;
+        inbound[chosen.destination][size_t(chosen.good)] += chosen.kg;
+        if (chosen.interruptedFlight)
+            interruptions[chosen.destination][size_t(chosen.good)] = 0;
+        hauls_.push_back(chosen);
+        open++;
+        event(network_->sites[chosen.destination].name +
+              (chosen.interruptedFlight ? " / FUNDED EMERGENCY RELAY / " : " / FUNDED PLAYER HAUL / ") +
+              std::to_string(chosen.kg) + " KG " + std::string(goodInfo(chosen.good).name));
+    }
+}
+std::string Economy::haulCommand(const EconomicCommand& c, EconomyPlayer& player) {
+    auto h = std::find_if(hauls_.begin(), hauls_.end(), [&](const auto& x) { return x.id == c.contract; });
+    if (h == hauls_.end())
+        return "HAUL NO LONGER AVAILABLE";
+    auto& source = sites_[h->source];
+    auto& destination = sites_[h->destination];
+    const auto g = size_t(h->good);
+    if (c.good != h->good || c.kg != h->kg)
+        return "CONSIGNMENT CHANGED / REVIEW JOB";
+    if (c.action == EconomicAction::AcceptHaul) {
+        if (h->phase != HaulPhase::Open || tick_ > h->deadline)
+            return "HAUL OFFER CLOSED";
+        if (h->interruptedFlight) {
+            const auto* incident = incidentFor(h->interruptedFlight);
+            if (incident && !incident->remainingKg())
+                return "REPLACEMENT SHIPMENT ALREADY RECEIVED";
+        }
+        if (player.haul)
+            return "FINISH OR RETURN YOUR ACTIVE HAUL FIRST";
+        if (c.port != network_->sites[h->source].id)
+            return "SELECT THE HAUL PICKUP PORT";
+        h->phase = HaulPhase::Reserved;
+        player.haul = PlayerHaul{network_->system,
+                                 h->id,
+                                 h->deadline,
+                                 network_->sites[h->source].id,
+                                 network_->sites[h->destination].id,
+                                 h->good,
+                                 h->kg,
+                                 false};
+        return "HAUL ACCEPTED / F4 PICKUP / CARGO AND FEE RESERVED";
+    }
+    if (!player.haul || player.haul->system != network_->system || player.haul->id != h->id)
+        return "THIS IS NOT YOUR ACTIVE HAUL";
+    auto& p = *player.haul;
+    if (c.action == EconomicAction::PickupHaul) {
+        if (h->phase != HaulPhase::Reserved || p.onboard)
+            return "HAUL IS NOT AWAITING PICKUP";
+        if (c.port != p.source)
+            return "PICK UP AT THE CONTRACT SOURCE";
+        if (player.massKg() + h->kg > player.capacityKg ||
+            player.volumeLitres() + h->kg * goodInfo(h->good).litresPerKg > player.capacityLitres)
+            return "MAKE ROOM FOR THE SEALED CONSIGNMENT";
+        source.stock[g] -= h->kg;
+        source.reserved[g] -= h->kg;
+        source.exported[g] += h->kg;
+        player.cargo[g] += h->kg;
+        h->phase = HaulPhase::InTransit;
+        p.onboard = true;
+        event("PLAYER PICKUP / " + std::to_string(h->kg) + " KG SEALED " +
+              std::string(goodInfo(h->good).name));
+        return "SEALED CARGO LOADED / F4 DELIVERY / NO PURCHASE CHARGE";
+    }
+    if (c.action == EconomicAction::DeliverHaul) {
+        if (h->phase != HaulPhase::InTransit || !p.onboard)
+            return "PICK UP THE CONSIGNMENT FIRST";
+        if (c.port != p.destination)
+            return "DELIVER AT THE CONTRACT DESTINATION";
+        if (economicCapacity(network_->sites[h->destination], destination) - total(destination.stock) < h->kg)
+            return "DESTINATION WAREHOUSE FULL / CARGO RETAINED";
+        const auto before = economicVitals(network_->sites[h->destination], destination, tick_);
+        const bool late = tick_ > h->deadline;
+        const auto payment = late ? h->fee / 2 : h->fee;
+        destination.stock[g] += h->kg;
+        destination.imported[g] += h->kg;
+        incidentCargo(h->destination, h->good, h->kg, true, h->interruptedFlight);
+        player.cargo[g] -= h->kg;
+        player.credits += payment;
+        source.cash += h->cost;
+        destination.cash += h->escrow - h->cost - payment;
+        externalMoneyDelta_ -= payment;
+        h->escrow = 0;
+        h->phase = HaulPhase::Complete;
+        player.deliveries++;
+        player.lateDeliveries += late;
+        player.freightEarnings += payment;
+        player.haul.reset();
+        Stock delivery{};
+        delivery[g] = h->kg;
+        recordOutcome(c, h->destination, h->interruptedFlight ? OutcomeKind::Relay : OutcomeKind::Haul,
+                      delivery, payment, before);
+        event("PLAYER HAUL DELIVERED / " + std::to_string(payment / 100) + " CR" +
+              (late ? " / LATE" : " / ON TIME"));
+        return "HAUL DELIVERED / " + std::to_string(payment / 100) + " CR" +
+               (late ? " / LATE FEE" : " / ON TIME");
+    }
+    if (c.action == EconomicAction::CancelHaul) {
+        if (h->phase == HaulPhase::Reserved) {
+            source.reserved[g] -= h->kg;
+            destination.cash += h->escrow;
+        } else if (h->phase == HaulPhase::InTransit && p.onboard) {
+            if (c.port != p.source)
+                return "RETURN SEALED CARGO TO ITS SOURCE / F4 IN JOBS";
+            if (economicCapacity(network_->sites[h->source], source) - total(source.stock) < h->kg)
+                return "SOURCE WAREHOUSE FULL / DELIVER TO THE BUYER";
+            source.stock[g] += h->kg;
+            source.imported[g] += h->kg;
+            player.cargo[g] -= h->kg;
+            destination.cash += h->escrow;
+        } else
+            return "HAUL ALREADY CLOSED";
+        h->escrow = 0;
+        h->phase = HaulPhase::Cancelled;
+        player.haul.reset();
+        player.returnedHauls++;
+        event("PLAYER HAUL WITHDRAWN / goods and buyer funds reconciled");
+        return "HAUL WITHDRAWN / SEALED CARGO AND ESCROW RETURNED";
+    }
+    return "INVALID HAUL ACTION";
+}
+std::vector<EconomySnapshot::Job> economicJobs(const EconomySnapshot& s) {
+    std::vector<EconomySnapshot::Job> jobs;
+    if (!s.network)
+        return jobs;
+    auto time = [&](uint64_t deadline) {
+        return deadline < s.tick ? std::string("OVERDUE")
+                                 : std::to_string((deadline - s.tick) * 5 / 60) + " ECON H LEFT";
+    };
+    const auto addDistress = [&](const WreckRecovery& wreck, bool aboard) {
+        const auto& issuer = s.network->sites[wreck.accountingSite];
+        EconomySnapshot::Job job;
+        job.distress = wreck.id;
+        job.source = job.destination = wreck.accountingSite;
+        job.issuer = issuer.id;
+        job.target = aboard ? issuer.id : wreck.id;
+        job.deadline = wreck.rescueDeadline;
+        job.action = aboard ? EconomicAction::DisembarkRescued : EconomicAction::RecoverWreck;
+        job.title = std::string(aboard ? "RESCUE HANDOVER / " : "DISTRESS RESCUE / ") +
+                    wreck.survivor->name + " / " + std::to_string(wreck.rescueEscrow / 100) + " CR / " + time(job.deadline);
+        job.route = aboard ? "SURVIVOR ABOARD / " + issuer.name
+                         : std::string(wreck.id.slot < 200 ? "FREIGHTER" : "FERRY") + " DISABLED / SURVIVOR SIGNAL";
+        jobs.push_back(std::move(job));
+    };
+    for (const auto& wreck : s.wrecks)
+        if (wreck.rescueEscrow && wreck.survivor && wreck.rescued && jobs.size() < 4 &&
+            std::any_of(s.player.rescued.begin(), s.player.rescued.end(), [&](const auto& p) { return p.source == wreck.id; }))
+            addDistress(wreck, true);
+    auto addCombat = [&](const CombatContract& c) {
+        EconomySnapshot::Job job;
+        job.combat = true;
+        job.id = c.id;
+        job.source = job.destination = c.site;
+        job.issuer = s.network->sites[c.site].id;
+        job.deadline = c.deadline;
+        const bool claim = c.phase == CombatJobPhase::Claimable;
+        job.target = claim ? job.issuer : c.target;
+        job.action = c.phase == CombatJobPhase::Open ? EconomicAction::AcceptCombat
+                     : claim                         ? EconomicAction::ClaimCombat
+                                                     : EconomicAction::ReportCombat;
+        job.working = c.phase == CombatJobPhase::Accepted;
+        job.title = std::string(c.kind == CombatJobKind::Escort ? "LANE ESCORT " : "NAMED BOUNTY ") +
+                    (claim         ? "CLAIM "
+                     : job.working ? "ACTIVE "
+                                   : "") +
+                    std::to_string(c.reward / 100) + "CR / " + time(c.deadline);
+        job.route = c.targetName + " / " +
+                    std::string(c.kind == CombatJobKind::Escort
+                                    ? "FERRY / 5KM / " + std::to_string(int(c.protectedSeconds)) + "/90S"
+                                : c.physicalSalvage ? "RAIDER / DISABLE / RECOVER WRECK"
+                                                    : "RAIDER / DISABLE / 22KG SALVAGE") +
+                    " / ISSUER " + s.network->sites[c.site].name;
+        jobs.push_back(std::move(job));
+    };
+    for (const auto& c : s.combatContracts)
+        if (c.phase == CombatJobPhase::Accepted || c.phase == CombatJobPhase::Claimable)
+            addCombat(c);
+    auto addHaul = [&](const HaulContract& h) {
+        const auto fee = s.tick > h.deadline ? h.fee / 2 : h.fee;
+        const bool mine =
+            s.player.haul && s.player.haul->system == s.network->system && s.player.haul->id == h.id;
+        EconomySnapshot::Job job;
+        job.haul = true;
+        job.id = h.id;
+        job.good = h.good;
+        job.kg = h.kg;
+        job.source = h.source;
+        job.destination = h.destination;
+        job.deadline = h.deadline;
+        job.action = h.phase == HaulPhase::Open       ? EconomicAction::AcceptHaul
+                     : h.phase == HaulPhase::Reserved ? EconomicAction::PickupHaul
+                                                      : EconomicAction::DeliverHaul;
+        job.target = s.network->sites[h.phase == HaulPhase::InTransit ? h.destination : h.source].id;
+        job.title = std::string(h.interruptedFlight ? "RELAY / " : "") +
+            (mine ? h.phase == HaulPhase::InTransit ? "DELIVER SEALED " : "PICKUP " : "HAUL ") +
+            std::to_string(h.kg) + "KG " + std::string(goodInfo(h.good).name) + " / FEE " +
+            std::to_string(fee / 100) + "CR / " + time(h.deadline);
+        job.route = (h.interruptedFlight ? "FREIGHTER DISABLED / " : "") +
+                    s.network->sites[h.source].name + " > " + s.network->sites[h.destination].name;
+        jobs.push_back(std::move(job));
+    };
+    for (const auto& h : s.hauls)
+        if (h.phase == HaulPhase::Reserved || h.phase == HaulPhase::InTransit)
+            addHaul(h);
+    auto addRecovery = [&](const RecoveryJob& j) {
+        EconomySnapshot::Job job;
+        job.recovery = true;
+        job.working = j.phase == RecoveryPhase::Working;
+        job.id = j.id;
+        job.target = s.network->sites[j.site].id;
+        job.source = job.destination = j.site;
+        job.deadline = j.deadline;
+        job.action =
+            j.phase == RecoveryPhase::Open ? EconomicAction::AcceptRecovery : EconomicAction::DeliverRecovery;
+        std::string bundle;
+        int64_t payment = 0;
+        for (size_t g = 0; g < goodCount; ++g) {
+            job.required[g] = j.required[g] - j.delivered[g];
+            job.kg += job.required[g];
+            payment += job.required[g] * j.rates[g];
+            if (job.required[g]) {
+                job.good = Good(g);
+                bundle += std::to_string(job.required[g]) + "KG " + std::string(goodInfo(Good(g)).name) + " ";
+            }
+        }
+        job.title = std::string(j.kind == RecoveryKind::Relief ? "RELIEF "
+                              : j.kind == RecoveryKind::Maintenance ? (j.engineering?"POWER/COOLING ":"RECOVER PLANT ") : "RESTART ") +
+                    (job.working ? "CREW " + std::to_string(j.progress) + "/" + std::to_string(j.pairs) +
+                                       " / ENTER REPORT"
+                     : j.phase == RecoveryPhase::Accepted ? "ACTIVE / " + bundle
+                                                          : bundle) +
+                    (job.working ? "" : " / " + std::to_string(payment / 100) + "CR / " + time(j.deadline));
+        job.route = s.network->sites[j.site].name +
+                    (j.recipe ? " / INPUT SHORTAGE / " + std::string(productionRecipes()[j.recipe - 1].name)
+                     : job.working ? " / LOCAL CREW USES RESERVED KIT" : " / SOURCE UNSEALED SUPPLIES");
+        if(j.engineering)job.route+=" / HEAT "+std::to_string(int(j.engineering->heat*100))+"% / COOLING RESTART";
+        if (j.kind == RecoveryKind::Relief && std::any_of(s.flights.begin(), s.flights.end(), [&](const auto& f) {
+                return f.weatherHold && f.destination == j.site && job.required[size_t(f.good)] > 0;
+            }))
+            job.route = s.network->sites[j.site].name + " / SUPPLIES DELAYED BY WEATHER";
+        jobs.push_back(std::move(job));
+    };
+    for (const auto& j : s.recoveries)
+        if ((j.phase == RecoveryPhase::Accepted || j.phase == RecoveryPhase::Working) && jobs.size() < 12)
+            addRecovery(j);
+    auto addSupply = [&](const EconomicContract& c) {
+        EconomySnapshot::Job job;
+        job.id = c.id;
+        job.good = c.good;
+        job.kg = c.requested - c.delivered;
+        job.source = job.destination = c.site;
+        job.deadline = c.deadline;
+        job.target = s.network->sites[c.site].id;
+        job.title = std::string(c.phase == ContractPhase::Accepted ? "SUPPLY ACTIVE " : "SUPPLY ") +
+                    std::to_string(job.kg) + "KG " + std::string(goodInfo(c.good).name) + " / " +
+                    std::to_string(c.unitCents / 100) + "CR/KG / " + time(c.deadline);
+        job.route = s.network->sites[c.site].name + " / PLAYER SOURCES THE GOODS";
+        jobs.push_back(std::move(job));
+    };
+    for (const auto& c : s.contracts)
+        if (c.phase == ContractPhase::Accepted && jobs.size() < 12)
+            addSupply(c);
+    unsigned calls = 0;
+    for (const auto& wreck : s.wrecks)
+        if (wreck.rescueEscrow && wreck.survivor && !wreck.rescued && calls < 2 && jobs.size() < 12) {
+            addDistress(wreck, false);
+            ++calls;
+        }
+    for (const auto& j : s.recoveries)
+        if (j.kind == RecoveryKind::Restart && j.phase == RecoveryPhase::Open && jobs.size() < 12)
+            addRecovery(j);
+    unsigned relays = 0;
+    for (const auto& h : s.hauls)
+        if (h.interruptedFlight && h.phase == HaulPhase::Open && relays < 2 && jobs.size() < 12) {
+            addHaul(h);
+            ++relays;
+        }
+    unsigned security = 0;
+    for (const auto& c : s.combatContracts)
+        if (c.phase == CombatJobPhase::Open && security < 4 && jobs.size() < 12) {
+            addCombat(c);
+            ++security;
+        }
+    for (const auto& j : s.recoveries)
+        if (j.kind != RecoveryKind::Restart && j.phase == RecoveryPhase::Open && jobs.size() < 12)
+            addRecovery(j);
+    for (const auto& h : s.hauls)
+        if (h.phase == HaulPhase::Open && jobs.size() < 12) {
+            if (h.interruptedFlight && relays) {
+                --relays;
+                continue;
+            }
+            addHaul(h);
+        }
+    for (const auto& c : s.contracts)
+        if (c.phase == ContractPhase::Open && jobs.size() < 12)
+            addSupply(c);
+    return jobs;
+}
+} // namespace infinity

@@ -1,0 +1,24 @@
+{
+  "space_rgb_rms": [
+    120.10137324653915,
+    59.779032095202176,
+    20.651870996139483
+  ],
+  "hud_rgb_rms": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "space_contrast": {
+    "dark_fraction": 0.6154943708625966,
+    "yellow_fraction": 0.043205457213009786
+  },
+  "previous_berth": {
+    "dark_fraction": 0.26926586771401056,
+    "yellow_fraction": 0.00013360693344358006
+  },
+  "current_berth": {
+    "dark_fraction": 0.6446912671483238,
+    "yellow_fraction": 0.013728742632712019
+  }
+}

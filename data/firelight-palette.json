@@ -1,0 +1,25 @@
+{
+  "name": "Reference firelight",
+  "reference": "The two user-supplied wildfire photographs",
+  "colours": {
+    "soot": "#250904",
+    "charred_wine": "#520807",
+    "crimson": "#99160c",
+    "flame": "#e74a12",
+    "hot_orange": "#f88f26",
+    "fire_gold": "#ffd24a",
+    "white_heat": "#fff5be"
+  },
+  "treatment": "Near-black silhouettes, crimson shadows, orange midtones, isolated yellow-white incandescence. The images are colour references only.",
+  "display_treatment": "Steeper shadow-to-highlight separation: deep umber and crimson, burning yellow and white heat",
+  "display_palette": {
+    "umber": "#130401",
+    "blackened_red": "#380302",
+    "crimson": "#750602",
+    "scarlet": "#e02403",
+    "orange": "#ff6e05",
+    "yellow_heat": "#fff013",
+    "white_heat": "#fffeb8"
+  },
+  "space": "Exaggerated glass sheets, refraction, internal double images and caustic edges in the void"
+}

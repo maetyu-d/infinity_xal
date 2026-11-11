@@ -1,0 +1,6 @@
+.DS_Store
+/build*/
+/*.app/
+/xalaria-save/
+__pycache__/
+*.pyc

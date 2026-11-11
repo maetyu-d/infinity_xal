@@ -1,0 +1,390 @@
+{
+  "catalogue_test": "passed",
+  "native_map_frames": 150,
+  "native_flight_frames": 150,
+  "native_journey_frames": 1209,
+  "native_journey_system": 16538,
+  "native_journey_arrivals": 1,
+  "native_journey_travel_metres": 2863730000000000.0,
+  "source_system": 14940,
+  "snapshot": "5923cc4f",
+  "runtime": "C++20, SDL3, bgfx Metal, Infinity Hyperion renderer",
+  "platform": "macOS 26+, arm64",
+  "linked_dependencies": "system libraries and frameworks only",
+  "packaged_app_test": "passed: signed app crossed Oylanhai to Ziksa with four cargo units, physically docked and bought four iron in a separate run, and rendered Tidal Blue with the ship rolled",
+  "native_keyboard_search": "verified visually in packaged app",
+  "signature": "ad hoc codesign verification passed",
+  "version": "0.10.0",
+  "integration_tests": "passed: immutable destination, two-hop route, final-world handoff, pause/resume, route save/restore, cockpit selection, world search, frame-invariant position, map picking, anchored zoom",
+  "test_suites": 3,
+  "economy_integration_tests": "passed: physical docking access, conserved transactions, stock and cargo limits, sealed charter, real berth departure and wormhole haul, fuel progress, save validation, construction, vault storage, farms and guards, finite deposits, restoration, culture, galleries, offline settlement, deadlines and UI bounds",
+  "test_result": "3 of 3 passed",
+  "native_economy_frames": 280,
+  "native_economy_transaction": {
+    "purchase": "4 iron",
+    "starting_credits_cents": 2000000,
+    "remaining_credits_cents": 1976958,
+    "cargo_units": 4,
+    "docked": true
+  },
+  "native_restart_frames": 150,
+  "native_restart_result": "same 1976958 cents, 4 cargo units and actual station berth after restoring atomic session",
+  "economic_time_scale": 60,
+  "bulk_commodities": 12,
+  "economy_source": "https://www.xalaria.com/handbook/",
+  "economy_limits": "Offline public-rule implementation with local balance; full server economy not reproduced. See ECONOMY.md.",
+  "binary_sha256": "df232d34be10da97b5a83308cdc800f4948ad11fce2bb7f03cd99432bdccc4dc",
+  "graphics_style": "Charred Glass, Verdant Fog, Tidal Blue and Acid Etch regional looks with depth-aware camera optics",
+  "graphics_scope": [
+    "world pigments",
+    "sky",
+    "atmospheric scattering",
+    "HDR display grade",
+    "warp streaks and soft destination fade",
+    "physical cockpit",
+    "map",
+    "economy panels",
+    "late target markers"
+  ],
+  "shader_backends_compiled": [
+    "Metal",
+    "SPIR-V",
+    "GLSL"
+  ],
+  "shader_embedding": "Project-local checked-in shaders, source/binary SHA-256 validated at CMake configuration",
+  "shader_manifest_sha256": "87092fa7de3c45ba7f821a2633dec891ad450528b5cf42d7281ae827c379b15b",
+  "native_graphics_checks": {
+    "acid_space": 145,
+    "acid_orbit": 135,
+    "acid_horizon": 140,
+    "acid_station_purchase": 280,
+    "acid_station_restore": 130,
+    "acid_atlas": 98,
+    "cross_region_journey": 1209,
+    "version": "0.8.0"
+  },
+  "capture_runs_ignore_desktop_helm_input": true,
+  "colour_reference": "Two user-supplied wildfire photographs, used for the palette only",
+  "colour_swatches": {
+    "soot": "#250904",
+    "charred_wine": "#520807",
+    "crimson": "#99160c",
+    "flame": "#e74a12",
+    "hot_orange": "#f88f26",
+    "fire_gold": "#ffd24a",
+    "white_heat": "#fff5be"
+  },
+  "highlight_response": "Peak-aware saturation brightness and retained HDR heat highlights; source silhouettes stay near black",
+  "graphics_materials": [
+    "smoked glass with parallax interiors",
+    "screen-space mirror floors",
+    "polished alloy",
+    "clear-coated physical cockpit",
+    "obsidian, water and ice glaze"
+  ],
+  "reflection_verification": {
+    "size": [
+      1420,
+      777
+    ],
+    "floor_rgb_rms": [
+      16.14478981390223,
+      4.551175306641116,
+      0.36939460964140963
+    ],
+    "hud_rgb_rms": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "changed_bounds": [
+      51,
+      0,
+      1420,
+      655
+    ]
+  },
+  "reflection_model": "Current-frame opaque colour/depth plus RGBA16F authored view normals and roughness; 28 ray steps and five refinements; edge fade and directional environment fallback",
+  "reflection_extra_bytes_per_pixel": 8,
+  "reflection_limits": "Only visible geometry can appear in screen-space reflections; off-screen rays use the environment. Glass interiors are optical parallax, not newly simulated rooms.",
+  "space_glass": "Celestial-direction optical sheets with broad reflective faces, nested caustics, live-background refraction and second-surface images; depth masked and composited before the HUD",
+  "space_glass_verification": {
+    "space_rgb_rms": [
+      120.10137324653915,
+      59.779032095202176,
+      20.651870996139483
+    ],
+    "hud_rgb_rms": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "space_contrast": {
+      "dark_fraction": 0.6154943708625966,
+      "yellow_fraction": 0.043205457213009786
+    },
+    "previous_berth": {
+      "dark_fraction": 0.26926586771401056,
+      "yellow_fraction": 0.00013360693344358006
+    },
+    "current_berth": {
+      "dark_fraction": 0.6446912671483238,
+      "yellow_fraction": 0.013728742632712019
+    }
+  },
+  "display_palette": {
+    "umber": "#130401",
+    "blackened_red": "#380302",
+    "crimson": "#750602",
+    "scarlet": "#e02403",
+    "orange": "#ff6e05",
+    "yellow_heat": "#fff013",
+    "white_heat": "#fffeb8"
+  },
+  "lens_verification": {
+    "version": "0.5.0",
+    "native_signed_app": true,
+    "open_space": {
+      "size": [
+        1420,
+        777
+      ],
+      "scene_rgb_rms": [
+        31.56400514025099,
+        27.182181593896146,
+        12.700019954679048
+      ],
+      "hud_rgb_rms": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dark_fraction": 0.5822312862062186,
+      "yellow_fraction": 0.06797315761080552
+    },
+    "station": {
+      "size": [
+        1420,
+        777
+      ],
+      "scene_rgb_rms": [
+        25.9099783191786,
+        17.84694466285546,
+        8.140640774344313
+      ],
+      "hud_rgb_rms": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dark_fraction": 0.6241737797653559,
+      "yellow_fraction": 0.018606656146171026
+    },
+    "method": "Matching native frames and saved berth, lens on/off. World RGB difference, identical title HUD pixels, deep-shadow and yellow-highlight coverage. Full images inspected visually.",
+    "aperture": "48-tap, eight-blade iris, edge cat-eye compression, isolated highlight footprint compensation",
+    "focus": "Central five-depth cross; opaque-depth silhouette rejection; five-pixel geometric blur cap",
+    "pipeline": "Opaque HDR + atmosphere + SSR + glass-space refraction -> optical HDR -> highlight seed -> aperture bokeh -> single display transform + halation/flare -> physical cockpit -> HUD",
+    "limits": "Screen-space camera approximation; transparent surfaces use opaque depth; no temporal autofocus history; no simulated lens geometry.",
+    "added_target_bytes_per_scene_pixel": 9.777777777777779
+  },
+  "baseline_reflection_verification_version": "0.4.1",
+  "baseline_space_glass_verification_version": "0.4.1",
+  "build_binary_sha256": "93cc4375e49982d8eab462ba5c38ee5f57cfb901f0cccf712181386b00b72039",
+  "baseline_native_graphics_checks": {
+    "version": "0.5.0",
+    "lens_open_space_on": 160,
+    "lens_open_space_off_control": 160,
+    "lens_restored_berth_on": 160,
+    "lens_berth_off_control": 160,
+    "map_system_warp": 180,
+    "economy_purchase": 280,
+    "save_restart": 150,
+    "sunset_horizon": 180,
+    "polished_planet": 150,
+    "full_journey": 2115
+  },
+  "warp_visuals": "Ember speed streaks and smooth destination fade; no petalled fronts, scalloped ribs, or exit ring.",
+  "regional_looks": {
+    "assignment": "Stable by occupied 20 x 20 sector region",
+    "charred_glass_regions": 22,
+    "verdant_fog_regions": 20,
+    "tidal_blue_regions": 20,
+    "acid_etch_regions": 20,
+    "acid_example": "Eudaya (6,4), five wormhole hops from Oylanhai",
+    "tested_route": "Iasaugs, Tidal Blue, to Oergoi, Acid Etch",
+    "acid_model": "Material-space pitting, rough slate, raspberry oxidation and sulphur-yellow mineral crust with separate pink and yellow grading curves",
+    "tidal_model": "Three curved celestial currents with filtered swells, broken foam, reflected glints and open gaps. The sky shader anchors the currents to the celestial field."
+  },
+  "acid_palette_verification": {
+    "version": "0.8.1",
+    "system": "Eudaya",
+    "frames": {
+      "space": 145,
+      "station": 130,
+      "horizon": 140,
+      "orbit": 135
+    },
+    "result": "Each matching scene has more pink and yellow and less orange than 0.8.0. Visual inspection confirmed slate surfaces and sulphur mineral deposits."
+  },
+  "tidal_current_verification": {
+    "version": "0.8.2",
+    "system": "Phiat",
+    "frames": {
+      "upright": 105,
+      "inverted": 105,
+      "looking_up": 105,
+      "looking_down": 105,
+      "orbit": 135,
+      "star": 120,
+      "station": 130
+    },
+    "result": "World-aligned swells and open starfield in both pitch directions. The same swells align after rotating the inverted image back 180 degrees.",
+    "inverted_capture_rgb_rms": [
+      14.34,
+      30.13,
+      38.86
+    ],
+    "aligned_capture_rgb_rms": [
+      4.3,
+      6.9,
+      8.69
+    ]
+  },
+  "manual_wormhole_verification": {
+    "origin": "Eunhia Station 1, Oylanhai",
+    "destination": "Phehmyar Station 1, Ziksa",
+    "cargo": "4 nickel",
+    "purchase_cents": 47028,
+    "sale_cents": 54227,
+    "trade_margin_cents_before_fuel": 7199,
+    "fuel_used_at_gate": 8,
+    "simulation_seconds": 191.6,
+    "hull_percent": 100,
+    "swept_opening_checks": [
+      "off-ring miss",
+      "insufficient fuel",
+      "opposite face",
+      "no exit retrigger"
+    ],
+    "native_crossings": 1,
+    "native_guided_arrivals_during_crossing": 0,
+    "native_cargo_in_transit": 4,
+    "native_cargo_after_sale": 0,
+    "native_wallet_after_sale_cents": 2007199
+  },
+  "structure_lighting_verification": {
+    "version": "0.9.1",
+    "stations": [
+      "Eunhia 1",
+      "Phehmyar 1",
+      "Mroyrn 1",
+      "Yugve 1"
+    ],
+    "surface_buildings": [
+      "Iakay City 44219",
+      "Phehmyar City 59518"
+    ],
+    "model": "Authored structure finishes and fixture colours with regional diffuse light, reflected highlights and distance haze. The normal buffer identifies built surfaces so their finish survives the final display grade.",
+    "acid_station_comparison_rgb_rms": {
+      "wall": [
+        79.4,
+        77.3,
+        57.2
+      ],
+      "open_sky": [
+        0.6,
+        0.3,
+        0.5
+      ]
+    },
+    "acid_city_comparison_rgb_rms": {
+      "tower": [
+        41.1,
+        60.5,
+        40.2
+      ],
+      "open_sky": [
+        0.0,
+        0.2,
+        0.3
+      ]
+    }
+  },
+  "cockpit_look_verification": {
+    "native_test_frames": 88,
+    "checks": [
+      "Both Shift keys and correct horizontal and vertical camera motion",
+      "Ship heading fixed while moving the view",
+      "View limits and recenter on last Shift release",
+      "Mouse steering resumes when C was already enabled",
+      "Opening the map or losing focus releases mouse capture",
+      "Left Option engages and releases boost"
+    ]
+  },
+  "full_cockpit_verification": {
+    "native_oylanhai_test_frames": 88,
+    "signed_ziksa_test_frames": 95,
+    "camera_views": [
+      "forward",
+      "port",
+      "starboard",
+      "overhead",
+      "controls and floor",
+      "rear hatch"
+    ],
+    "camera_checks": [
+      "360-degree yaw wrap",
+      "pitch limit",
+      "fixed ship heading while looking",
+      "recenter on Shift release",
+      "mouse capture restored for atlas"
+    ],
+    "physical_displays": [
+      "velocity",
+      "throttle",
+      "hull integrity"
+    ]
+  },
+  "cockpit_instruments_verification": {
+    "native_oylanhai_test_frames": 207,
+    "signed_docking_test_frames": 171,
+    "camera_checks": [
+      "freelook keeps the yoke and throttle idle",
+      "recenter on Shift release"
+    ],
+    "control_checks": [
+      "throttle lever advances with W and uses real fuel",
+      "physical yoke responds to pitch and roll"
+    ],
+    "physical_displays": [
+      "velocity and altitude or stopping distance",
+      "live throttle and fuel",
+      "Oylanhai to Ziksa wormhole bearing and range",
+      "hull integrity",
+      "gear, assist and docking status"
+    ]
+  },
+  "graphics_upgrade_verification": {
+    "platform_tested": "macOS Metal",
+    "shader_targets_compiled": [
+      "Metal",
+      "SPIR-V",
+      "GLSL"
+    ],
+    "native_flight_controls_frames": 207,
+    "signed_manual_crossing": {
+      "frames": 112,
+      "arrivals": 1,
+      "system": 14538,
+      "cargo_units": 4
+    },
+    "signed_docking": {
+      "frames": 171,
+      "docked": true,
+      "cargo_units": 4
+    },
+    "signed_tidal_roll_frames": 104,
+    "verdant_horizon_frames": 136,
+    "updated_readme_screenshots": 16
+  }
+}

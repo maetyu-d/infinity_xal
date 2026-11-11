@@ -1,0 +1,7 @@
+{
+  "source": "https://www.xalaria.com/handbook/",
+  "retrieved": "2026-11-10",
+  "sha256": "c61fd1003e2a96003b357743eda77ee9922b7b9ef4ec668e3e84533a27df8305",
+  "included": "Independently implemented public rules and numeric facts; no handbook prose or Xalaria code",
+  "local_balance": "See docs/ECONOMY.md"
+}
