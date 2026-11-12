@@ -49,7 +49,7 @@ int main(int argc,char** argv){
             else if(a=="--space-test"){spaceProof=true;flightView=true;}
             else if(a=="--sunset-test"){sunsetProof=true;flightView=true;}
             else if(a=="--economy-test")economyProof=true;else if(a=="--checkpoint-test")checkpointProof=true;
-            else if(a=="--help"){std::cout<<"Infinity / Xalaria 0.10.0\nF4 economy. F2 map/flight. F3 galaxy/system. Type to search; Tab cycles results. Click worlds; Enter flies. Space pauses/resumes a course.\nMap: drag pan, scroll zoom, Home locate ship, Page Up/Down world list.\nFlight: WASD and Q/E thrust, arrows turn, C mouse steering, hold Shift and move mouse to look around, left Option/Alt boost, B cancel/brake, X cruise, H target manual wormhole, J fly selected world, Y next world, L land, G gear, F1 help.\n--catalog FILE --data DIR --start SEED --fresh --frames N --capture-dir DIR --flight-view --journey-test --atlas-test --economy-test\n";return 0;}
+            else if(a=="--help"){std::cout<<"Infinity / Xalaria 0.12.1\nF4 economy. F2 map/flight. F3 galaxy/system. Type to search; Tab cycles results. Click worlds; Enter flies. Space pauses/resumes a course.\nMap: drag pan, scroll zoom, Home locate ship, Page Up/Down world list.\nFlight: WASD and Q/E thrust, arrows turn, U/O or V/Z roll left/right, hold R to level, C mouse steering, hold Shift and move mouse to look around, left Option/Alt boost, B cancel/brake, X cruise, H target manual wormhole, J fly selected world, Y next world, L land, G gear, F1 help.\n--catalog FILE --data DIR --start SEED --fresh --frames N --capture-dir DIR --flight-view --journey-test --atlas-test --economy-test\n";return 0;}
             else throw std::runtime_error("Unknown option: "+a);
         }
         if(!explicitData&&bundle){char* pref=SDL_GetPrefPath("Infinity","Xalaria");if(!pref)throw std::runtime_error(SDL_GetError());save=pref;SDL_free(pref);}
@@ -120,7 +120,7 @@ int main(int argc,char** argv){
         if(!fresh&&!routeSave.empty()&&!course.restore(routeSave))throw std::runtime_error("The saved route could not be read; it has been preserved");map.open=!flightView&&!economyProof;
         if(journeyProof){course.selectSystem(catalog->star(map.current).wormholes.at(0));if(!course.fly())throw std::runtime_error("Test departure refused");}
         if(atlasProof){course.selectSystem(catalog->star(map.current).wormholes.at(0));xalariaFitRoute(map,1.6);}
-        SDL_SetAppMetadata("Infinity / Xalaria","0.10.0","org.infinity.xalaria");
+        SDL_SetAppMetadata("Infinity / Xalaria","0.12.1","org.infinity.xalaria");
         if(!SDL_Init(SDL_INIT_VIDEO|SDL_INIT_EVENTS))throw std::runtime_error(SDL_GetError());
         window=SDL_CreateWindow("INFINITY / XALARIA",1440,900,SDL_WINDOW_RESIZABLE);
         if(!window)throw std::runtime_error(SDL_GetError());SDL_SetWindowMinimumSize(window,960,640);SDL_SyncWindow(window);
@@ -402,7 +402,12 @@ int main(int argc,char** argv){
                     const auto* keys=SDL_GetKeyboardState(nullptr);
                     input.throttle=double(keys[SDL_SCANCODE_W])-keys[SDL_SCANCODE_S];input.strafe=double(keys[SDL_SCANCODE_D])-keys[SDL_SCANCODE_A];
                     input.lift=double(keys[SDL_SCANCODE_E])-keys[SDL_SCANCODE_Q];input.yaw=double(keys[SDL_SCANCODE_RIGHT])-keys[SDL_SCANCODE_LEFT];
-                    input.pitch=double(keys[SDL_SCANCODE_DOWN])-keys[SDL_SCANCODE_UP];input.roll=double(keys[SDL_SCANCODE_Z])-keys[SDL_SCANCODE_V];
+                    input.pitch=double(keys[SDL_SCANCODE_DOWN])-keys[SDL_SCANCODE_UP];
+                    const bool bankLeft = keys[SDL_SCANCODE_U] || keys[SDL_SCANCODE_V];
+                    const bool bankRight = keys[SDL_SCANCODE_O] || keys[SDL_SCANCODE_Z];
+                    input.roll = double(bankRight) - bankLeft;
+                    if (keys[SDL_SCANCODE_R] && !bankLeft && !bankRight)
+                        input.roll = course.levelRollInput();
                     input.boost=keys[SDL_SCANCODE_LALT];input.precision=keys[SDL_SCANCODE_LCTRL];
                     if(map.flying&&(input.throttle||input.strafe||input.lift||input.yaw||input.pitch||input.roll))course.pause();
                 }

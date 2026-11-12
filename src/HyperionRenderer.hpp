@@ -21,7 +21,10 @@ class HyperionRenderer {
     void setRegionalLook(glm::vec3 look, double seconds, double logMetres, bool exterior);
     bgfx::ProgramHandle cockpitProgram(){init();return geometry_;}
     bgfx::ProgramHandle cockpitGlazingProgram();
+    void bindCockpitGlazing();
     bgfx::ProgramHandle wormholeProgram();
+    bool wormholeOptics(glm::vec3 centre, glm::vec3 right, glm::vec3 up,
+                        float radius, glm::vec3 plasma, float tanHalfFov, double seconds);
     void stellar(const StellarImage&, float aspect, float tanHalfFov, double visualTime);
     void landingContact(const Address&, glm::vec3 pointFromEye, glm::vec3 up, float radius, float strength);
     void localWeather(const PlanetClimate&, const WeatherSample&, double seconds, bool enabled);
@@ -115,8 +118,13 @@ class HyperionRenderer {
     size_t bytes_ = 0;
     bgfx::FrameBufferHandle scene_ = BGFX_INVALID_HANDLE;
     bgfx::FrameBufferHandle optical_=BGFX_INVALID_HANDLE,lensSeed_=BGFX_INVALID_HANDLE,bokeh_=BGFX_INVALID_HANDLE;
+    bgfx::FrameBufferHandle display_=BGFX_INVALID_HANDLE;
     bgfx::ProgramHandle lensSeedProgram_=BGFX_INVALID_HANDLE,bokehProgram_=BGFX_INVALID_HANDLE,lensProgram_=BGFX_INVALID_HANDLE;
+    bgfx::ProgramHandle presentProgram_=BGFX_INVALID_HANDLE;
     bgfx::ProgramHandle cockpitGlazing_=BGFX_INVALID_HANDLE,wormhole_=BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle wormholeParams_ = BGFX_INVALID_HANDLE;
+    std::array<glm::vec4, 5> wormholeData_{};
+    bgfx::UniformHandle glazingParams_ = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle lensParams_=BGFX_INVALID_HANDLE,focusSeedSampler_=BGFX_INVALID_HANDLE;
     bool lensEnabled_=true;
     std::array<bgfx::FrameBufferHandle, 2> bloom_{{BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE}};

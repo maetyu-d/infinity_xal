@@ -153,6 +153,9 @@ PlanetTraits planetTraits(const Node& p){
     }
     return t;
 }
+Pose planetRingPose(const Pose& planet, const RingProcess& rings) {
+    return {planet.position, planet.orientation * tangentFrame(rings.axis), planet.scale * rings.outerRadius};
+}
 double ringOpticalDepth(const RingProcess& r, double radius) {
     if (!r.present() || radius <= r.innerRadius || radius >= r.outerRadius)
         return 0;

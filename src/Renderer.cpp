@@ -768,7 +768,7 @@ struct Renderer::Impl {
         const double range = glm::length(centre);
         const double cullScale = 500. / std::max(range, radius);
         if (range > worldFarPlane * .8 || LOD::pixels(radius, range, height, fieldOfView) < 1 ||
-            !LOD::visible(cameraCentre * cullScale, radius * (1.32 * cullScale), double(width) / height, fieldOfView))
+            !LOD::visible(cameraCentre * cullScale, radius * (1.65 * cullScale), double(width) / height, fieldOfView))
             return;
         const auto orientation = universe.relative(mouth.reference, nav.anchor, nav.logDistance).orientation *
                                  mouth.orientation;
@@ -781,6 +781,9 @@ struct Renderer::Impl {
                           + glm::vec3(.30f,.78f,.31f)*regionalLook.x
                           + glm::vec3(.19f,.57f,.94f)*regionalLook.y
                           + glm::vec3(.92f,.21f,.56f)*regionalLook.z;
+        const bool opticalRim = hyperion->wormholeOptics(glm::vec3(cameraCentre),
+            glm::vec3(cameraInverse * right), glm::vec3(cameraInverse * up), float(radius), plasma,
+            float(std::tan(fieldOfView * .5)), visualTime);
         glm::mat4 rim(1);
         rim[0] = glm::vec4(glm::vec3(right * (radius * 1.32)), 0);
         rim[1] = glm::vec4(glm::vec3(up * (radius * 1.32)), 0);
@@ -800,8 +803,10 @@ struct Renderer::Impl {
         const Geometry geometry;
         const ScenePresentation material{geometry,mouth.reference,{},hyperionPhase(universe.seed()),1.f,{}};
         const auto program = hyperion->wormholeProgram();
-        // The physical throat writes depth. A second layer draws the emissive rim.
-        for (uint32_t layer = 0; layer < layers.size(); ++layer) {
+        // The physical throat writes depth. Readable-depth views draw the rim
+        // during optical resolve, where it can bend the scene behind the gate.
+        const uint32_t layerCount = opticalRim ? 1 : uint32_t(layers.size());
+        for (uint32_t layer = 0; layer < layerCount; ++layer) {
             hyperion->bind(material, {}, {0,0,1}, glm::mat4(1), 0, visualTime);
             bgfx::setVertexBuffer(0, hyperionBillboardMesh.vertices);
             bgfx::setIndexBuffer(hyperionBillboardMesh.indices);
@@ -813,7 +818,7 @@ struct Renderer::Impl {
         stats.uploadBytes += sizeof(layers);
     }
     void drawPlanetRings(const Node& planet, const Navigation& nav) {
-        if (!planetRings || planet.address.kind() != Kind::Planet || hasSolidSurface(planet))
+        if (!planetRings || planet.address.kind() != Kind::Planet)
             return;
         const auto t = planetTraits(planet);
         if (!t.rings.present())
@@ -821,23 +826,23 @@ struct Renderer::Impl {
         auto detail = details.find(planet.address);
         if (detail == details.end() || !detail->second.blend.current)
             return;
-        const auto pose = poseFor(planet.address, nav);
-        const double radius = std::pow(10., planet.frame.logRadius - nav.logDistance);
-        const auto centre = pose.position - eye;
-        if (glm::length(centre) > worldFarPlane * .8 || radius > worldFarPlane ||
-            !LOD::visible(cameraInverse * centre, radius * t.rings.outerRadius, double(width) / height,
+        const auto globe = poseFor(planet.address, nav);
+        const auto ring = planetRingPose(globe, t.rings);
+        const auto centre = ring.position - eye;
+        if (glm::length(centre) > worldFarPlane * .8 || globe.scale > worldFarPlane ||
+            !LOD::visible(cameraInverse * centre, ring.scale, double(width) / height,
                           fieldOfView))
             return;
-        const auto frame = tangentFrame(t.rings.axis);
-        const auto rotation = pose.orientation * frame;
         const glm::mat4 view = glm::mat4_cast(glm::quat(cameraInverse)), proj(projection);
         bgfx::setViewTransform(65, glm::value_ptr(view), glm::value_ptr(proj));
         bgfx::setViewRect(65, 0, 0, uint16_t(width), uint16_t(height));
-        const auto model = glm::translate(glm::mat4(1), glm::vec3(centre)) *
-                           glm::mat4_cast(glm::quat(rotation)) *
-                           glm::scale(glm::mat4(1), glm::vec3(float(radius * t.rings.outerRadius)));
+        const glm::mat4 model = glm::translate(glm::dmat4(1), centre) * glm::mat4_cast(ring.orientation) *
+                                glm::scale(glm::dmat4(1), glm::dvec3(ring.scale));
+        // Leave room for the filtered silhouette at the outer edge.
+        constexpr float bounds = 1.05f;
         const Vertex vertices[] = {
-            {-1, 0, -1, 0xffffffff}, {1, 0, -1, 0xffffffff}, {1, 0, 1, 0xffffffff}, {-1, 0, 1, 0xffffffff}};
+            {-bounds, 0, -bounds, 0xffffffff}, {bounds, 0, -bounds, 0xffffffff},
+            {bounds, 0, bounds, 0xffffffff}, {-bounds, 0, bounds, 0xffffffff}};
         const uint16_t indices[] = {0, 1, 2, 0, 2, 3};
         if (bgfx::getAvailTransientVertexBuffer(4, layout) < 4 || bgfx::getAvailTransientIndexBuffer(6) < 6)
             return;
@@ -850,8 +855,9 @@ struct Renderer::Impl {
         bgfx::setTransform(glm::value_ptr(model));
         bgfx::setVertexBuffer(0, &vb);
         bgfx::setIndexBuffer(&ib);
-        const auto light = glm::inverse(rotation) * lightAt(planet.address, nav);
-        const auto localEye = glm::inverse(rotation) * (-centre / radius);
+        const auto fromScene = glm::inverse(ring.orientation);
+        const auto light = fromScene * lightAt(planet.address, nav);
+        const auto localEye = fromScene * (-centre / globe.scale);
         const auto program = hyperion->ringProgram(t, glm::vec3(light), glm::vec3(localEye), 1);
         bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GEQUAL | BGFX_STATE_BLEND_ALPHA |
                        BGFX_STATE_MSAA);
@@ -2095,7 +2101,7 @@ Renderer::Renderer(SDL_Window* window, const Universe& universe, bool benchmark)
         throw std::runtime_error("bgfx could not initialize a graphics device");
     // Shadow casters are submitted during extraction but execute before colour
     // draws. Materials sample this frame's map using their actual positions.
-    std::array<bgfx::ViewId, 87> order{};
+    std::array<bgfx::ViewId, 88> order{};
     order[0] = 70;
     size_t next = 1;
     for (bgfx::ViewId id = 0; id < order.size(); id++)
@@ -3294,34 +3300,25 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
         bgfx::setViewTransform(64,glm::value_ptr(rotation),glm::value_ptr(projection));bgfx::setViewRect(64,0,0,uint16_t(p.width),uint16_t(p.height));
         p.transient(miningDust,64,false,false,true,false,true);
     }
-    if (opticalDepth) {
-        for (const auto& planet : nodes)
-            if (opticalPlanet && planet.address == opticalPlanet->address) {
-                const auto pose = p.poseFor(planet.address, nav);
-                const double radiusMetres = std::pow(10., planet.frame.logRadius);
-                const double radius = std::pow(10., planet.frame.logRadius - nav.logDistance);
-                const auto localEye = glm::inverse(pose.orientation) * (p.eye - pose.position) / radius;
-                const double eyeRadius = glm::length(localEye);
-                const auto climate = planetClimate(planet);
-                if (eyeRadius < 8 && eyeRadius > .99) {
-                    const auto rotation = glm::mat4_cast(glm::quat(glm::inverse(pose.orientation) * p.cameraQ));
-                    const auto light = glm::normalize(glm::inverse(pose.orientation) * p.lightAt(planet.address, nav));
-                    const double height = std::clamp(climate.scaleHeightMetres / radiusMetres, 1e-5, .02);
-                    const float strength = atmosphericOpticalStrength(
-                        climate.pressureBar, climate.temperatureK, (eyeRadius - 1.) * radiusMetres,
-                        radiusMetres, height * radiusMetres, glm::dot(localEye / eyeRadius, light));
-                    p.hyperion->atmosphere(glm::vec3(localEye), glm::vec3(light), rotation, float(radius),
-                                           float(height), strength, float(p.width) / p.height,
-                                           float(std::tan(fov * .5)),
-                                           hyperionPhase(planet.planetSeed ? planet.planetSeed : planet.seed),
-                                           float(radiusMetres / 1000.),
-                                           p.polarLights && (!p.instruments || !p.instruments->shrinking)
-                                               ? extractPolarLight(planet)
-                                               : PolarLight{},
-                                           p.visualTime);
-                    ++p.stats.atmospheres;
-                }
-            }
+    if (opticalPlanet && (p.instruments || opticalDepth)) {
+        const auto& planet = *opticalPlanet;
+        const auto pose = p.poseFor(planet.address, nav);
+        const double radiusMetres = std::pow(10., planet.frame.logRadius);
+        const double radius = std::pow(10., planet.frame.logRadius - nav.logDistance);
+        const auto localEye = glm::inverse(pose.orientation) * (p.eye - pose.position) / radius;
+        const auto rotation = glm::mat4_cast(glm::quat(glm::inverse(pose.orientation) * p.cameraQ));
+        const auto light = glm::normalize(glm::inverse(pose.orientation) * p.lightAt(planet.address, nav));
+        const auto climate = planetClimate(planet);
+        const double height = std::clamp(climate.scaleHeightMetres / radiusMetres, 1e-5, .02);
+        const float strength = atmosphericOpticalStrength(
+            climate.pressureBar, climate.temperatureK, (glm::length(localEye) - 1.) * radiusMetres,
+            radiusMetres, height * radiusMetres, glm::dot(glm::normalize(localEye), light));
+        p.hyperion->atmosphere(glm::vec3(localEye), glm::vec3(light), rotation, float(radius), float(height),
+                               strength, float(p.width) / p.height, float(std::tan(fov * .5)),
+                               hyperionPhase(planet.planetSeed ? planet.planetSeed : planet.seed),
+                               float(radiusMetres / 1000.),
+                               p.polarLights ? extractPolarLight(planet) : PolarLight{}, p.visualTime);
+        ++p.stats.atmospheres;
     }
     p.hyperion->finish();
     if (p.instruments && overlay && !p.probeRemote) {
@@ -3348,10 +3345,10 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
         const auto cabinProjection = bgfx::getCaps()->homogeneousDepth
                                          ? glm::perspectiveRH_NO(float(fov), float(aspect), .025f, 6.f)
                                          : glm::perspectiveRH_ZO(float(fov), float(aspect), .025f, 6.f);
-        bgfx::setViewRect(86, 0, 0, uint16_t(p.width), uint16_t(p.height));
-        bgfx::setViewMode(86, bgfx::ViewMode::Sequential);
-        bgfx::setViewTransform(86, glm::value_ptr(cabinView), glm::value_ptr(cabinProjection));
-        bgfx::setViewClear(86, BGFX_CLEAR_DEPTH, 0, 1.f, 0);
+        bgfx::setViewRect(87, 0, 0, uint16_t(p.width), uint16_t(p.height));
+        bgfx::setViewMode(87, bgfx::ViewMode::Sequential);
+        bgfx::setViewTransform(87, glm::value_ptr(cabinView), glm::value_ptr(cabinProjection));
+        bgfx::setViewClear(87, BGFX_CLEAR_DEPTH, 0, 1.f, 0);
         const Geometry source;
         const ScenePresentation presentation{source, nav.anchor, {.09f,.82f,.20f,0},
             hyperionPhase(p.universe.seed()), 1.f, {5.f,xalaria ? 1.f : 0.f,0,0}};
@@ -3372,11 +3369,13 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
                 std::memcpy(instance.data, &posed, sizeof(posed));
                 p.hyperion->bind(presentation, cabinEye, glm::vec3(sun), glm::inverse(model), 0, p.visualTime);
                 bgfx::setInstanceDataBuffer(&instance);
-                bgfx::submit(86, glazing ? p.hyperion->cockpitGlazingProgram() : p.hyperion->cockpitProgram());
+                if (glazing)
+                    p.hyperion->bindCockpitGlazing();
+                bgfx::submit(87, glazing ? p.hyperion->cockpitGlazingProgram() : p.hyperion->cockpitProgram());
                 p.stats.uploadBytes += 80;
             } else {
                 bgfx::setTransform(glm::value_ptr(model));
-                bgfx::submit(86, p.colorProgram);
+                bgfx::submit(87, p.colorProgram);
             }
         };
         drawCabin(p.cabin, glm::mat4(1));
@@ -3387,11 +3386,11 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
             drawCabin(p.cabinGlazing, glm::mat4(1), true);
             const auto fuel = p.xalariaEconomy ? p.xalariaEconomy->fuel() : 0.;
             const auto capacity = p.xalariaEconomy ? p.xalariaEconomy->fuelCapacity() : 0.;
-            p.transient(xalariaCockpitDisplays(*p.instruments, fuel, capacity), 86,
+            p.transient(xalariaCockpitDisplays(*p.instruments, fuel, capacity), 87,
                         BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_LESS | BGFX_STATE_MSAA);
         }
     } else
-        bgfx::setViewClear(86, BGFX_CLEAR_NONE);
+        bgfx::setViewClear(87, BGFX_CLEAR_NONE);
 
     if (p.instruments && overlay) {
         const auto& viewport = p.hudViewport;

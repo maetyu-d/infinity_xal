@@ -4,6 +4,8 @@
 
 namespace infinity {
 class XalariaEconomy;
+// Positive bank means the left wing is down. Near vertical flight has no bank reference.
+std::optional<double> xalariaBankAngle(glm::dvec3 localUp);
 // Preview selections never change an in-flight route. The committed destination
 // and its world are retained through browsing, pauses, reference changes and saves.
 class XalariaNavigation {
@@ -25,6 +27,7 @@ class XalariaNavigation {
     void cancel();
     void update(double seconds);
     FlightInstruments instruments() const;
+    double levelRollInput() const;
     Phase phase() const {return phase_;}
     std::string serialize() const;
     bool restore(std::string_view);
@@ -46,6 +49,7 @@ class XalariaNavigation {
     Address defaultWorld(uint32_t) const;
     const XalariaWormholeMouth* wormholeAt(uint32_t system) const;
     bool manualFlight() const;
+    glm::dvec3 bankReference() const;
     glm::dvec3 eyeInMetres(const Address&) const;
     bool crossWormhole(const XalariaWormholeMouth&, glm::dvec3 before, glm::dvec3 after);
     bool beginLeg();

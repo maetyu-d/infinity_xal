@@ -33,11 +33,11 @@ void main(){
   gl_FragColor=vec4(light,1.);
   return;
  }
- float inner=smoothstep(.27,.96,r);
- float stretch=sin(13.*r-2.*a+2.7*broad-t*1.03);
- float crease=pow(.5+.5*stretch,4.)*(.19+.81*broad);
- float funnel=inner*inner*inner*(.10+.24*broad+.19*crease);
- float pin=exp(-abs(r-.948+.009*sin(a*5.))/.010)*.12*edgeFlow;
- vec3 abyss=vec3(.004,.006,.012)*(1.+broad*.72);
+ float inner=smoothstep(.28,.98,r);
+ float stretch=sin(27.*r-1.6*a+4.2*broad-t*1.17);
+ float crease=pow(.5+.5*stretch,8.)*(.12+.88*broad);
+ float funnel=inner*inner*(.020+.10*broad+.105*crease);
+ float pin=exp(-abs(r-.920+.009*sin(a*5.))/.012)*.068*edgeFlow;
+ vec3 abyss=vec3(.0013,.0018,.0035)*(1.+broad*.9);
  gl_FragColor=vec4(abyss+plasma*(funnel+pin),1.);
 }

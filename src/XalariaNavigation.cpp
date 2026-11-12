@@ -295,8 +295,33 @@ void XalariaNavigation::update(double dt){
     }
     refresh();
 }
+std::optional<double> xalariaBankAngle(glm::dvec3 localUp) {
+    if (glm::length(glm::dvec2(localUp)) < .035)
+        return std::nullopt;
+    return std::atan2(localUp.x, localUp.y);
+}
+
+glm::dvec3 XalariaNavigation::bankReference() const {
+    const auto& flight = pilot_.instruments();
+    if (flight.altitude >= 0)
+        return flight.localUp;
+    const auto system = catalog_.address(view.current);
+    const auto systemToFrame = universe_.relative(system, navigation_.anchor, 0.).orientation;
+    return glm::inverse(navigation_.orientation) * systemToFrame * glm::dvec3(0,1,0);
+}
+
+double XalariaNavigation::levelRollInput() const {
+    const auto& flight = pilot_.instruments();
+    if (flight.landed || flight.navigating || flight.docking.active || flight.docking.docked)
+        return 0;
+    const auto bank = xalariaBankAngle(bankReference());
+    return bank ? std::clamp(*bank*1.15 - flight.rollRate*.52, -.68, .68) : 0.;
+}
+
 FlightInstruments XalariaNavigation::instruments() const {
     auto t=pilot_.instruments();
+    if (t.altitude < 0 && !t.docking.active && !t.docking.docked)
+        t.localUp = bankReference();
     if(t.logMetres!=navigation_.logDistance){
         t.logMetres=navigation_.logDistance;
         t.scaleRate=0;

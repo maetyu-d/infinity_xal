@@ -20,7 +20,7 @@ int main(int argc,char** argv){
     require(u.children(u.describe(Address{})).size()==1,"Synthetic galaxies added");
     require(std::abs(std::pow(10.,u.describe(galaxy).frame.logRadius)/(110e15)-1)<1e-12,"Public map scale changed");
     auto all=u.children(u.describe(galaxy),10000);require(all.size()==cat->stars.size(),"Galaxy has synthetic/missing stars");
-    size_t checked=0,worlds=0;
+    size_t checked=0,worlds=0,ringedWorlds=0,ringedSolidWorlds=0,ringedMoons=0;
     for(const auto& [id,s]:cat->stars){
         auto a=cat->address(id);const auto n=u.describe(a);
         require(n.seed==seedOf(a,u.seed()),"Engine cache identity changed");
@@ -30,9 +30,13 @@ int main(int argc,char** argv){
         auto addresses=u.children(n,1000);require(addresses.size()==s.worlds.size(),"Lost planets or moons");
         worlds+=addresses.size();
         for(auto target:s.wormholes)require(cat->stars.contains(target),"Dangling wormhole");
-        if((checked++%31)!=0)continue;
+        const bool sample = (checked++%31)==0;
         for(const auto& address:addresses){
-            const auto w=u.describe(address);const auto& source=cat->world(address);
+            const auto& source=cat->world(address);
+            const bool hasRings = source.ringOuter > source.ringInner;
+            if (!sample && !hasRings)
+                continue;
+            const auto w=u.describe(address);
             require(w.seed==seedOf(address,u.seed()),"World cache identity changed");
             require(w.label()==source.name,"World name mismatch");
             require(std::abs(std::pow(10.,w.frame.logRadius)/source.radius-1)<1e-12,"World radius units");
@@ -42,9 +46,28 @@ int main(int argc,char** argv){
             const auto traits=planetTraits(w);require(traits.rings.innerRadius==source.ringInner&&traits.rings.outerRadius==source.ringOuter,"Ring bounds differ");
             require(isMoon(address)==(source.primary>=0),"Moon identity mismatch");
             if(source.primary>=0)require(w.satelliteOf==uint64_t(source.primary),"Moon parent mismatch");
+            require(traits.rings.present()==hasRings,"Ring presence differs from catalogue");
+            if (hasRings) {
+                ++ringedWorlds;
+                ringedSolidWorlds += hasSolidSurface(w);
+                ringedMoons += isMoon(address);
+                for (const auto& anchor : {a, address}) {
+                    const double logScale = anchor == a ? n.frame.logRadius : w.frame.logRadius;
+                    const auto globe = u.relative(address, anchor, logScale);
+                    const auto ring = planetRingPose(globe, traits.rings);
+                    require(ring.position == globe.position, "Ring centre differs from its parent globe");
+                    require(std::abs(ring.scale / globe.scale - source.ringOuter) < 1e-12,
+                            "Ring outer radius differs from catalogue");
+                    require(glm::length(ring.orientation * glm::dvec3(0, 1, 0) -
+                                        globe.orientation * traits.rings.axis) < 1e-12,
+                            "Ring plane does not follow its parent globe");
+                }
+            }
         }
     }
     require(worlds==48081,"World total changed");
+    require(ringedWorlds==14887 && ringedSolidWorlds==1211 && ringedMoons==39,
+            "Ringed planets or moons lost from the public snapshot");
     auto from=14940u;const auto to=cat->star(from).wormholes.front();
     const auto route=cat->route(from,to);require(route==std::vector<uint32_t>({from,to}),"Direct link was not shortest");
     require(cat->route(from,from)==std::vector<uint32_t>{from},"Identity route");
@@ -81,7 +104,7 @@ int main(int argc,char** argv){
     require(final.kind()==Kind::System&&final.id()==to,"Arrival was in the wrong system");
 
     std::cout<<"ARRIVAL flight_seconds="<<pilot.ship().flightSeconds<<" travel_m="<<pilot.ship().travelMetres<<" system="<<final.id()<<"\n";
-    std::cout<<"PASS catalogue=7710 stars/48081 worlds; descriptor samples; names; moon identities; directed routes; map bounds; real flight; save restore; complete interstellar arrival\n";
+    std::cout<<"PASS catalogue=7710 stars/48081 worlds; 14887 centred ring poses; descriptor samples; names; moon identities; directed routes; map bounds; real flight; save restore; complete interstellar arrival\n";
     return 0;
  }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}
 }

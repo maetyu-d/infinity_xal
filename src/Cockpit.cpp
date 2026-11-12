@@ -1,6 +1,7 @@
 #include "infinity/Cockpit.hpp"
 #include "infinity/Xalaria.hpp"
 #include "infinity/XalariaEconomy.hpp"
+#include "infinity/XalariaNavigation.hpp"
 #include "infinity/CrewMinimap.hpp"
 #include "infinity/MicroView.hpp"
 #include "infinity/CockpitContext.hpp"
@@ -1124,7 +1125,15 @@ Mesh xalariaCockpitDisplays(const FlightInstruments& instruments, double fuel, d
     quantity(drive,instruments.speed,27,56,153,19,cabinLamp,true);
     quantity(drive,aboveSurface ? instruments.altitude : instruments.stoppingDistance,202,58,92,13,cabinLamp);
     rect(drive.panels,188,50,1.5,34,grid);
-    fitted(drive,instruments.drive,27,93,260,12,cabinSignal);
+    fitted(drive,instruments.drive,27,93,168,12,cabinSignal);
+    const auto bank = xalariaBankAngle(instruments.localUp);
+    char bankLabel[18] = "BANK --";
+    if (bank) {
+        const int degrees = int(std::round(glm::degrees(*bank)));
+        if (degrees == 0) std::snprintf(bankLabel,sizeof(bankLabel),"BANK 0");
+        else std::snprintf(bankLabel,sizeof(bankLabel),"BANK %c%d",degrees > 0 ? 'L' : 'R',std::abs(degrees));
+    }
+    fitted(drive,bankLabel,202,93,92,11,cabinSignal);
     addScreen(driveScreen, drive);
 
     CockpitOverlay port;
@@ -1228,14 +1237,16 @@ CockpitOverlay cockpitOverlay(const FlightInstruments& t, double aspect, std::st
         rect(h.panels,12,12,w-24,876,{.025,.04,.065});
         text(h,"INFINITY / XALARIA",40,48,25,pearl);
         text(h,"FLIGHT AND EXPLORATION",40,103,16,mint);
-        const std::array<std::pair<const char*,const char*>,15> rows{{
+        const std::array<std::pair<const char*,const char*>,17> rows{{
             {"F2","OPEN OR CLOSE THE WORMHOLE ATLAS"},
             {"ATLAS","TYPE TO SEARCH / TAB NEXT RESULT / CLICK STAR OR WORLD"},
             {"ENTER","FLY THE SELECTED WORMHOLE ROUTE OR LOCAL WORLD"},
             {"F3 / SPACE","GALAXY-SYSTEM / PAUSE OR RESUME JOURNEY"},
             {"W A S D","FORWARD / LEFT / BACK / RIGHT THRUST"},
             {"Q / E","DOWN / UP THRUST"},
-            {"ARROWS / Z V","PITCH AND YAW / ROLL"},
+            {"ARROWS","PITCH AND YAW"},
+            {"U / O  OR  V / Z","ROLL LEFT / RIGHT"},
+            {"HOLD R","LEVEL THE WINGS IN MANUAL FLIGHT"},
             {"C","CAPTURE OR RELEASE MOUSE STEERING"},
             {"HOLD SHIFT + MOUSE","LOOK AROUND THE COCKPIT / RELEASE TO CENTRE"},
             {"LEFT OPTION / CTRL","BOOST / PRECISE THRUST"},
@@ -1246,7 +1257,7 @@ CockpitOverlay cockpitOverlay(const FlightInstruments& t, double aspect, std::st
             {"F1 / ESC","CLOSE THIS HELP / RELEASE MOUSE OR EXIT"}
         }};
         double y=158;for(const auto& [key,action]:rows){
-            fitted(h,key,40,y,230,12,ice);fitted(h,action,290,y,w-330,12,pearl);y+=39;
+            fitted(h,key,40,y,230,12,ice);fitted(h,action,290,y,w-330,12,pearl);y+=35;
         }
         fitted(h,"PUBLIC CATALOGUE SNAPSHOT / INFINITY REAL-TIME FLIGHT",40,790,w-80,12,muted);
         return h;

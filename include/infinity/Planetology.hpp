@@ -44,5 +44,7 @@ std::string_view planetTypeName(PlanetType);
 std::string_view thermalTypeName(ThermalType);
 // Shared physical broad features; GPU presentation refines these same belts.
 glm::vec3 giantAlbedo(const PlanetTraits&, glm::dvec3 direction);
+// World pose of the ring plane. Local XZ spans one outer radius and +Y is the ring pole.
+Pose planetRingPose(const Pose& planet, const RingProcess& rings);
 double ringOpticalDepth(const RingProcess&, double radiusInPlanetRadii);
 } // namespace infinity

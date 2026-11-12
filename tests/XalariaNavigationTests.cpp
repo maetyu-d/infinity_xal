@@ -21,6 +21,28 @@ struct Flight {
 };
 int main(int argc,char** argv){try{
     check(argc==2,"Catalogue required");auto c=std::make_shared<XalariaCatalog>(argv[1]);Flight f(c);
+    {
+        Flight banking(c);
+        banking.nav.changeFrame(c->address(14940));
+        banking.nav.setRenderScale(13);
+        banking.nav.offset={0,0,2};
+        banking.nav.orientation=glm::angleAxis(1.38,glm::dvec3(0,0,-1));
+        banking.pilot.resetMotion();
+        banking.pilot.synchronizeFrame();
+        banking.course.update(0);
+        check(banking.course.levelRollInput()<-.6,"Level control turned an existing right bank further right");
+        check(!xalariaBankAngle({0,0,1}),"Vertical flight has an ambiguous bank reference");
+        const auto forward=banking.nav.orientation*glm::dvec3(0,0,-1);
+        for (int frame=0;frame<300;++frame) {
+            HelmInput input;
+            input.roll=banking.course.levelRollInput();
+            banking.course.advanceFlight(input,1./60);
+        }
+        const auto bank=xalariaBankAngle(banking.course.instruments().localUp);
+        check(bank&&std::abs(*bank)<.045,"Level control did not recover from a right bank");
+        check(glm::length(banking.nav.orientation*glm::dvec3(0,0,-1)-forward)<1e-7,
+              "Roll leveling changed the forward bearing");
+    }
     const auto first=c->star(14940).wormholes.front();uint32_t destination=0;
     for(auto id:c->star(first).wormholes)if(c->route(14940,id).size()==3){destination=id;break;}
     check(destination!=0,"No two-hop fixture");

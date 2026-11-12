@@ -1,8 +1,8 @@
-# Infinity / Xalaria 0.10.0
+# Infinity / Xalaria 0.12.1
 
 A native C++20 exploration prototype combining **Xalaria's published universe and wormhole map** with **your existing Infinity flight engine and Hyperion/Metal renderer**.
 
-Download [Infinity / Xalaria 0.10.0 for macOS](https://github.com/maetyu-d/infinity_xal/releases/tag/v0.10.0). Unzip the download and open **Infinity Xalaria.app**. The macOS 26+ arm64 app runs offline with the engine built in.
+Unzip the macOS build and open **Infinity Xalaria.app**. The macOS 26+ arm64 app runs offline with the engine built in. Published builds are available from the [GitHub releases page](https://github.com/maetyu-d/infinity_xal/releases).
 
 The 82 occupied regions have four looks. **Charred Glass** covers 22 regions. **Verdant Fog**, **Tidal Blue**, and **Acid Etch** cover 20 each. The atlas shows the selected region's look, and the flight view blends to it as you enter. Oylanhai has the charred palette, Ziksa has green haze, and Phiat has dark, white-capped currents suspended among the stars. The currents stay in place as the ship rolls. Search for Eudaya to see Acid Etch, with hot pink skies, sulphur-yellow mineral crust, and pitted slate surfaces.
 
@@ -10,20 +10,24 @@ Warp now uses ember speed streaks and a soft fade around the destination. The pe
 
 ## Graphics upgrade
 
-- Charred Glass has layered dust lanes and refracting sheets. Verdant Fog has thicker cloud banks with lit edges. Tidal Blue has finer foam and reflections on currents that stay in place as the ship rolls. Acid Etch has mottled pink and sulphur-yellow deposits.
+- Planetary atmospheres have a higher airglow layer and softer twilight on the dark side. Gas giants show sheared cloud bands, spiral storms with darker eyes, and finer debris rings that brighten with the angle of the light.
+- Rings follow the centre and scale of their parent globe on gas giants, solid planets, and moons. Narrow rings retain their coverage at oblique angles.
+- A live, depth-aware refraction bends stars and dust around the wormhole opening. Braided plasma traces its rim and the throat falls away into shadow.
+- Resolved stars show darker magnetic regions, bright convection and animated prominence loops. Planetary clouds have deeper shadows, softer scattered light, and brighter sunlit edges.
+- Charred Glass has finer striations in its refracting sheets. Verdant Fog has more defined sunlit edges and deeper shadows. Tidal Blue has finer eddies and broken crests in its world-anchored currents. Acid Etch has mottled pink and sulphur-yellow deposits.
 - Planet surfaces have more visible erosion, mineral deposits, and dark crust around molten areas. Atmospheric haze, high-altitude scattering, and stellar discs resolve against the actual scene depth.
 - Stations have braced decks, stacked hulls, and radiator fins. The Oylanhai–Ziksa wormhole has an animated plasma rim and a dark, textured throat.
-- The windscreen and side panes reflect the cabin lights. Rubber, brushed metal, painted panels, and bronze trim respond differently to light. Direct stellar light is filtered by the canopy openings.
+- The windscreen and side panes refract the live exterior and reflect cabin lights. Rubber, brushed metal, painted panels, and bronze trim pick up coloured light from the instruments and nearby star.
 
 ## Cockpit
 
 Hold **Shift** and move the mouse to look through the side windows, up at the overhead panel, down at the controls, or back toward the hatch. Release **Shift** to face forward. The heads-up display fades as you turn away from the windscreen. The windows carry the light of each system onto the painted alloy and rubber trim.
 
 - The yoke follows the ship's pitch, yaw, and roll. The port throttle lever slides as you change thrust with **W** and **S**.
-- The forward display shows velocity and either altitude or stopping distance. The port console shows throttle and fuel. The starboard scope shows the selected target's bearing and range alongside hull integrity.
+- The forward display shows velocity, bank, and either altitude or stopping distance. The port console shows throttle and fuel. The starboard scope shows the selected target's bearing and range alongside hull integrity.
 - The overhead panel shows landing gear, flight assist, and docking status.
 
-[![The starboard navigation console under the new canopy glazing](Previews/Cockpit.png)](Previews/Cockpit.png)
+[![The bank readout and canopy as the ship rolls across Tidal Blue currents](Previews/Cockpit.png)](Previews/Cockpit.png)
 
 ## Planets and stars by environment
 
@@ -32,7 +36,7 @@ Select any screenshot to open it at full size.
 | Environment | Planet | Local star |
 | --- | --- | --- |
 | **Charred Glass**<br>Oylanhai | [![Eunhia with bright terrain contours against a charred sky](Previews/Charred-Planet.png)](Previews/Charred-Planet.png) | [![Oylanhai’s stellar disc framed by glowing glass bands](Previews/Charred-Star.png)](Previews/Charred-Star.png) |
-| **Verdant Fog**<br>Ziksa | [![Sunlit Phehmyar in green fog](Previews/Verdant-Planet.png)](Previews/Verdant-Planet.png) | [![Ziksa’s stellar disc seen through green haze](Previews/Verdant-Star.png)](Previews/Verdant-Star.png) |
+| **Verdant Fog**<br>Ziksa | [![Sunlit Phehmyar in green fog](Previews/Verdant-Planet.png)](Previews/Verdant-Planet.png) · [![Cloud bands and debris rings on Frak](Previews/Frak-Rings.png)](Previews/Frak-Rings.png) | [![Ziksa’s stellar disc seen through green haze](Previews/Verdant-Star.png)](Previews/Verdant-Star.png) |
 | **Tidal Blue**<br>Phiat | [![Mroyrn among dark blue currents](Previews/Tidal-Orbit.png)](Previews/Tidal-Orbit.png) | [![Phiat’s stellar disc beside suspended ocean swells](Previews/Tidal-Star.png)](Previews/Tidal-Star.png) |
 | **Acid Etch**<br>Eudaya | [![Dark Yugve against hot pink and sulphur-yellow skies](Previews/Acid-Orbit.png)](Previews/Acid-Orbit.png) | [![Eudaya’s pink stellar disc in Acid Etch](Previews/Acid-Star.png)](Previews/Acid-Star.png) |
 
@@ -131,7 +135,9 @@ The catalogue contains **7,710 stars, 48,081 planets and moons, 11,254 life-bear
 | Atlas | Home | Centre on the live ship |
 | Atlas | Page Up / Page Down | Scroll the world list |
 | Flight | W A S D / Q E | Forward, sideways and vertical thrust |
-| Flight | Arrows / Z V | Pitch, yaw and roll |
+| Flight | Arrows | Pitch and yaw |
+| Flight | U / O or V / Z | Roll left / right |
+| Flight | Hold R | Level the wings in manual flight. Uses the local horizon near a planet and the system's orbital plane in open space. |
 | Flight | C | Capture / release mouse steering |
 | Flight | Hold Shift + move mouse | Look around the cockpit. Release Shift to face forward. |
 | Flight | Left Option (Alt) / Ctrl | Boost / precision |

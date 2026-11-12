@@ -11,10 +11,10 @@
   "runtime": "C++20, SDL3, bgfx Metal, Infinity Hyperion renderer",
   "platform": "macOS 26+, arm64",
   "linked_dependencies": "system libraries and frameworks only",
-  "packaged_app_test": "passed: signed app crossed Oylanhai to Ziksa with four cargo units, physically docked and bought four iron in a separate run, and rendered Tidal Blue with the ship rolled",
+  "packaged_app_test": "passed: signed Mac app rendered the rings centred on Stips, a solid moon",
   "native_keyboard_search": "verified visually in packaged app",
   "signature": "ad hoc codesign verification passed",
-  "version": "0.10.0",
+  "version": "0.12.1",
   "integration_tests": "passed: immutable destination, two-hop route, final-world handoff, pause/resume, route save/restore, cockpit selection, world search, frame-invariant position, map picking, anchored zoom",
   "test_suites": 3,
   "economy_integration_tests": "passed: physical docking access, conserved transactions, stock and cargo limits, sealed charter, real berth departure and wormhole haul, fuel progress, save validation, construction, vault storage, farms and guards, finite deposits, restoration, culture, galleries, offline settlement, deadlines and UI bounds",
@@ -33,7 +33,7 @@
   "bulk_commodities": 12,
   "economy_source": "https://www.xalaria.com/handbook/",
   "economy_limits": "Offline public-rule implementation with local balance; full server economy not reproduced. See ECONOMY.md.",
-  "binary_sha256": "df232d34be10da97b5a83308cdc800f4948ad11fce2bb7f03cd99432bdccc4dc",
+  "binary_sha256": "7abefc8b4977f30d03d3c51da465e5368ffdced678fbca1caaf060ab8be17e45",
   "graphics_style": "Charred Glass, Verdant Fog, Tidal Blue and Acid Etch regional looks with depth-aware camera optics",
   "graphics_scope": [
     "world pigments",
@@ -52,7 +52,7 @@
     "GLSL"
   ],
   "shader_embedding": "Project-local checked-in shaders, source/binary SHA-256 validated at CMake configuration",
-  "shader_manifest_sha256": "87092fa7de3c45ba7f821a2633dec891ad450528b5cf42d7281ae827c379b15b",
+  "shader_manifest_sha256": "2323923e40a6c3b2f15d13dd4a1bb1e5e4798488c4639bc8ce8d044132723664",
   "native_graphics_checks": {
     "acid_space": 145,
     "acid_orbit": 135,
@@ -189,7 +189,7 @@
   },
   "baseline_reflection_verification_version": "0.4.1",
   "baseline_space_glass_verification_version": "0.4.1",
-  "build_binary_sha256": "93cc4375e49982d8eab462ba5c38ee5f57cfb901f0cccf712181386b00b72039",
+  "build_binary_sha256": "caee37500109c34e85e9f9b268dfa65902dae070db08f7dc971330c6f7f72178",
   "baseline_native_graphics_checks": {
     "version": "0.5.0",
     "lens_open_space_on": 160,
@@ -385,6 +385,111 @@
     },
     "signed_tidal_roll_frames": 104,
     "verdant_horizon_frames": 136,
-    "updated_readme_screenshots": 16
+    "updated_readme_screenshots": 16,
+    "version": "0.10.0"
+  },
+  "roll_and_graphics_verification": {
+    "platform_tested": "macOS Metal",
+    "integrated_tests": "3 of 3 passed, including bank recovery and fixed forward bearing",
+    "native_keyboard_test": {
+      "frames_per_system": 432,
+      "systems": [
+        "Oylanhai",
+        "Phiat"
+      ],
+      "checks": [
+        "U and O bank independently of pitch and yaw",
+        "R levels the wings and holds heading",
+        "V and Z preserve existing roll bindings",
+        "The atlas suppresses roll input"
+      ]
+    },
+    "signed_manual_crossing": {
+      "frames": 112,
+      "manual_arrivals": 1,
+      "system": 14538,
+      "cargo_units": 4
+    },
+    "native_stellar_frames_per_region": 120,
+    "native_stellar_systems": [
+      "Oylanhai",
+      "Ziksa",
+      "Phiat",
+      "Eudaya"
+    ],
+    "near_surface_comparison": {
+      "method": "165 frames per run, same Ziksa profile, no screenshot capture, whole application wall-clock time",
+      "previous_seconds": [
+        8.59,
+        8.63
+      ],
+      "current_seconds": [
+        9.41,
+        9.45
+      ]
+    },
+    "updated_readme_screenshots": [
+      "Charred-Star.png",
+      "Verdant-Star.png",
+      "Tidal-Star.png",
+      "Acid-Star.png",
+      "Cockpit.png"
+    ],
+    "version": "0.11.0"
+  },
+  "orbital_graphics_verification": {
+    "platform_tested": "macOS Metal",
+    "test_suites": "3 of 3 passed",
+    "shader_targets_compiled": [
+      "Metal",
+      "SPIR-V",
+      "GLSL"
+    ],
+    "signed_manual_crossing": {
+      "frames": 112,
+      "manual_arrivals": 1,
+      "system": 14538,
+      "cargo_units": 4
+    },
+    "comparison_views": [
+      "Oylanhai gate approach, 106 frames",
+      "Phehmyar orbit and crescent, 120 frames each",
+      "Frak cloud bands and rings, 120 frames"
+    ],
+    "near_surface_comparison": {
+      "method": "165 frames per run, same Ziksa profile, no screenshot capture, alternating whole-application wall-clock runs",
+      "previous_seconds": [
+        7.63,
+        7.83
+      ],
+      "current_seconds": [
+        9.23,
+        7.4
+      ]
+    },
+    "updated_readme_screenshots": [
+      "Manual-Wormhole.png",
+      "Verdant-Planet.png",
+      "Frak-Rings.png"
+    ],
+    "version": "0.12.0"
+  },
+  "centred_ring_verification": {
+    "platform_tested": "macOS Metal",
+    "test_suites": "3 of 3 passed",
+    "shader_targets_compiled": [
+      "Metal",
+      "SPIR-V",
+      "GLSL"
+    ],
+    "catalogue_rings_centred_in_world_and_system_frames": 14887,
+    "ringed_solid_worlds": 1211,
+    "ringed_moons": 39,
+    "polar_render_check": "Ring-on/off difference bounds put the outer ring centre within two pixels of the aimed-at globe centre",
+    "native_view_tests": [
+      "Frak from both sides of its ring plane and from the pole",
+      "Efbip, a solid planet",
+      "Stips, a solid moon, in the signed game"
+    ]
   }
 }

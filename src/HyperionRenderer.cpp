@@ -41,6 +41,7 @@ bgfx::ShaderHandle shader(const char* name) {
     LOAD_SHADER(fs_hyperion_lens_seed, BACKEND);                                                            \
     LOAD_SHADER(fs_hyperion_bokeh, BACKEND);                                                                \
     LOAD_SHADER(fs_hyperion_lens, BACKEND);                                                                 \
+    LOAD_SHADER(fs_hyperion_present, BACKEND);                                                              \
     LOAD_SHADER(fs_hyperion_post, BACKEND)
     switch (bgfx::getRendererType()) {
     case bgfx::RendererType::Metal: {
@@ -139,6 +140,8 @@ void HyperionRenderer::init() {
     blur_ = program("vs_hyperion_screen", "fs_hyperion_blur");
     post_ = program("vs_hyperion_screen", "fs_hyperion_post");
     sceneSampler_ = bgfx::createUniform("s_scene", bgfx::UniformType::Sampler);
+    wormholeParams_ = bgfx::createUniform("u_wormholeOptics", bgfx::UniformType::Vec4, 5);
+    glazingParams_ = bgfx::createUniform("u_glazing", bgfx::UniformType::Vec4);
     bloomSampler_ = bgfx::createUniform("s_bloom", bgfx::UniformType::Sampler);
     depthSampler_ = bgfx::createUniform("s_opaqueDepth", bgfx::UniformType::Sampler);
     reflectionSampler_=bgfx::createUniform("s_reflectionSurface",bgfx::UniformType::Sampler);
@@ -165,6 +168,7 @@ void HyperionRenderer::init() {
     lensSeedProgram_=program("vs_hyperion_screen","fs_hyperion_lens_seed");
     bokehProgram_=program("vs_hyperion_screen","fs_hyperion_bokeh");
     lensProgram_=program("vs_hyperion_screen","fs_hyperion_lens");
+    presentProgram_=program("vs_hyperion_screen","fs_hyperion_present");
     sunSampler_ = bgfx::createUniform("s_sunShadow", bgfx::UniformType::Sampler);
     sunMatrix_ = bgfx::createUniform("u_sunFromWorld", bgfx::UniformType::Mat4);
     sunParams_ = bgfx::createUniform("u_sunShadowParams", bgfx::UniformType::Vec4);
@@ -177,7 +181,7 @@ void HyperionRenderer::clearTargets() {
     if (bgfx::isValid(scene_))
         bgfx::destroy(scene_);
     scene_ = BGFX_INVALID_HANDLE;
-    for(auto* target:{&optical_,&lensSeed_,&bokeh_}){
+    for(auto* target:{&optical_,&lensSeed_,&bokeh_,&display_}){
         if(bgfx::isValid(*target))bgfx::destroy(*target);
         *target=BGFX_INVALID_HANDLE;
     }
@@ -209,7 +213,7 @@ HyperionRenderer::~HyperionRenderer() {
             bgfx::destroy(t);
     if (bgfx::isValid(sunTarget_))
         bgfx::destroy(sunTarget_);
-    for (auto p : {lensSeedProgram_,bokehProgram_,lensProgram_,geometry_,cockpitGlazing_,wormhole_,
+    for (auto p : {lensSeedProgram_,bokehProgram_,lensProgram_,presentProgram_,geometry_,cockpitGlazing_,wormhole_,
                    glow_,
                    blur_,
                    post_,
@@ -231,7 +235,7 @@ HyperionRenderer::~HyperionRenderer() {
                    rings_})
         if (bgfx::isValid(p))
             bgfx::destroy(p);
-    for (auto u : {lensParams_,focusSeedSampler_,planetParams_,   planetRingsParams_,
+    for (auto u : {lensParams_,glazingParams_,wormholeParams_,focusSeedSampler_,planetParams_,   planetRingsParams_,
                    ringParams_,     weatherVisualParams_,
                    landingParams_,  stellarParams_,
                    starTypeParams_, starMatrix_,
@@ -293,11 +297,28 @@ bgfx::ProgramHandle HyperionRenderer::cockpitGlazingProgram() {
         cockpitGlazing_ = program("vs_hyperion", "fs_cockpit_glazing");
     return cockpitGlazing_;
 }
+
+void HyperionRenderer::bindCockpitGlazing() {
+    const glm::vec4 glazing{1.f / width_, 1.f / height_, bgfx::getCaps()->originBottomLeft ? 1.f : -1.f, 0};
+    bgfx::setUniform(glazingParams_, glm::value_ptr(glazing));
+    bgfx::setTexture(0, sceneSampler_, bgfx::getTexture(display_), sampling);
+}
 bgfx::ProgramHandle HyperionRenderer::wormholeProgram() {
     init();
     if (!bgfx::isValid(wormhole_))
         wormhole_ = program("vs_hyperion", "fs_xalaria_wormhole");
     return wormhole_;
+}
+bool HyperionRenderer::wormholeOptics(glm::vec3 centre, glm::vec3 right, glm::vec3 up,
+                                     float radius, glm::vec3 plasma, float tanHalfFov, double seconds) {
+    if (!readableDepth_)
+        return false;
+    wormholeData_[0] = {centre, radius};
+    wormholeData_[1] = {right, width_ * tanHalfFov / height_};
+    wormholeData_[2] = {up, tanHalfFov * (bgfx::getCaps()->originBottomLeft ? 1.f : -1.f)};
+    wormholeData_[3] = {plasma, float(seconds)};
+    wormholeData_[4] = {glm::cross(right, up), 0.f};
+    return true;
 }
 void HyperionRenderer::begin(RenderMode, int width, int height, bool opticalDepth, bool flight) {
     detailUploadBytes_ = 0;
@@ -310,6 +331,7 @@ void HyperionRenderer::begin(RenderMode, int width, int height, bool opticalDept
     starTypeData_ = {};
     starFromEye_ = glm::mat4(1);
     atmosphereData_ = {};
+    wormholeData_ = {};
     polarData_ = {};
     weatherData_ = {};
     weatherPending_ = false;
@@ -342,14 +364,15 @@ void HyperionRenderer::begin(RenderMode, int width, int height, bool opticalDept
             target = bgfx::createFrameBuffer(std::max(1, width / 3), std::max(1, height / 3),
                                              bgfx::TextureFormat::RGBA16F, BGFX_TEXTURE_RT | sampling);
         optical_=bgfx::createFrameBuffer(width,height,bgfx::TextureFormat::RGBA16F,BGFX_TEXTURE_RT|sampling);
+        display_=bgfx::createFrameBuffer(width,height,bgfx::TextureFormat::RGBA8,BGFX_TEXTURE_RT|sampling);
         lensSeed_=bgfx::createFrameBuffer(std::max(1,width/3),std::max(1,height/3),bgfx::TextureFormat::RGBA16F,BGFX_TEXTURE_RT|sampling);
         bokeh_=bgfx::createFrameBuffer(std::max(1,width/3),std::max(1,height/3),bgfx::TextureFormat::RGBA16F,BGFX_TEXTURE_RT|sampling);
-        if(!bgfx::isValid(optical_)||!bgfx::isValid(lensSeed_)||!bgfx::isValid(bokeh_))
+        if(!bgfx::isValid(optical_)||!bgfx::isValid(display_)||!bgfx::isValid(lensSeed_)||!bgfx::isValid(bokeh_))
             throw std::runtime_error("Camera lens target allocation failed");
         if (!bgfx::isValid(scene_) || !bgfx::isValid(bloom_[0]) || !bgfx::isValid(bloom_[1]))
             throw std::runtime_error("Hyperion HDR target allocation failed");
         bytes_ = size_t(width) * height * (mirrors?20:12) + size_t(std::max(1, width / 3)) * std::max(1, height / 3) * 16;
-        bytes_+=size_t(width)*height*8+size_t(std::max(1,width/3))*std::max(1,height/3)*16;
+        bytes_+=size_t(width)*height*12+size_t(std::max(1,width/3))*std::max(1,height/3)*16;
         if (opticalDepth) {
             polarTarget_ = bgfx::createFrameBuffer(std::max(1, width / 2), std::max(1, height / 2),
                                                    bgfx::TextureFormat::RGBA16F, BGFX_TEXTURE_RT | sampling);
@@ -778,6 +801,7 @@ void HyperionRenderer::finish() {
         bgfx::setUniform(reflectionParams_,reflection.data(),2);
         bgfx::setUniform(spaceGlassParams_,glm::value_ptr(spaceGlassData_));
         bgfx::setUniform(spaceGlassMatrix_,glm::value_ptr(spaceGlassFromEye_));
+        bgfx::setUniform(wormholeParams_, wormholeData_.data(), 5);
         bgfx::setTexture(3,reflectionSampler_,bgfx::getTexture(scene_,reflectiveTargets_?1:0),sampling|BGFX_SAMPLER_MIN_POINT|BGFX_SAMPLER_MAG_POINT);
         bgfx::setUniform(atmosphere_, atmosphereData_.data(), 4);
         bgfx::setUniform(weatherParams_, weatherData_.data(), 4);
@@ -803,7 +827,7 @@ void HyperionRenderer::finish() {
     bgfx::setTexture(0,sceneSampler_,bgfx::getTexture(lensSeed_),sampling);
     bgfx::setTexture(2,depthSampler_,depth,sampling|BGFX_SAMPLER_MIN_POINT|BGFX_SAMPLER_MAG_POINT);
     screen(84,bokehProgram_);
-    bgfx::setViewFrameBuffer(85,BGFX_INVALID_HANDLE);
+    bgfx::setViewFrameBuffer(85,display_);
     bgfx::setViewRect(85,0,0,width_,height_);
     bgfx::setUniform(regionLook_, regionLookData_.data(), 2);
     bgfx::setUniform(lensParams_,lens.data(),2);
@@ -818,5 +842,10 @@ void HyperionRenderer::finish() {
     bgfx::setTexture(5,noiseSampler_,noise_);
     bgfx::setTexture(9,cloudSampler_,readableDepth_?bgfx::getTexture(cloudTarget_):noise_,sampling);
     screen(85,lensProgram_);
+    // The canopy and the back buffer both sample this finished camera image.
+    bgfx::setViewFrameBuffer(86,BGFX_INVALID_HANDLE);
+    bgfx::setViewRect(86,0,0,width_,height_);
+    bgfx::setTexture(0,sceneSampler_,bgfx::getTexture(display_),sampling);
+    screen(86,presentProgram_);
 }
 } // namespace infinity

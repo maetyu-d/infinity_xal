@@ -34,6 +34,52 @@ vec3 resolveStellarDisc(vec2 uv,vec3 background){
  }
  return mix(background,photosphere,disc*u_stellar[2].y);
 }
+
+vec3 stellarProminences(vec2 uv){
+ float radius=u_stellar[0].z;
+ float kind=u_starType[0].x;
+ float resolved=smoothstep(9.,26.,radius/max(u_stellar[2].z,1e-8));
+ if(u_stellar[0].w<=0. || resolved<=0. || kind<.5 || kind>6.5)return vec3(0.);
+ vec2 offset=(uv-u_stellar[0].xy)*vec2(u_stellar[2].x,1.);
+ float r=length(offset)/radius;
+ if(r<.992 || r>1.53)return vec3(0.);
+ if(texture2D(s_opaqueDepth,uv).r>u_stellar[1].w*1.03+1e-10)return vec3(0.);
+ vec2 radial=normalize(offset);
+ float altitude=r-1.;
+ float phase=u_starType[1].x;
+ float seconds=u_starType[1].w;
+ float spin=mod(seconds*u_starType[1].y,1.)*6.283;
+ float aa=max(u_stellar[2].z/radius,.002);
+ vec3 local=mul(mat3(u_starFromEye),vec3(radial.x,radial.y*u_starFromEye[3].w,0.));
+ float density=strataNoise(local*vec3(19.,10.,19.)+phase*13.,vec3(0.));
+ float threads=strataNoise(local*62.+vec3(0.,0.,altitude*10.),vec3(0.));
+ float plume=exp(-max(0.,altitude)/(.075+.24*density*density));
+ vec3 corona=u_stellar[1].rgb*plume*(.011+.12*pow(density,2.5)+threads*.029);
+ for(int i=0;i<4;i++){
+  float index=float(i);
+  float heading=phase*6.283+index*2.39996+spin;
+  float latitude=.16+.38*sin(index*2.17+phase*7.);
+  vec3 pole=normalize(vec3(cos(heading),latitude,sin(heading)));
+  vec3 cameraPole=mul(transpose(mat3(u_starFromEye)),pole);
+  vec2 projected=vec2(cameraPole.x,cameraPole.y*u_starFromEye[3].w);
+  float limbVisibility=smoothstep(.62,.97,length(projected));
+  vec2 axis=normalize(projected+vec2(1e-8,0.));
+  float arc=atan2(radial.x*axis.y-radial.y*axis.x,dot(radial,axis));
+  float width=.13+.12*fract(index*.73+phase);
+  if(abs(arc)>width)continue;
+  float rise=.10+.18*fract(index*.47+phase*1.7);
+  float arch=pow(max(0.,1.-arc*arc/(width*width)),.74)*rise;
+  arch*=.93+.07*sin(seconds*.42+index*2.3);
+  float distanceToArch=abs(altitude-arch);
+  float core=exp(-distanceToArch/max(.010,aa*.7));
+  float hair=exp(-abs(altitude-arch*.77-.012)/max(.008,aa*.65));
+  float halo=exp(-distanceToArch/.045)*.24;
+  float detail=.38+.62*threads;
+  corona+=u_stellar[1].rgb*(core*.87+hair*.31+halo)*limbVisibility*detail;
+ }
+ float limb=smoothstep(.992,1.02,r)*(1.-smoothstep(1.34,1.53,r));
+ return corona*limb*resolved*u_stellar[2].y;
+}
 // Actual Hyperion postFragment streak and ghost, evaluated in the existing
 // third-resolution bloom pass. Analytic box filtering keeps thin streaks
 // stable between low-resolution pixels without a new texture or history.

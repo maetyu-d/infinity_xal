@@ -3,6 +3,7 @@
 uniform vec4 u_hyperion[4];
 uniform vec4 u_cavity;
 uniform vec4 u_materialDomain;
+#include "hyperion_noise.sh"
 #include "hyperion_planets.sh"
 uniform mat4 u_pattern;
 uniform vec4 u_surface;
@@ -16,7 +17,6 @@ uniform mat4 u_meso;
 uniform vec4 u_microParams;
 #include "hyperion_material_detail.sh"
 #endif
-#include "hyperion_noise.sh"
 #include "hyperion_pigment.sh"
 #include "hyperion_tone.sh"
 #include "hyperion_acid.sh"
@@ -93,6 +93,11 @@ vec3 shadeCabin(vec3 base,float alpha,vec3 p,vec3 local,vec3 N,vec3 V,vec3 L){
  vec3 downLight=normalize(toLamp+vec3(1e-12));
  float fill=(.04+.17*max(dot(N,downLight),0.))/(.60+range2*1.7);
  lit+=body*(vec3(.044,.064,.079)+vec3(1.,.84,.63)*fill);
+ vec3 screenPosition=vec3(clamp(p.x,-.35,.35),-.420,-1.176);
+ vec3 screenRay=screenPosition-p;
+ float screenRange=dot(screenRay,screenRay);
+ float screenFacing=max(dot(N,normalize(screenRay+vec3(1e-8))),0.);
+ lit+=body*vec3(.055,.43,.32)*exp(-screenRange*13.)*(.07+.32*screenFacing)*(1.-display);
  float facing=clamp(dot(N,V),0.,1.);
  float fresnel=pow(1.-facing,5.);
  vec3 reflected=cabinFixtureReflection(p,reflect(-V,N),rough);
@@ -244,7 +249,10 @@ void main(){
                dot(n,u_terrainMaterial[3].xyz)*.35)*6.283185+warp*.6;
   float bedding=mix(.5,.5+.5*sin(layer),1.-smoothstep(.6,2.,fwidth(layer)));
   float vein=thread(middle*24.+warp*.8,.035)*(1.-smoothstep(.15,.9,fwidth(middle*24.)));
-  vec3 deposits=albedo*(.76+strata*.36+(grain-.5)*.07+bedding*.12);
+  float exposedLayer=smoothstep(.21,.67,bedding*.62+middle*.38)*smoothstep(.10,.59,slope);
+  float weathering=smoothstep(.29,.70,broad*.52+warp*.48);
+  vec3 deposits=albedo*(.66+strata*.38+(grain-.5)*.09+bedding*.14);
+  deposits=mix(deposits,deposits*.63+u_terrainMaterial[0].rgb*.052,exposedLayer*.58);
   deposits=mix(deposits,u_terrainMaterial[1].rgb*(.72+strata*.20),dust*u_terrainMaterial[2].y*.28);
   coatHue=pigment(phase+strata*.85+grain*.16);
   // Hyperion's geological pigment sits in the reflectance. Light and shadow
@@ -256,7 +264,7 @@ void main(){
   deposits=mix(deposits,mix(dryPigment,frozenPigment,ice),.32);
   deposits=mix(deposits,deposits*.46+pigment(phase+middle*.18)*.085,vein*.42);
   albedo=deposits;
-  rough=clamp(rough+(grain-.5)*.06+dust*.10,.22,.98);
+  rough=clamp(rough+(grain-.5)*.09+dust*.10+weathering*.14-exposedLayer*.09,.22,.98);
   float height=((middle-.5)*.65+(grain-.5)*.10)*u_microParams.z;
   vec3 dx=dFdx(v_position),dy=dFdy(v_position),a=cross(dy,N),b=cross(N,dx);float det=dot(dx,a);
   vec3 gradient=sign(det)*(dFdx(height)*a+dFdy(height)*b)/max(abs(det),1e-20);
@@ -385,6 +393,12 @@ void main(){
  if(!atom)metallic*=1.-u_regionLook[0].x*.72-acid*.88;
  vec3 lit=brdf(albedo,N,V,L,rough,metallic)*cavity*visibility*sunlight;
  lit+=diffuseEnvironment(N,up,albedo,skyDay,air)*cavity;
+ if(gas){
+  float grazing=pow(1.-clamp(dot(radial,V),0.,1.),3.);
+  float dawn=smoothstep(-.28,.25,dot(radial,L));
+  vec3 cloudRim=mix(vec3(.38,.20,.09),vec3(.56,.68,.83),dawn);
+  lit+=albedo*dawn*.19+cloudRim*grazing*dawn*visibility*.32;
+ }
  // Directional environment reflection makes rough rock, ice, polished ore and
  // atomic sites respond differently to the same sun and broad sky.
  vec3 reflected=reflectedEnvironment(reflect(-V,N),up,skyDay,phase,rough,planet?air:1.);
