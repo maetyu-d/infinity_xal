@@ -1,4 +1,6 @@
 #include "HyperionRenderer.hpp"
+#include "AtlasFontData.hpp"
+#include "infinity/Cockpit.hpp"
 #include "infinity/MaterialTexture.hpp"
 #include "infinity/StellarEvolution.hpp"
 #include "infinity/WorldDepth.hpp"
@@ -15,6 +17,8 @@ bgfx::ShaderHandle shader(const char* name) {
     if (std::strcmp(name, #NAME) == 0)                                                                       \
     return bgfx::createShader(bgfx::copy(NAME##_##BACKEND, sizeof(NAME##_##BACKEND)))
 #define LOAD_BACKEND(BACKEND)                                                                                \
+    LOAD_SHADER(vs_xalaria_atlas, BACKEND);                                                                \
+    LOAD_SHADER(fs_xalaria_atlas, BACKEND);                                                                \
     LOAD_SHADER(vs_planet_rings, BACKEND);                                                                   \
     LOAD_SHADER(fs_planet_rings, BACKEND);                                                                   \
     LOAD_SHADER(vs_hyperion, BACKEND);                                                                       \
@@ -205,6 +209,12 @@ HyperionRenderer::~HyperionRenderer() {
     detailTasks_.wait();
     if (bgfx::isValid(detail_))
         bgfx::destroy(detail_);
+    if (bgfx::isValid(atlasTextTexture_))
+        bgfx::destroy(atlasTextTexture_);
+    if (bgfx::isValid(atlasTextProgram_))
+        bgfx::destroy(atlasTextProgram_);
+    if (bgfx::isValid(atlasTextSampler_))
+        bgfx::destroy(atlasTextSampler_);
     clearTargets();
     if (bgfx::isValid(noise_))
         bgfx::destroy(noise_);
@@ -302,6 +312,42 @@ void HyperionRenderer::bindCockpitGlazing() {
     const glm::vec4 glazing{1.f / width_, 1.f / height_, bgfx::getCaps()->originBottomLeft ? 1.f : -1.f, 0};
     bgfx::setUniform(glazingParams_, glm::value_ptr(glazing));
     bgfx::setTexture(0, sceneSampler_, bgfx::getTexture(display_), sampling);
+}
+void HyperionRenderer::drawAtlasText(std::span<const AtlasGlyphQuad> glyphs, bgfx::ViewId view) {
+    if (glyphs.empty())
+        return;
+    if (!bgfx::isValid(atlasTextProgram_)) {
+        std::vector<uint8_t> pixels;
+        pixels.reserve(atlasFontData::width * atlasFontData::height);
+        for (const auto run : atlasFontData::coverageRuns)
+            pixels.insert(pixels.end(), (run & 255) + 1, uint8_t(run >> 8));
+        atlasTextTexture_ = bgfx::createTexture2D(atlasFontData::width, atlasFontData::height, false, 1,
+            bgfx::TextureFormat::R8, sampling, bgfx::copy(pixels.data(), uint32_t(pixels.size())));
+        atlasTextSampler_ = bgfx::createUniform("s_atlasText", bgfx::UniformType::Sampler);
+        atlasTextProgram_ = program("vs_xalaria_atlas", "fs_xalaria_atlas");
+        atlasTextLayout_.begin()
+            .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
+            .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
+            .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
+            .end();
+    }
+    struct Vertex { float x, y, z, u, v; uint32_t colour; };
+    bgfx::TransientVertexBuffer buffer;
+    const auto count = uint32_t(glyphs.size() * 6);
+    if (bgfx::getAvailTransientVertexBuffer(count, atlasTextLayout_) < count)
+        return;
+    bgfx::allocTransientVertexBuffer(&buffer, count, atlasTextLayout_);
+    auto* vertices = reinterpret_cast<Vertex*>(buffer.data);
+    for (const auto& g : glyphs) {
+        const Vertex a{g.x0,g.y0,0,g.u0,g.v0,g.colour}, b{g.x1,g.y0,0,g.u1,g.v0,g.colour};
+        const Vertex c{g.x0,g.y1,0,g.u0,g.v1,g.colour}, d{g.x1,g.y1,0,g.u1,g.v1,g.colour};
+        for (const auto& point : {a,b,c,b,d,c})
+            *vertices++ = point;
+    }
+    bgfx::setVertexBuffer(0, &buffer);
+    bgfx::setTexture(0, atlasTextSampler_, atlasTextTexture_, sampling);
+    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_ALPHA | BGFX_STATE_MSAA);
+    bgfx::submit(view, atlasTextProgram_);
 }
 bgfx::ProgramHandle HyperionRenderer::wormholeProgram() {
     init();

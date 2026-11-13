@@ -1,4 +1,4 @@
-# Infinity / Xalaria 0.12.1
+# Infinity / Xalaria 0.14.1
 
 A native C++20 exploration prototype combining **Xalaria's published universe and wormhole map** with **your existing Infinity flight engine and Hyperion/Metal renderer**.
 
@@ -23,11 +23,18 @@ Warp now uses ember speed streaks and a soft fade around the destination. The pe
 
 Hold **Shift** and move the mouse to look through the side windows, up at the overhead panel, down at the controls, or back toward the hatch. Release **Shift** to face forward. The heads-up display fades as you turn away from the windscreen. The windows carry the light of each system onto the painted alloy and rubber trim.
 
+Press **F5** from the pilot's seat to stand up. Walk with **W A S D** and look with the mouse or arrow keys. Hold **Shift** to walk faster. The rear hatch opens as you approach. Follow the passage to the crew quarters, systems alcove, or cargo bay. Return to the cockpit and press **E** beside the seat to take the helm. **Escape** releases the mouse while walking, and clicking the game captures it again.
+
+Flight continues while you walk. The ship follows any plotted course, and walking inputs act on the player. A restored save starts at the pilot's seat.
+
+Three crewmates appear at their work areas in the crew quarters, systems alcove, and cargo bay. Their dark suits have softly lit edges and subtle head and arm movement.
+
 - The yoke follows the ship's pitch, yaw, and roll. The port throttle lever slides as you change thrust with **W** and **S**.
 - The forward display shows velocity, bank, and either altitude or stopping distance. The port console shows throttle and fuel. The starboard scope shows the selected target's bearing and range alongside hull integrity.
 - The overhead panel shows landing gear, flight assist, and docking status.
 
 [![The bank readout and canopy as the ship rolls across Tidal Blue currents](Previews/Cockpit.png)](Previews/Cockpit.png)
+[![A crew silhouette at the side of the cargo bay](Previews/Ship-Interior.png)](Previews/Ship-Interior.png)
 
 ## Planets and stars by environment
 
@@ -89,6 +96,13 @@ The rules use Xalaria's public handbook, with documented local balance where the
 
 ## Map integration
 
+- The Galaxy view colours the starfield by regional environment. The **Links** button shows the full wormhole network. An amber dashed line marks a plan and a solid blue line marks the active course.
+- The System chart uses the selected system's palette for its star, planet markers and orbit guides. The chart shows the selected planet's moons and the scrollable list includes every planet and moon in the system.
+
+[![Galaxy map showing the ship and paused course to Ziksa](Previews/Atlas.png)](Previews/Atlas.png)
+[![Ziksa system map with the selected and arrival worlds marked](Previews/System.png)](Previews/System.png)
+[![Galaxy overview coloured by regional environment](Previews/Galaxy-Regions.png)](Previews/Galaxy-Regions.png)
+
 ### Fly the Oylanhai–Ziksa wormhole
 
 - At Eunhia Station 1, press **F4** to trade and **D** on the station screen to release the clamps. Wait for the departure lane to hand you the helm.
@@ -140,6 +154,9 @@ The catalogue contains **7,710 stars, 48,081 planets and moons, 11,254 life-bear
 | Flight | Hold R | Level the wings in manual flight. Uses the local horizon near a planet and the system's orbital plane in open space. |
 | Flight | C | Capture / release mouse steering |
 | Flight | Hold Shift + move mouse | Look around the cockpit. Release Shift to face forward. |
+| Flight | F5 | Stand up from the pilot's seat |
+| Ship interior | W A S D / mouse or arrows | Walk / look around |
+| Ship interior | Shift / E beside the seat | Walk faster / sit at the helm |
 | Flight | Left Option (Alt) / Ctrl | Boost / precision |
 | Flight | B | Brake and cancel the queued route |
 | Flight | X / scroll | Cruise / drive setting |

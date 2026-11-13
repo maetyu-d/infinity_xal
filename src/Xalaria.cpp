@@ -71,7 +71,6 @@ XalariaCatalog::XalariaCatalog(const std::filesystem::path& path) {
 const XalariaStar& XalariaCatalog::star(uint64_t seed) const {return stars.at(uint32_t(seed));}
 const XalariaWorld& XalariaCatalog::world(const Address& a) const {return star(a.parent().id()).worlds.at(a.id());}
 XalariaRegion XalariaCatalog::region(uint32_t seed) const {
-    constexpr unsigned regionSide = 20;
     const unsigned x = (seed % grid) / regionSide;
     const unsigned y = (seed / grid) / regionSide;
     const uint64_t regionIndex = x + y * (grid / regionSide);
@@ -122,6 +121,21 @@ std::vector<uint32_t> XalariaCatalog::search(std::string_view query,size_t limit
     std::sort(ranked.begin(),ranked.end());
     for(const auto& [rank,id]:ranked){out.push_back(id);if(out.size()==limit)break;}
     return out;
+}
+std::optional<uint64_t> XalariaCatalog::searchWorld(uint32_t system,std::string_view query) const {
+    const auto q=upper(query);
+    const auto& s=star(system);
+    if(q.empty()||upper(s.name).find(q)!=std::string::npos)
+        return {};
+    std::optional<uint64_t> partial;
+    for(const auto& [id,world] : s.worlds) {
+        const auto name=upper(world.name);
+        if(name==q)
+            return id;
+        if(!partial&&name.find(q)!=std::string::npos)
+            partial=id;
+    }
+    return partial;
 }
 void XalariaCatalog::apply(Node& n,const Node& p) const {
     if(n.address.kind()==Kind::System){

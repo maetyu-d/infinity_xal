@@ -5,9 +5,11 @@
 #include <array>
 #include <bgfx/bgfx.h>
 #include <memory>
+#include <span>
 #include <oneapi/tbb/task_group.h>
 
 namespace infinity {
+struct AtlasGlyphQuad;
 // Geometry shading, emission bloom, camera optics and final display transform. Owns no
 // universe, navigation, generator, seed state or geometry cache.
 class HyperionRenderer {
@@ -22,6 +24,7 @@ class HyperionRenderer {
     bgfx::ProgramHandle cockpitProgram(){init();return geometry_;}
     bgfx::ProgramHandle cockpitGlazingProgram();
     void bindCockpitGlazing();
+    void drawAtlasText(std::span<const AtlasGlyphQuad>, bgfx::ViewId);
     bgfx::ProgramHandle wormholeProgram();
     bool wormholeOptics(glm::vec3 centre, glm::vec3 right, glm::vec3 up,
                         float radius, glm::vec3 plasma, float tanHalfFov, double seconds);
@@ -125,6 +128,10 @@ class HyperionRenderer {
     bgfx::UniformHandle wormholeParams_ = BGFX_INVALID_HANDLE;
     std::array<glm::vec4, 5> wormholeData_{};
     bgfx::UniformHandle glazingParams_ = BGFX_INVALID_HANDLE;
+    bgfx::ProgramHandle atlasTextProgram_ = BGFX_INVALID_HANDLE;
+    bgfx::TextureHandle atlasTextTexture_ = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle atlasTextSampler_ = BGFX_INVALID_HANDLE;
+    bgfx::VertexLayout atlasTextLayout_;
     bgfx::UniformHandle lensParams_=BGFX_INVALID_HANDLE,focusSeedSampler_=BGFX_INVALID_HANDLE;
     bool lensEnabled_=true;
     std::array<bgfx::FrameBufferHandle, 2> bloom_{{BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE}};

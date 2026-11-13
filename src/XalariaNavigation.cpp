@@ -13,7 +13,6 @@ uint32_t containingSystem(Address a,uint32_t fallback){
     while(a.kind()>Kind::System)a=a.parent();
     return a.kind()==Kind::System?uint32_t(a.id()):fallback;
 }
-std::string folded(std::string_view s){std::string out(s);for(auto& ch:out)if(ch>='a'&&ch<='z')ch=char(ch-32);return out;}
 
 std::optional<XalariaWormholeMouth> manualMouth(const Universe& universe, const XalariaCatalog& catalog,
                                               uint32_t system, uint64_t world, uint32_t destination) {
@@ -168,7 +167,11 @@ void XalariaNavigation::selectWorld(uint64_t id){
     if(phase_==Phase::Arrived){phase_=Phase::Idle;route_.clear();world_.reset();}
     const auto& worlds=catalog_.star(view.selected).worlds;worlds.at(id);view.selectedWorld=id;
     const auto at=unsigned(std::distance(worlds.begin(),worlds.find(id)));
-    if(at<view.worldScroll||at>=view.worldScroll+8)view.worldScroll=at>4?at-4:0;
+    const auto rows = XalariaMapLayout::worldRows;
+    if (at<view.worldScroll || at>=view.worldScroll+rows) {
+        const auto last = worlds.size()>rows ? unsigned(worlds.size()-rows) : 0u;
+        view.worldScroll=std::min(last,at>rows/2?at-rows/2:0u);
+    }
 }
 void XalariaNavigation::selectFromFlight(const Address& a){
     if(a.kind()<Kind::System)return;
@@ -186,12 +189,9 @@ void XalariaNavigation::nextMatch(int direction){
     if(view.matches.empty())return;
     const auto count=long(view.matches.size());view.matchIndex=size_t((long(view.matchIndex)+direction+count)%count);
     selectSystem(view.matches[view.matchIndex]);
-    const auto q=folded(view.query);const auto& s=catalog_.star(view.selected);
-    // A world-name search retains the actual world, rather than only its star.
-    if(!q.empty()&&folded(s.name).find(q)==std::string::npos){
-        auto exact=std::find_if(s.worlds.begin(),s.worlds.end(),[&](const auto& pair){return folded(pair.second.name)==q;});
-        auto match=exact!=s.worlds.end()?exact:std::find_if(s.worlds.begin(),s.worlds.end(),[&](const auto& pair){return folded(pair.second.name).find(q)!=std::string::npos;});
-        if(match!=s.worlds.end()){selectWorld(match->first);view.mode=XalariaMapView::Mode::System;}
+    if (const auto world=catalog_.searchWorld(view.selected,view.query)) {
+        selectWorld(*world);
+        view.mode=XalariaMapView::Mode::System;
     }
 }
 bool XalariaNavigation::beginLeg(){

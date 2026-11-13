@@ -81,7 +81,7 @@ int main(int argc,char** argv){
     }
     XalariaMapView view;view.catalog=cat.get();view.current=from;view.selected=to;view.route=route;
     auto overlay=xalariaMapOverlay(view,1.6);
-    require(!overlay.panels.vertices.empty()&&!overlay.strokes.vertices.empty(),"Native map missing");
+    require(!overlay.panels.vertices.empty()&&!overlay.atlasGlyphs.empty(),"Native map missing");
     for(const auto& run:overlay.textRuns)require(run.bounds.x>=0&&run.bounds.y>=0&&run.bounds.x+run.bounds.w<=1440&&run.bounds.y+run.bounds.h<=900,"Map text outside canvas");
     Navigation nav(u);auto planet=cat->address(from).child(Kind::Planet,0);auto n=u.describe(planet);
     nav.changeFrame(planet);nav.setRenderScale(n.frame.logRadius);nav.offset={0,0,1.5};

@@ -46,6 +46,10 @@ struct CockpitTextRun {
     size_t firstVertex=0,vertexCount=0,firstIndex=0,indexCount=0;
     std::string value;
 };
+struct AtlasGlyphQuad {
+    float x0, y0, x1, y1, u0, v0, u1, v1;
+    uint32_t colour;
+};
 struct CockpitPopup {
     CockpitRect bounds;
     bool critical=false;
@@ -63,6 +67,7 @@ struct CockpitOverlay {
     std::vector<CockpitTextRun> textRuns;
     std::vector<CockpitPopup> popups;
     std::vector<CockpitContactHit> contactHits;
+    std::vector<AtlasGlyphQuad> atlasGlyphs;
 };
 std::vector<std::pair<size_t,size_t>> cockpitTextConflicts(const CockpitOverlay&);
 // Screen-space world markers yield to panels, notifications and label cards.
@@ -104,6 +109,13 @@ void drawPlannerDiagrams(CockpitOverlay&,const ExpeditionPlan&,const PlannerLayo
 // Port of Hyperion's CabinMesh / rebuildCockpit beveled screen-framed cabin.
 Mesh cockpitMesh(double aspect);
 Mesh xalariaCockpitMesh();
+Mesh xalariaCockpitHatch();
+Mesh xalariaShipDeck();
+Mesh xalariaShipSigns();
+struct ShipCrewMeshes {
+    Mesh body, head, arm;
+};
+ShipCrewMeshes xalariaShipCrewMeshes();
 Mesh xalariaCockpitGlazing();
 Mesh xalariaCockpitYoke();
 Mesh xalariaCockpitThrottle();

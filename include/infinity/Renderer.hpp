@@ -9,6 +9,7 @@
 #include <memory>
 struct SDL_Window;
 namespace infinity {
+class ShipInterior;
 struct CockpitViewport;
 struct XalariaMapView;
 class XalariaEconomy;
@@ -106,6 +107,7 @@ class Renderer {
     void freezeVisualTime(double seconds);
     void setCockpit(const FlightInstruments*);
     void setCockpitLook(glm::dvec2 yawPitch);
+    void setShipInterior(const ShipInterior*);
     void setCockpitValidation(bool); // Native UI proof only; no per-frame collision scan in normal play.
     void setCrew(const CrewView*);
     void setExpeditionPlan(const ExpeditionPlan*);

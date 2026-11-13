@@ -1,4 +1,6 @@
 #include "infinity/Cockpit.hpp"
+#include "infinity/ShipInterior.hpp"
+#include "AtlasFont.hpp"
 #include "infinity/Xalaria.hpp"
 #include "infinity/XalariaEconomy.hpp"
 #include "infinity/XalariaNavigation.hpp"
@@ -995,19 +997,17 @@ Mesh xalariaCockpitMesh() {
     cabin.beam({0,-.708,-1.11},yokePivot,.162,.161,cabinFrame);
     cabin.beam({0,-.661,-.956},{0,-.623,-.862},.143,.121,cabinRubber);
 
-    // Rear pressure bulkhead, access hatch, and seat under the camera.
-    cabin.face({-.79,.51,1.15},{.79,.51,1.15},{.80,-.82,1.15},{-.80,-.82,1.15},cabinLiner);
-    cabin.face({-.79,.51,1.15},{.79,.51,1.15},{.49,.69,1.15},{-.49,.69,1.15},cabinLiner);
-    cabin.beam({0,-.031,1.04},{0,-.031,1.149},.99,1.31,cabinFrame);
-    cabin.beam({0,-.031,.988},{0,-.031,1.03},.83,1.14,cabinTrim);
-    cabin.beam({0,-.031,.965},{0,-.031,.986},.749,1.06,cabinLiner);
-    cabin.beam({0,.37,.942},{0,-.46,.942},.053,.023,cabinRubber);
-    for (double x : {-.113,.113})
-        cabin.beam({x,-.054,.906},{x,-.054,.977},.055,.063,cabinFrame);
-    cabin.beam({-.113,-.054,.89},{.113,-.054,.89},.046,.047,cabinCopper);
-    for (double y : {-.383,.244})
-        cabin.beam({-.35,y,.95},{-.255,y,.935},.058,.087,cabinFrame);
-    cabin.beam({-.19,.35,.952},{.19,.35,.952},.028,.033,cabinStatusLight,.61f);
+    // A real opening through the rear pressure bulkhead connects the deck.
+    constexpr double hatch=shipDeck::hatch, door=shipDeck::hatchHalf;
+    for (double side : {-1.,1.}) {
+        const double inner=side*door,outer=side*.90;
+        cabin.face({inner,-.82,hatch},{outer,-.82,hatch},{outer,.69,hatch},{inner,.69,hatch},cabinLiner);
+        cabin.beam({inner+side*.036,-.82,hatch-.045},{inner+side*.036,.66,hatch-.045},.068,.12,cabinFrame);
+        cabin.beam({inner+side*.030,-.65,hatch-.112},{inner+side*.030,-.18,hatch-.112},.018,.025,cabinStatusLight,.58f);
+    }
+    cabin.beam({-.55,.647,hatch-.041},{.55,.647,hatch-.041},.11,.105,cabinFrame);
+    cabin.beam({-.43,.603,hatch-.108},{.43,.603,hatch-.108},.014,.020,cabinWarmLight,.77f);
+    // Pilot's seat and foot rails.
     cabin.beam({0,-.713,-.205},{0,-.713,.46},.576,.142,cabinFrame);
     cabin.beam({0,-.611,-.232},{0,-.611,.431},.514,.104,cabinRubber);
     cabin.beam({0,-.605,.424},{0,-.349,.55},.498,.125,cabinRubber);
@@ -1020,6 +1020,230 @@ Mesh xalariaCockpitMesh() {
 
     cabin.mesh.compact();
     return std::move(cabin.mesh);
+}
+
+Mesh xalariaCockpitHatch() {
+    CabinBuilder door;
+    const double z=shipDeck::hatch;
+    constexpr double x=shipDeck::hatchHalf*.5;
+    door.beam({x,-.102,z-.030},{x,-.102,z+.021},.47,1.42,cabinFrame);
+    for (double face : {-.069,.059}) {
+        door.beam({x,-.123,z+face},{x,-.123,z+face+.016},.385,1.21,cabinLiner);
+        door.beam({.086,-.083,z+face},{.195,-.083,z+face},.036,.048,cabinCopper);
+        for (double y : {-.568,.420})
+            door.beam({.062,y,z+face},{.410,y,z+face},.016,.020,cabinTrim);
+        door.beam({.11,.302,z+face},{.31,.302,z+face},.014,.018,cabinStatusLight,.66f);
+    }
+    door.mesh.compact();
+    return std::move(door.mesh);
+}
+
+Mesh xalariaShipDeck() {
+    using namespace shipDeck;
+    CabinBuilder deck;
+    const CabinFinish deckPlate{{.091f,.125f,.145f},CabinMaterial::Polymer};
+    const CabinFinish bulkhead{{.145f,.21f,.25f},CabinMaterial::Painted};
+    const CabinFinish ceiling{{.20f,.25f,.27f},CabinMaterial::Painted};
+    const CabinFinish routeLamp{{.23f,.69f,.72f},CabinMaterial::Display};
+    const CabinFinish cargoPaint{{.43f,.23f,.094f},CabinMaterial::Painted};
+    const CabinFinish cloth{{.16f,.26f,.29f},CabinMaterial::Polymer};
+    const CabinFinish reactorLamp{{.38f,.75f,1.f},CabinMaterial::Display};
+    const auto surface = [&](double left,double right,double start,double end,double y,const CabinFinish& finish) {
+        deck.face({left,y,start},{right,y,start},{right,y,end},{left,y,end},finish);
+    };
+    const auto side = [&](double x,double from,double to,double floor,double roof,const CabinFinish& finish) {
+        deck.face({x,floor,from},{x,floor,to},{x,roof,to},{x,roof,from},finish);
+    };
+    const auto wall = [&](double z,double left,double right,double floor,double roof,const CabinFinish& finish) {
+        deck.face({left,floor,z},{right,floor,z},{right,roof,z},{left,roof,z},finish);
+    };
+    const auto box = [&](const DeckArea& footprint,double base,double top,const CabinFinish& finish) {
+        deck.beam({(footprint.left+footprint.right)*.5,(base+top)*.5,footprint.front},
+                  {(footprint.left+footprint.right)*.5,(base+top)*.5,footprint.back},
+                  footprint.right-footprint.left,top-base,finish);
+    };
+
+    // Ramp from the bridge's raised floor to the passage.
+    deck.face({-hatchHalf,bridgeFloor,hatch},{hatchHalf,bridgeFloor,hatch},
+              {passageHalf,deckFloor,1.71},{-passageHalf,deckFloor,1.71},deckPlate);
+    surface(-passageHalf,passageHalf,1.71,cargoFront,deckFloor,deckPlate);
+    surface(-passageHalf,passageHalf,hatch,cargoFront,passageRoof,ceiling);
+    for (double sign : {-1.,1.}) {
+        deck.face({sign*hatchHalf,bridgeFloor,hatch},{sign*passageHalf,deckFloor,1.71},
+                  {sign*passageHalf,passageRoof,1.71},{sign*hatchHalf,.69,hatch},bulkhead);
+        side(sign*passageHalf,1.71,quartersDoorFront,deckFloor,passageRoof,bulkhead);
+        side(sign*passageHalf,quartersDoorBack,cargoFront,deckFloor,passageRoof,bulkhead);
+        side(sign*passageHalf,quartersDoorFront,quartersDoorBack,.82,passageRoof,cabinFrame);
+        for (double z : {1.79,quartersDoorFront,quartersDoorBack,3.49}) {
+            deck.beam({sign*passageHalf,deckFloor,z},{sign*passageHalf,passageRoof,z},.069,.080,cabinFrame);
+        }
+        deck.beam({sign*.52,deckFloor+.028,1.72},{sign*.52,deckFloor+.028,cargoFront},.025,.017,routeLamp,.48f);
+        deck.beam({sign*.49,passageRoof-.044,1.45},{sign*.49,passageRoof-.044,3.55},
+                  .061,.035,cabinWarmLight,.78f);
+        const auto left=std::min(sign*passageHalf,sign*quartersWall);
+        const auto right=std::max(sign*passageHalf,sign*quartersWall);
+        surface(left,right,quartersFront,quartersBack,deckFloor,deckPlate);
+        surface(left,right,quartersFront,quartersBack,passageRoof,ceiling);
+        wall(quartersFront,left,right,deckFloor,passageRoof,bulkhead);
+        wall(quartersBack,left,right,deckFloor,passageRoof,bulkhead);
+        side(sign*quartersWall,quartersFront,quartersBack,deckFloor,passageRoof,bulkhead);
+        deck.beam({sign*1.55,passageRoof-.050,2.05},{sign*1.55,passageRoof-.050,3.20},.066,.042,
+                  cabinWarmLight,.84f);
+    }
+    deck.face({-.49,.69,hatch},{.49,.69,hatch},{passageHalf,passageRoof,1.71},
+              {-passageHalf,passageRoof,1.71},ceiling);
+    for (int i=0;i<7;++i) {
+        const double z=1.82+i*.265;
+        deck.beam({-.38,deckFloor+.009,z},{.38,deckFloor+.009,z},.015,.013,cabinRubber);
+    }
+
+    // Port berth, with mattress, folded blanket and a small reading lamp.
+    box(bunk,deckFloor,-.61,cabinFrame);
+    box({-1.86,2.03,-1.46,3.19},-.63,-.47,cloth);
+    box({-1.84,2.09,-1.48,2.33},-.47,-.39,cabinTrim);
+    box({-1.85,2.74,-1.47,3.15},-.47,-.431,cargoPaint);
+    deck.beam({-1.88,.30,2.04},{-1.88,.30,3.19},.12,.062,cabinTrim);
+    deck.beam({-1.83,.235,2.12},{-1.83,.235,2.53},.036,.043,cabinWarmLight,.95f);
+    // Starboard systems alcove, with separate vertical cooling pipes.
+    box(systems,deckFloor,.68,cabinFrame);
+    for (double z : {2.13,2.44,2.75,3.06}) {
+        deck.beam({1.449,-.79,z},{1.449,.38,z},.122,.107,cabinTrim);
+        deck.beam({1.384,-.66,z},{1.384,.28,z},.044,.041,reactorLamp,.70f);
+    }
+    deck.beam({1.43,.44,2.07},{1.43,.44,3.14},.075,.105,cabinCopper);
+
+    // The cargo bay has one clear aisle and two banks of tied-down crates.
+    surface(-cargoHalf,cargoHalf,cargoFront,cargoBack,deckFloor,deckPlate);
+    surface(-cargoHalf,cargoHalf,cargoFront,cargoBack,cargoRoof,ceiling);
+    wall(cargoFront,-cargoHalf,-cargoDoorHalf,deckFloor,cargoRoof,bulkhead);
+    wall(cargoFront,cargoDoorHalf,cargoHalf,deckFloor,cargoRoof,bulkhead);
+    wall(cargoFront,-cargoDoorHalf,cargoDoorHalf,.90,cargoRoof,cabinFrame);
+    wall(cargoBack,-cargoHalf,cargoHalf,deckFloor,cargoRoof,bulkhead);
+    for (double sign : {-1.,1.}) {
+        side(sign*cargoHalf,cargoFront,cargoBack,deckFloor,cargoRoof,bulkhead);
+        deck.beam({sign*.60,deckFloor,cargoFront},{sign*.60,.91,cargoFront},.071,.089,cabinTrim);
+        deck.beam({sign*.54,deckFloor+.023,3.82},{sign*.54,deckFloor+.023,7.33},
+                  .032,.020,routeLamp,.57f);
+        for (double z : {3.95,4.97,6.13,7.26}) {
+            deck.beam({sign*1.52,deckFloor,z},{sign*1.52,1.04,z},.15,.144,cabinFrame);
+            deck.beam({sign*1.52,1.04,z},{sign*1.15,cargoRoof,z},.13,.114,cabinFrame);
+        }
+        for (double z : {4.45,5.52,6.66}) {
+            deck.beam({sign*1.617,.76,z-.36},{sign*1.617,.76,z+.36},.034,.15,cabinLiner);
+            deck.beam({sign*1.594,.727,z-.30},{sign*1.594,.727,z+.30},.019,.027,cabinTrim);
+            for (double slot : {-2.,-1.,0.,1.,2.})
+                deck.beam({sign*1.59,.782,z+slot*.094},{sign*1.59,.829,z+slot*.094},.021,.017,cabinRubber);
+        }
+        for (double z : {4.19,5.23,6.27}) {
+            deck.beam({sign*.76,cargoRoof-.045,z},{sign*.76,cargoRoof-.045,z+.52},
+                      .132,.064,cabinWarmLight,.88f);
+        }
+    }
+    deck.beam({0,-.072,7.393},{0,-.072,7.331},1.47,1.55,cabinFrame);
+    deck.beam({0,-.083,7.32},{0,-.083,7.288},1.29,1.36,cabinLiner);
+    for (double x : {-.62,.62}) {
+        deck.beam({x,-.65,7.275},{x,.48,7.275},.059,.053,cabinTrim);
+        deck.beam({x,-.27,7.24},{x,.17,7.24},.022,.023,routeLamp,.48f);
+    }
+    for (size_t i=0;i<cargoCrates.size();++i) {
+        const auto& crate=cargoCrates[i];
+        const double top=(i%3==1)?-.105:(i==2)?.15:-.31;
+        box(crate,deckFloor+.055,top,cargoPaint);
+        for (double x : {crate.left+.10,crate.right-.10}) {
+            deck.beam({x,top+.022,crate.front+.02},{x,top+.022,crate.back-.02},.056,.047,cabinRubber);
+            for (double z : {crate.front-.018,crate.back+.018})
+                deck.beam({x,deckFloor+.092,z},{x,top+.02,z},.056,.047,cabinRubber);
+        }
+        const double inside=crate.left<0?crate.right+.019:crate.left-.019;
+        deck.beam({inside,top-.13,crate.front+.15},{inside,top-.13,crate.back-.15},
+                  .027,.047,cabinCopper);
+    }
+    deck.beam({-.58,.57,7.30},{.58,.57,7.30},.10,.094,cabinFrame);
+    deck.beam({-.44,.57,7.25},{.44,.57,7.25},.024,.030,routeLamp,.76f);
+    for (double z : {4.10,4.82,5.54,6.26,6.98})
+        deck.beam({-.47,deckFloor+.010,z},{.47,deckFloor+.010,z},.016,.019,cabinFrame);
+
+    deck.mesh.compact();
+    return std::move(deck.mesh);
+}
+
+ShipCrewMeshes xalariaShipCrewMeshes() {
+    ShipCrewMeshes crew;
+    // Rounded sections give the pressure suit a readable outline from
+    // any side. All positions are relative to a 1.78 metre standing figure.
+    struct Section { double y, halfWidth, halfDepth, z; };
+    const auto form = [](Mesh& mesh,glm::dvec3 offset,std::initializer_list<Section> sections,glm::vec3 colour) {
+        constexpr unsigned sides=16;
+        const auto first=uint32_t(mesh.vertices.size());
+        unsigned row=0;
+        for(const auto& s:sections) {
+            for(unsigned i=0;i<sides;++i) {
+                const double a=i*2*std::numbers::pi/sides;
+                const auto p=offset+glm::dvec3(s.halfWidth*std::cos(a),s.y,s.z+s.halfDepth*std::sin(a));
+                mesh.vertices.push_back({float(p.x),float(p.y),float(p.z),rgba(colour)});
+                if(row) {
+                    const auto before=first+(row-1)*sides+i;
+                    const auto next=first+(row-1)*sides+(i+1)%sides;
+                    mesh.indices.insert(mesh.indices.end(),{before,next,before+sides,
+                                                            before+sides,next,next+sides});
+                }
+            }
+            ++row;
+        }
+        for (unsigned i=1;i+1<sides;++i) {
+            const auto end=first+(row-1)*sides;
+            mesh.indices.insert(mesh.indices.end(),{first,first+i+1,first+i,end,end+i,end+i+1});
+        }
+    };
+    const glm::vec3 suit(.034f,.046f,.053f), reinforcement(.044f,.055f,.060f), visor(.017f,.026f,.030f);
+    form(crew.body,{},{{.77,.138,.10,.012},{.86,.169,.116,.013},{.97,.16,.110,.007},
+                      {1.10,.142,.096,-.006},{1.30,.184,.110,-.012},{1.42,.209,.122,0},
+                      {1.49,.171,.104,.007},{1.52,.102,.078,.012},{1.56,.071,.062,.013}},suit);
+    form(crew.body,{},{{1.055,.107,.055,.123},{1.10,.132,.067,.136},{1.37,.131,.067,.136},
+                      {1.43,.100,.049,.13}},reinforcement);
+    for (double side : {-1.,1.}) {
+        form(crew.body,{side*.091,0,0},
+             {{.09,.058,.062,.012},{.18,.060,.065,.015},{.39,.068,.074,.024},
+              {.52,.074,.070,-.009},{.66,.085,.086,.008},{.82,.093,.102,.016},{.89,.074,.076,.015}},suit);
+        form(crew.body,{side*.091,0,0},{{.005,.062,.114,-.041},{.039,.070,.125,-.042},
+                                       {.102,.067,.106,-.022},{.16,.055,.063,.018}},reinforcement);
+    }
+    form(crew.head,{},{{1.52,.063,.069,.013},{1.57,.098,.091,.003},{1.64,.106,.096,-.002},
+                       {1.72,.093,.084,.008},{1.775,.055,.049,.018},{1.79,.020,.020,.018}},reinforcement);
+    form(crew.head,{},{{1.574,.044,.022,-.075},{1.603,.077,.035,-.078},{1.672,.084,.039,-.079},
+                       {1.707,.056,.025,-.074}},visor);
+    form(crew.arm,{},{{-.55,.025,.026,-.118},{-.53,.040,.034,-.126},{-.475,.044,.038,-.133},
+                      {-.42,.041,.042,-.130},{-.33,.055,.054,-.090},{-.255,.053,.057,-.030},
+                      {-.18,.058,.061,-.003},{-.076,.069,.074,0},{.007,.069,.073,.006},
+                      {.045,.039,.043,.009}},suit);
+    for (auto* part : {&crew.body,&crew.head,&crew.arm})
+        part->compact();
+    return crew;
+}
+
+Mesh xalariaShipSigns() {
+    Mesh signs;
+    const auto sign = [&](const CabinSurface& surface,std::string_view label,glm::vec3 colour) {
+        CockpitOverlay overlay;
+        constexpr double size=14;
+        text(overlay,label,4,2,size,colour);
+        const auto first=uint32_t(signs.vertices.size());
+        const double width=4+label.size()*size*6/7;
+        for (const auto& v : overlay.lettering.vertices) {
+            const auto p=surface.point(v.x/width,v.y/18);
+            signs.vertices.push_back({float(p.x),float(p.y),float(p.z),v.color});
+        }
+        for (auto index : overlay.lettering.indices)
+            signs.indices.push_back(first+index);
+    };
+    sign({{.36,.565,1.039},{-.72,0,0},{0,-.072,0}},"MAIN DECK",cabinLamp);
+    sign({{-.34,.576,1.218},{.68,0,0},{0,-.075,0}},"COCKPIT",cabinSignal);
+    sign({{.48,1.10,3.662},{-.96,0,0},{0,-.092,0}},"CARGO BAY",cabinLamp);
+    sign({{.56,.41,7.263},{-1.12,0,0},{0,-.102,0}},"CARGO BAY",cabinSignal);
+    sign({{-.704,.918,2.99},{0,0,-.74},{0,-.079,0}},"CREW QUARTERS",cabinLamp);
+    sign({{.704,.918,2.25},{0,0,.74},{0,-.079,0}},"SYSTEMS",cabinLamp);
+    signs.compact();
+    return signs;
 }
 
 Mesh xalariaCockpitGlazing() {
@@ -1237,7 +1461,7 @@ CockpitOverlay cockpitOverlay(const FlightInstruments& t, double aspect, std::st
         rect(h.panels,12,12,w-24,876,{.025,.04,.065});
         text(h,"INFINITY / XALARIA",40,48,25,pearl);
         text(h,"FLIGHT AND EXPLORATION",40,103,16,mint);
-        const std::array<std::pair<const char*,const char*>,17> rows{{
+        const std::array<std::pair<const char*,const char*>,18> rows{{
             {"F2","OPEN OR CLOSE THE WORMHOLE ATLAS"},
             {"ATLAS","TYPE TO SEARCH / TAB NEXT RESULT / CLICK STAR OR WORLD"},
             {"ENTER","FLY THE SELECTED WORMHOLE ROUTE OR LOCAL WORLD"},
@@ -1249,6 +1473,7 @@ CockpitOverlay cockpitOverlay(const FlightInstruments& t, double aspect, std::st
             {"HOLD R","LEVEL THE WINGS IN MANUAL FLIGHT"},
             {"C","CAPTURE OR RELEASE MOUSE STEERING"},
             {"HOLD SHIFT + MOUSE","LOOK AROUND THE COCKPIT / RELEASE TO CENTRE"},
+            {"F5 / E","LEAVE THE SEAT / SIT DOWN BESIDE THE HELM"},
             {"LEFT OPTION / CTRL","BOOST / PRECISE THRUST"},
             {"B / X","BRAKE AND CANCEL COURSE / TOGGLE CRUISE"},
             {"Y / J","NEXT PLANET / FLY TO SELECTED PLANET"},
@@ -2419,14 +2644,31 @@ CockpitOverlay cockpitOverlay(const FlightInstruments& t, double aspect, std::st
 }
 namespace {
 using MapRect=XalariaMapRect;
-void mapLine(CockpitOverlay& h,MapRect r,glm::dvec2 a,glm::dvec2 b,glm::vec3 color,bool arrow=false){
+void mapLine(CockpitOverlay& h,MapRect r,glm::dvec2 a,glm::dvec2 b,glm::vec3 color,bool arrow=false,double weight=1,bool dashed=false){
     const auto delta=b-a;double lo=0,hi=1;
     const auto clip=[&](double p,double q){
         if(std::abs(p)<1e-12)return q>=0;
         const double t=q/p;if(p<0)lo=std::max(lo,t);else hi=std::min(hi,t);return lo<=hi;
     };
     if(!clip(-delta.x,a.x-r.x)||!clip(delta.x,r.x+r.w-a.x)||!clip(-delta.y,a.y-r.y)||!clip(delta.y,r.y+r.h-a.y))return;
-    b=a+delta*hi;a+=delta*lo;line(h.strokes,a.x,a.y,b.x,b.y,color);
+    b=a+delta*hi;
+    a+=delta*lo;
+    const auto length=glm::length(b-a);
+    if (weight>1 && length>1e-6) {
+        const auto side=glm::dvec2(a.y-b.y,b.x-a.x)*(weight*.5/length);
+        const auto stroke=[&](glm::dvec2 from,glm::dvec2 to) {
+            triangle(h.panels,{from-side,0},{from+side,0},{to+side,0},color);
+            triangle(h.panels,{from-side,0},{to+side,0},{to-side,0},color);
+        };
+        if (dashed) {
+            for (double at=0;at<length;at+=14)
+                stroke(glm::mix(a,b,at/length),glm::mix(a,b,std::min(length,at+8)/length));
+        } else {
+            stroke(a,b);
+        }
+    } else {
+        line(h.strokes,a.x,a.y,b.x,b.y,color);
+    }
     if(arrow&&glm::length(b-a)>24){
         const auto d=glm::normalize(b-a),p=a+(b-a)*.62,n=glm::dvec2(-d.y,d.x);
         for(int side:{-1,1})line(h.strokes,p.x,p.y,p.x-d.x*5+n.x*3*side,p.y-d.y*5+n.y*3*side,color);
@@ -2442,150 +2684,435 @@ void mapButton(CockpitOverlay& h,MapRect r,std::string_view name,bool selected=f
     line(h.strokes,r.x,r.y+r.h,r.x+r.w,r.y+r.h,color*.5f);
     fitted(h,name,r.x+12,r.y+(r.h-11)/2,r.w-24,11,color);
 }
-void mapLabel(CockpitOverlay& h,MapRect r,std::string_view name,glm::dvec2 p,glm::vec3 color,double size=10){
-    const double width=std::min(150.,(name.size()+.5)*size*6/7);
-    CockpitRect box{p.x,p.y,width,size};
-    if(p.x<r.x+3||p.y<r.y+3||p.x+width>r.x+r.w-3||p.y+size>r.y+r.h-3)return;
-    for(const auto& existing:h.textRuns)if(existing.bounds.overlaps(box))return;
-    fitted(h,name,p.x,p.y,width,size,color);
-}
-void routeLine(CockpitOverlay& h,const XalariaMapView& v,MapRect r,uint32_t from,uint32_t to,double aspect,glm::vec3 color){
-    const double grid=v.catalog->grid,scale=r.h/v.span;
-    const glm::dvec2 ga{double(from%v.catalog->grid),double(from/v.catalog->grid)},gb{double(to%v.catalog->grid),double(to/v.catalog->grid)};
-    auto delta=gb-ga;for(int k=0;k<2;++k)delta[k]-=std::round(delta[k]/grid)*grid;
-    const auto a=xalariaMapPoint(v,from,aspect),b=xalariaMapPoint(v,to,aspect),virtualB=a+delta*scale;
-    mapLine(h,r,a,virtualB,color,true);
-    if(glm::length(virtualB-b)>1)mapLine(h,r,a+(b-virtualB),b,color,true);
-}
 void liveMarker(CockpitOverlay& h,MapRect r,glm::dvec2 p){
     p=glm::clamp(p,glm::dvec2(r.x+9,r.y+9),glm::dvec2(r.x+r.w-9,r.y+r.h-9));
     const glm::dvec2 a{p.x,p.y-7},b{p.x-5,p.y+5},c{p.x+5,p.y+5};
     triangle(h.panels,{a,0},{b,0},{c,0},mint);
     mapCircle(h,r,p,12,mint*.6f);
 }
-void galaxyChart(CockpitOverlay& h,const XalariaMapView& v,double aspect){
-    const auto r=XalariaMapLayout(aspect).chart;const auto& c=*v.catalog;
-    for(const auto& [seed,s]:c.stars){
-        const auto a=xalariaMapPoint(v,seed,aspect);if(!r.contains(a))continue;
-        for(auto to:s.wormholes){
-            if(seed>to&&std::find(c.star(to).wormholes.begin(),c.star(to).wormholes.end(),seed)!=c.star(to).wormholes.end())continue;
-            auto b=xalariaMapPoint(v,to,aspect);
-            const auto raw=glm::dvec2(double(to%c.grid)-double(seed%c.grid),double(to/c.grid)-double(seed/c.grid));
-            if(std::abs(raw.x)>c.grid/2.||std::abs(raw.y)>c.grid/2.)continue;
-            mapLine(h,r,a,b,seed==v.selected||seed==v.current?glm::vec3(.14,.31,.36):glm::vec3(.045,.11,.15),v.span<45);
+const glm::vec3 atlasBg{.036,.052,.075}, chartBg{.018,.030,.049}, atlasSurface{.065,.090,.121},
+    atlasBorder{.16,.21,.28}, atlasTextColour{.91,.94,.98}, atlasSecondary{.65,.72,.81},
+    atlasShip{.57,.91,.78}, atlasSelection{1,.75,.41}, atlasRoute{.40,.77,1.};
+
+struct AtlasPalette {
+    std::string_view name;
+    glm::vec3 colour, highlight;
+};
+constexpr std::array<AtlasPalette,4> atlasPalettes{{
+    {"Charred Glass",{.96f,.30f,.15f},{1.f,.67f,.28f}},
+    {"Verdant Fog",{.28f,.77f,.37f},{.72f,.94f,.33f}},
+    {"Tidal Blue",{.22f,.57f,1.f},{.25f,.91f,.90f}},
+    {"Acid Etch",{.94f,.28f,.62f},{1.f,.91f,.34f}}
+}};
+const AtlasPalette& atlasPalette(XalariaLook look) {
+    return atlasPalettes.at(size_t(look));
+}
+void atlasPanel(CockpitOverlay& h, MapRect r, glm::vec3 fill) {
+    rect(h.panels,r.x,r.y,r.w,r.h,fill);
+}
+void atlasGradient(CockpitOverlay& h, MapRect r, glm::vec3 top, glm::vec3 bottom) {
+    auto& mesh=h.panels;
+    const auto first=uint32_t(mesh.vertices.size());
+    const auto left=float(r.x),right=float(r.x+r.w),y0=float(r.y),y1=float(r.y+r.h);
+    mesh.vertices.insert(mesh.vertices.end(),{
+        {left,y0,0,rgba(top)},{right,y0,0,rgba(top)},
+        {left,y1,0,rgba(bottom)},{right,y1,0,rgba(bottom)}
+    });
+    mesh.indices.insert(mesh.indices.end(),{first,first+1,first+2,first+1,first+3,first+2});
+}
+void atlasDisc(CockpitOverlay& h, glm::dvec2 centre, double radius, glm::vec3 core,
+               glm::vec3 rim, unsigned sides) {
+    auto& mesh=h.panels;
+    const auto first=uint32_t(mesh.vertices.size());
+    mesh.vertices.push_back({float(centre.x),float(centre.y),0,rgba(core)});
+    for (unsigned i=0;i<sides;++i) {
+        const double angle=i*2*std::numbers::pi/sides;
+        const auto point=centre+radius*glm::dvec2(std::cos(angle),std::sin(angle));
+        mesh.vertices.push_back({float(point.x),float(point.y),0,rgba(rim)});
+        mesh.indices.insert(mesh.indices.end(),{first,first+1+i,first+1+(i+1)%sides});
+    }
+}
+glm::vec3 atlasWorldColour(const XalariaWorld& world, const AtlasPalette& palette) {
+    if (world.life)
+        return glm::mix(palette.highlight,atlasShip,.63f);
+    if (world.primary>=0)
+        return glm::mix(palette.colour,atlasSecondary,.48f);
+    return world.composition==0 ? palette.highlight : glm::mix(palette.colour,atlasTextColour,.25f);
+}
+void atlasButton(CockpitOverlay& h, MapRect r, std::string_view name,
+                 bool selected=false, bool enabled=true, bool primary=false) {
+    atlasPanel(h,r,primary && enabled ? atlasSelection : selected ? glm::vec3(.14,.22,.31) : atlasSurface);
+    const auto colour = !enabled ? atlasSecondary*.68f : primary ? atlasBg : atlasTextColour;
+    const double textWidth = atlasTextWidth(name,17);
+    atlasText(h,name,r.x+std::max(9.,(r.w-textWidth)/2),r.y+(r.h-17)/2,r.w-18,17,colour);
+    if (selected && !primary)
+        atlasPanel(h,{r.x+1,r.y+r.h-2,r.w-2,2},atlasRoute);
+}
+void atlasLabel(CockpitOverlay& h, MapRect chart, std::string_view name, glm::dvec2 p,
+                glm::vec3 colour, double size, bool key=false) {
+    if (!chart.contains(p))
+        return;
+    const double w = atlasTextWidth(name,size);
+    const std::array<glm::dvec2,4> positions{{{15,-size-5},{15,8},{-w-15,-size-5},{-w-15,8}}};
+    for (const auto offset : positions) {
+        const auto at = p+offset;
+        const CockpitRect box{at.x-6,at.y-4,w+12,size+8};
+        if (!chart.contains({box.x,box.y}) || !chart.contains({box.x+box.w,box.y+box.h}))
+            continue;
+        if (std::any_of(h.textRuns.begin(),h.textRuns.end(),
+                        [&](const auto& text){return text.bounds.overlaps(box);}))
+            continue;
+        if (key)
+            atlasPanel(h,{box.x,box.y,box.w,box.h},chartBg);
+        atlasText(h,name,at.x,at.y,w+1,size,colour);
+        return;
+    }
+}
+void atlasMarker(CockpitOverlay& h, MapRect r, glm::dvec2 p, glm::vec3 colour, bool ship=false) {
+    if (!r.contains(p))
+        return;
+    const double radius=ship?8.:9.;
+    const std::array<glm::dvec2,4> points{{p+glm::dvec2(0,-radius),p+glm::dvec2(radius,0),
+                                        p+glm::dvec2(0,radius),p+glm::dvec2(-radius,0)}};
+    if (ship) {
+        triangle(h.panels,{points[0],0},{p+glm::dvec2(-7,6),0},{p+glm::dvec2(7,6),0},colour);
+        return;
+    }
+    for (size_t i=0;i<points.size();++i)
+        mapLine(h,r,points[i],points[(i+1)%points.size()],colour);
+}
+void atlasRouteLine(CockpitOverlay& h, const XalariaMapView& v, MapRect r,
+                    uint32_t from, uint32_t to, double aspect, glm::vec3 colour, bool dashed) {
+    const auto a=xalariaMapPoint(v,from,aspect), b=xalariaMapPoint(v,to,aspect);
+    const auto draw=[&](glm::dvec2 start,glm::dvec2 end) {
+        mapLine(h,r,start,end,colour,!dashed,dashed?2.:2.8,dashed);
+    };
+    if (v.span>=150) {
+        draw(a,b);
+        return;
+    }
+    const double grid=v.catalog->grid;
+    glm::dvec2 delta{double(to%v.catalog->grid)-double(from%v.catalog->grid),
+                     double(to/v.catalog->grid)-double(from/v.catalog->grid)};
+    for(int axis=0;axis<2;++axis)
+        delta[axis]-=std::round(delta[axis]/grid)*grid;
+    const auto wrappedEnd=a+delta*(r.h/v.span);
+    draw(a,wrappedEnd);
+    if(glm::length(wrappedEnd-b)>1)
+        draw(a+b-wrappedEnd,b);
+}
+void atlasRegions(CockpitOverlay& h, const XalariaMapView& v, MapRect chart, double aspect) {
+    const auto& catalog=*v.catalog;
+    const auto side=XalariaCatalog::regionSide;
+    const auto count=catalog.grid/side;
+    std::vector<bool> occupied(count*count);
+    for (const auto& [id,star] : catalog.stars)
+        occupied[id/catalog.grid/side*count+(id%catalog.grid)/side]=true;
+
+    const double scale=chart.h/v.span, period=catalog.grid*scale, tile=side*scale;
+    const bool wraps=v.span<150;
+    const glm::dvec2 chartMin{chart.x,chart.y}, chartMax{chart.x+chart.w,chart.y+chart.h};
+    const auto centre=(chartMin+chartMax)*.5;
+    const auto clipMin=wraps?glm::max(chartMin,centre-period*.5):chartMin;
+    const auto clipMax=wraps?glm::min(chartMax,centre+period*.5):chartMax;
+    const auto selected=catalog.region(v.selected);
+    for (unsigned y=0;y<count;++y) {
+        for (unsigned x=0;x<count;++x) {
+            if (!occupied[y*count+x])
+                continue;
+            const auto& palette=atlasPalette(catalog.region(y*side*catalog.grid+x*side).look);
+            const bool focused=x==selected.x&&y==selected.y;
+            const auto low=glm::mix(chartBg,palette.colour,focused?.23f:.13f);
+            const auto high=glm::mix(low,palette.highlight,focused?.125f:.080f);
+            const auto cell=xalariaMapPoint(v,{(x+.5)*side-.5,(y+.5)*side-.5},aspect);
+            // Split a region at the wrapped projection's edge, just as its
+            // stars are wrapped individually around the chart centre.
+            const int copies=wraps?1:0;
+            for (int row=-copies;row<=copies;++row) {
+                for (int col=-copies;col<=copies;++col) {
+                    const auto tileMin=cell+glm::dvec2(col,row)*period-tile*.5;
+                    const auto lo=glm::max(clipMin,tileMin+.65);
+                    const auto hi=glm::min(clipMax,tileMin+tile-.65);
+                    if (hi.x<=lo.x||hi.y<=lo.y)
+                        continue;
+                    const auto sample=[&](double value) {
+                        return glm::mix(high,low,float((value-tileMin.y)/tile));
+                    };
+                    atlasGradient(h,{lo.x,lo.y,hi.x-lo.x,hi.y-lo.y},sample(lo.y),sample(hi.y));
+                }
+            }
         }
     }
-    for(size_t n=1;n<v.route.size();++n)routeLine(h,v,r,v.route[n-1],v.route[n],aspect,amber*.65f);
-    for(size_t n=1;n<v.activeRoute.size();++n)routeLine(h,v,r,v.activeRoute[n-1],v.activeRoute[n],aspect,n<=v.activeLeg?muted*.5f:mint);
-    for(const auto& [seed,s]:c.stars){const auto p=xalariaMapPoint(v,seed,aspect);if(!r.contains(p))continue;
-        const double size=v.span<50?3.5:1.8;
-        rect(h.panels,p.x-size/2,p.y-size/2,size,size,stellarColor(s.temperature));}
-    mapCircle(h,r,xalariaMapPoint(v,v.selected,aspect),9,amber);
-    if(!v.activeRoute.empty())mapCircle(h,r,xalariaMapPoint(v,v.destination,aspect),12,mint);
-    mapLabel(h,r,c.star(v.selected).name,xalariaMapPoint(v,v.selected,aspect)+glm::dvec2(13,-18),amber,12);
-    mapLabel(h,r,c.star(v.current).name,xalariaMapPoint(v,v.current,aspect)+glm::dvec2(13,8),mint,11);
-    if(v.span<55)for(const auto& [seed,s]:c.stars)mapLabel(h,r,s.name,xalariaMapPoint(v,seed,aspect)+glm::dvec2(7,7),muted,9);
-    liveMarker(h,r,xalariaMapPoint(v,v.ship,aspect));
 }
-void systemChart(CockpitOverlay& h,const XalariaMapView& v,double aspect){
-    const auto r=XalariaMapLayout(aspect).chart;const auto& s=v.catalog->star(v.selected);
+void galaxyChart(CockpitOverlay& h,const XalariaMapView& v,double aspect) {
+    const auto r=XalariaMapLayout(aspect).chart;
+    const auto& catalog=*v.catalog;
+    atlasRegions(h,v,r,aspect);
+    if (v.showLinks) {
+        for (const auto& [id,star] : catalog.stars) {
+            const auto start=xalariaMapPoint(v,id,aspect);
+            for (auto link : star.wormholes) {
+                const auto end=xalariaMapPoint(v,link,aspect);
+                const auto delta=glm::abs(end-start);
+                if (v.span>=150 || std::max(delta.x,delta.y)<=r.h*catalog.grid/v.span*.5)
+                    mapLine(h,r,start,end,id==v.selected ? atlasSecondary*.55f : atlasBorder*.63f,
+                            v.span<32 && id==v.selected);
+            }
+        }
+    }
+    const double size = v.span>120 ? 1.6 : v.span>50 ? 2.3 : 4.2;
+    for (const auto& [id,star] : catalog.stars) {
+        const auto p=xalariaMapPoint(v,id,aspect);
+        if (!r.contains(p))
+            continue;
+        const auto& palette=atlasPalette(catalog.region(id).look);
+        const float warmth=float(std::clamp((6000.-star.temperature)/5200.,0.,1.));
+        const auto dot=glm::mix(palette.colour,palette.highlight,.15f+warmth*.25f);
+        atlasPanel(h,{p.x-size/2,p.y-size/2,size,size},dot*(v.span>120?.66f:.83f));
+    }
+    const bool active=!v.activeRoute.empty();
+    const auto next=active ? v.activeRoute[std::min(v.activeLeg+1,v.activeRoute.size()-1)] : v.selected;
+    if (v.route!=v.activeRoute)
+        for(size_t i=1;i<v.route.size();++i)
+            atlasRouteLine(h,v,r,v.route[i-1],v.route[i],aspect,atlasSelection,true);
+    for(size_t i=1;i<v.activeRoute.size();++i)
+        atlasRouteLine(h,v,r,v.activeRoute[i-1],v.activeRoute[i],aspect,
+                       i<=v.activeLeg?atlasSecondary*.55f:atlasRoute,false);
+
+    const auto ship=xalariaMapPoint(v,v.ship,aspect);
+    const auto selected=xalariaMapPoint(v,v.selected,aspect);
+    if (v.selected!=v.current)
+        atlasMarker(h,r,selected,atlasSelection);
+    if (active && v.destination!=v.selected && v.destination!=v.current)
+        atlasMarker(h,r,xalariaMapPoint(v,v.destination,aspect),atlasRoute);
+    atlasMarker(h,r,ship,atlasShip,true);
+    atlasLabel(h,r,"Ship / "+catalog.star(v.current).name,ship,atlasShip,17,true);
+    if (v.selected!=v.current)
+        atlasLabel(h,r,catalog.star(v.selected).name,selected,atlasSelection,19,true);
+    if (active && v.destination!=v.selected && v.destination!=v.current)
+        atlasLabel(h,r,catalog.star(v.destination).name,xalariaMapPoint(v,v.destination,aspect),atlasRoute,17,true);
+    if (active && next!=v.destination && next!=v.selected && next!=v.current)
+        atlasLabel(h,r,catalog.star(next).name,xalariaMapPoint(v,next,aspect),atlasRoute,16,true);
+}
+void systemChart(CockpitOverlay& h,const XalariaMapView& v,double aspect,const AtlasPalette& palette) {
+    const auto r=XalariaMapLayout(aspect).chart;
+    const auto& star=v.catalog->star(v.selected);
     const glm::dvec2 centre{r.x+r.w/2,r.y+r.h/2};
-    rect(h.panels,centre.x-6,centre.y-6,12,12,stellarColor(s.temperature));
-    mapCircle(h,r,centre,16,stellarColor(s.temperature)*.6f);
-    for(const auto& [id,w]:s.worlds){const auto p=xalariaSystemPoint(v,id,aspect);
-        if(w.primary<0)mapCircle(h,r,centre,glm::length(p-centre),{.065,.13,.18});
-        else mapLine(h,r,xalariaSystemPoint(v,uint64_t(w.primary),aspect),p,muted*.4f);
-        const double size=w.primary<0?8:4;
-        rect(h.panels,p.x-size/2,p.y-size/2,size,size,w.life?mint:w.composition==0?glm::vec3(.65,.65,.87):ice);
-        if(w.ringOuter>w.ringInner)mapCircle(h,r,p,8,amber*.65f);
-        if(v.selectedWorld==id)mapCircle(h,r,p,13,amber);
-        if(v.destination==v.selected&&v.activeWorld==id&&!v.activeRoute.empty())mapCircle(h,r,p,16,mint);
+    const auto selected=v.selectedWorld;
+    const auto arrival = v.destination==v.selected && !v.activeRoute.empty() ? v.activeWorld : std::nullopt;
+    const auto orbitFocus = selected ? selected : arrival;
+    const auto selectedPrimary = orbitFocus && star.worlds.at(*orbitFocus).primary>=0
+        ? std::optional<uint64_t>(uint64_t(star.worlds.at(*orbitFocus).primary)) : orbitFocus;
+    const auto sky=glm::mix(chartBg,palette.colour,.105f);
+    atlasPanel(h,r,sky);
+    atlasDisc(h,centre,std::min(r.w,r.h)*.48,glm::mix(sky,palette.colour,.30f),sky,64);
+    atlasDisc(h,centre,32,palette.highlight*.58f,glm::mix(sky,palette.colour,.26f),32);
+    atlasDisc(h,centre,9,glm::mix(palette.highlight,atlasTextColour,.63f),palette.highlight,24);
+    for (const auto& [id,world] : star.worlds) {
+        if (!xalariaSystemShowsWorld(v,id))
+            continue;
+        const auto p=xalariaSystemPoint(v,id,aspect);
+        const auto colour=atlasWorldColour(world,palette);
+        if (world.primary<0)
+            mapCircle(h,r,centre,glm::length(p-centre),
+                      selectedPrimary==id ? atlasSelection*.55f : colour*.43f);
+        else
+            mapLine(h,r,xalariaSystemPoint(v,uint64_t(world.primary),aspect),p,colour*.44f);
+        const double radius=world.primary<0?5.3:3.3;
+        if (!r.contains(p-glm::dvec2(radius))||!r.contains(p+glm::dvec2(radius)))
+            continue;
+        atlasDisc(h,p,radius,glm::mix(colour,atlasTextColour,.28f),colour*.78f,14);
+        if (id==selected || id==arrival)
+            atlasMarker(h,r,p,id==selected?atlasSelection:atlasRoute);
     }
-    if(v.selectedWorld)mapLabel(h,r,s.worlds.at(*v.selectedWorld).name,xalariaSystemPoint(v,*v.selectedWorld,aspect)+glm::dvec2(16,-19),amber,12);
-    for(const auto& [id,w]:s.worlds)mapLabel(h,r,w.name,xalariaSystemPoint(v,id,aspect)+glm::dvec2(9,9),w.life?mint:pearl);
-    if(v.current==v.selected)liveMarker(h,r,xalariaSystemShipPoint(v,aspect));
+    if (v.current==v.selected) {
+        const auto ship=xalariaSystemShipPoint(v,aspect);
+        atlasMarker(h,r,ship,atlasShip,true);
+        atlasLabel(h,r,"Ship",ship,atlasShip,17,true);
+    }
+    if (selected)
+        atlasLabel(h,r,star.worlds.at(*selected).name,xalariaSystemPoint(v,*selected,aspect),atlasSelection,19,true);
+    if (arrival && arrival!=selected)
+        atlasLabel(h,r,star.worlds.at(*arrival).name,xalariaSystemPoint(v,*arrival,aspect),atlasRoute,17,true);
+    for (const auto& [id,world] : star.worlds)
+        if (world.primary<0 && id!=selected && id!=arrival)
+            atlasLabel(h,r,world.name,xalariaSystemPoint(v,id,aspect),atlasTextColour,16);
+}
+void atlasLegend(CockpitOverlay& h,MapRect chart,bool galaxy,bool ship,bool active) {
+    const double y=chart.y+chart.h+12;
+    const auto show=[&](double x,std::string_view label,glm::vec3 colour) {
+        atlasPanel(h,{x,y+5,8,8},colour);
+        atlasText(h,label,x+15,y,116,15,atlasSecondary);
+    };
+    if (ship)
+        show(chart.x,"Ship",atlasShip);
+    const double selectionX=chart.x+(ship?76:0);
+    show(selectionX,galaxy?"Selection / plan":"Selected world",atlasSelection);
+    if (active)
+        show(selectionX+151,galaxy?"Active course":"Arrival world",atlasRoute);
+    if (!galaxy) {
+        constexpr std::string_view note="Orbits not to scale";
+        const double width=atlasTextWidth(note,15);
+        atlasText(h,note,chart.x+chart.w-width,y,width+1,15,atlasSecondary);
+    } else {
+        double x=chart.x;
+        for (const auto& palette : atlasPalettes) {
+            const double width=atlasTextWidth(palette.name,14);
+            atlasPanel(h,{x,y+23,8,8},palette.colour);
+            atlasText(h,palette.name,x+14,y+20,width+1,14,atlasSecondary);
+            x+=width+35;
+        }
+    }
 }
 }
-CockpitOverlay xalariaMapOverlay(const XalariaMapView& v,double aspect){
-    CockpitOverlay h;const auto& c=*v.catalog;const XalariaMapLayout l(aspect);const auto r=l.chart;const double rx=l.details.x,rw=l.details.w;
-    rect(h.panels,8,8,l.width-16,884,{.018,.032,.05});
-    text(h,"INFINITY / NAVIGATION",24,27,24,pearl);
-    const auto liveRegion = c.region(v.current);
-    fitted(h,"LIVE / "+c.star(v.current).name+" / "+std::string(xalariaLookName(liveRegion.look)),
-           24,61,l.width-48,12,mint);
-    mapButton(h,l.galaxy,"GALAXY",v.mode==XalariaMapView::Mode::Galaxy);
-    mapButton(h,l.system,"SYSTEM",v.mode==XalariaMapView::Mode::System);
-    mapButton(h,l.locate,"LOCATE");
-    mapButton(h,l.fitRoute,"FIT ROUTE");
-    mapButton(h,l.fitGalaxy,"OVERVIEW");
-    mapButton(h,l.economy,"TRADE F4");
-    fitted(h,v.mode==XalariaMapView::Mode::Galaxy?"WORMHOLE NETWORK / DRAG TO PAN / SCROLL TO ZOOM":"ORBITAL SCHEMATIC / SELECT PLANETS AND MOONS / NOT TO SCALE",r.x,131,r.w,10,muted);
-    rect(h.panels,r.x,r.y,r.w,r.h,{.006,.014,.025});
-    if(v.mode==XalariaMapView::Mode::Galaxy){
-        const double step=v.span>100?20:v.span>40?10:v.span>15?5:1;
-        const auto lo=xalariaMapGrid(v,{r.x,r.y},aspect),hi=xalariaMapGrid(v,{r.x+r.w,r.y+r.h},aspect);
-        for(double x=std::ceil(lo.x/step)*step;x<hi.x;x+=step){const double px=r.x+r.w/2+(x-v.centre.x)*r.h/v.span;mapLine(h,r,{px,r.y},{px,r.y+r.h},{.028,.065,.09});}
-        for(double y=std::ceil(lo.y/step)*step;y<hi.y;y+=step){const double py=r.y+r.h/2+(y-v.centre.y)*r.h/v.span;mapLine(h,r,{r.x,py},{r.x+r.w,py},{.028,.065,.09});}
+CockpitOverlay xalariaMapOverlay(const XalariaMapView& v,double aspect) {
+    CockpitOverlay h;
+    const auto& c=*v.catalog;
+    const XalariaMapLayout l(aspect);
+    const auto r=l.chart;
+    const bool galaxy=v.mode==XalariaMapView::Mode::Galaxy;
+    const bool active=v.flying||v.paused;
+    const auto& star=c.star(v.selected);
+    const auto& palette=atlasPalette(c.region(v.selected).look);
+    const auto selectedRow=glm::mix(atlasSurface,palette.colour,.19f);
+    const double x=l.search.x,w=l.search.w;
+    const auto add=[&](std::string_view value,double y,double size,glm::vec3 colour=atlasTextColour) {
+        atlasText(h,value,x,y,w,size,colour);
+    };
+
+    atlasPanel(h,{0,0,l.width,900},atlasBg);
+    atlasPanel(h,r,chartBg);
+    atlasPanel(h,l.details,glm::mix(glm::vec3(.049,.070,.096),palette.colour,.066f));
+    atlasText(h,"Navigation",24,24,180,32,atlasTextColour);
+    atlasText(h,"Ship in "+c.star(v.current).name,218,34,l.economy.x-236,19,atlasSecondary);
+    atlasButton(h,l.economy,"Trade");
+    atlasButton(h,l.close,"Back to flight");
+    atlasButton(h,l.galaxy,"Galaxy",galaxy);
+    atlasButton(h,l.system,"System",!galaxy);
+    atlasButton(h,galaxy?l.locate:l.links,"Locate");
+    if (galaxy) {
+        atlasButton(h,l.fitRoute,"Fit route",false,v.route.size()>1||v.activeRoute.size()>1);
+        atlasButton(h,l.fitGalaxy,"Overview");
+        atlasButton(h,l.links,"Links",v.showLinks);
         galaxyChart(h,v,aspect);
-    }else systemChart(h,v,aspect);
-    rect(h.panels,l.search.x,l.search.y,l.search.w,l.search.h,v.searchFocused?glm::vec3(.065,.13,.17):glm::vec3(.035,.07,.10));
-    fitted(h,v.query.empty()?"SEARCH STAR OR WORLD / TYPE":v.query,l.search.x+10,l.search.y+10,l.search.w-20,12,ice);
-    fitted(h,v.mode==XalariaMapView::Mode::Galaxy?"RUST PLAN / AMBER ACTIVE COURSE / TRIANGLE SHIP":"RUST SELECTION / AMBER ARRIVAL / TRIANGLE SHIP",r.x,715,r.w,9,muted);
-    const auto& nearby=c.star(v.current).wormholes;
-    const auto& results=v.query.empty()?nearby:v.matches;
-    const size_t first=v.query.empty()?0:(v.matchIndex/4)*4;
-    for(size_t i=first;i<std::min(results.size(),first+4);++i){
-        const double y=l.results.y+(i-first)*24;
-        if(!v.query.empty()&&i==v.matchIndex)rect(h.panels,l.results.x,y,l.results.w,22,{.07,.15,.17});
-        fitted(h,c.star(results[i]).name,l.results.x+8,y+5,l.results.w-70,11,results[i]==v.selected?amber:pearl);
-        const bool manual=v.wormhole&&v.wormhole->destination==results[i];
-        fitted(h,v.query.empty()?(manual?"MANUAL":"LINK"):std::to_string(i+1),l.results.x+l.results.w-55,y+5,48,9,muted);
+    } else {
+        systemChart(h,v,aspect,palette);
     }
-    if(results.empty())fitted(h,v.query.empty()?"NO OUTBOUND WORMHOLES":"NO MATCHES",rx,185,rw,12,amber);
-    if(!v.query.empty()&&!results.empty())fitted(h,"TAB / SHIFT-TAB / RESULT "+std::to_string(v.matchIndex+1)+" OF "+std::to_string(results.size()),rx,276,rw,8.5,muted);
-    const auto& s=c.star(v.selected);
-    fitted(h,s.name,rx,294,rw,21,amber);
-    fitted(h,"CLASS "+std::string("OBAFGKM").substr(s.spectralClass,1)+" / TECH "+std::to_string(s.technology)+" / "+std::to_string(s.worlds.size())+" WORLDS",rx,329,rw,11,ice);
-    fitted(h,v.current==v.selected?"CURRENT SYSTEM":v.route.empty()?"UNREACHABLE BY WORMHOLE":std::to_string(v.route.size()-1)+" HOPS FROM SHIP",rx,355,rw,11,v.route.empty()?amber:mint);
-    const auto region = c.region(v.selected);
-    fitted(h,"REGION "+std::to_string(region.x)+","+std::to_string(region.y)+" / "+
-           std::string(xalariaLookName(region.look)),rx,372,rw,9,ice);
-    fitted(h,"WORLDS / CLICK A DESTINATION",rx,386,rw,11,muted);
-    size_t index=0,row=0;
-    for(const auto& [id,w]:s.worlds){
-        if(index++<v.worldScroll)continue;if(row==l.worldRows)break;
-        const double y=l.worldY+row++*l.worldStep;
-        if(v.selectedWorld==id)rect(h.panels,rx-4,y-5,rw+8,24,{.065,.14,.17});
-        fitted(h,(w.primary>=0?"  ":"")+w.name,rx,y,rw*.64,11,v.selectedWorld==id?amber:pearl);
-        fitted(h,std::to_string(int(w.temperature))+" K"+(w.life?" LIFE":""),rx+rw*.66,y,rw*.34,9,w.life?mint:muted);
+    atlasLegend(h,r,galaxy,galaxy||v.current==v.selected,galaxy?!v.activeRoute.empty():
+                !v.activeRoute.empty()&&v.destination==v.selected);
+
+    atlasPanel(h,l.search,v.searchFocused?glm::vec3(.10,.15,.21):atlasSurface);
+    atlasText(h,v.query.empty()?"Search stars or worlds":v.query,x+12,l.search.y+12,
+              w-24-(v.query.empty()?0:l.clearSearch.w),18,v.query.empty()?atlasSecondary:atlasTextColour);
+    if (!v.query.empty()) {
+        atlasButton(h,l.clearSearch,"Clear");
+        add(v.matches.empty()?"No matching destinations":"Search results",177,19);
+        const size_t first=(v.matchIndex/l.resultRows)*l.resultRows;
+        const size_t end=std::min(v.matches.size(),first+l.resultRows);
+        for (size_t i=first;i<end;++i) {
+            const double y=l.results.y+(i-first)*l.resultStep;
+            if(i==v.matchIndex)
+                atlasPanel(h,{x,y,w,l.resultStep-4},selectedRow);
+            const auto& result=c.star(v.matches[i]);
+            const auto world=c.searchWorld(v.matches[i],v.query);
+            atlasText(h,world?result.worlds.at(*world).name+" / "+result.name:result.name,x+10,y+10,w-20,19,
+                      i==v.matchIndex?atlasSelection:atlasTextColour);
+        }
+        if (!v.matches.empty())
+            add(std::to_string(v.matchIndex+1)+" of "+std::to_string(v.matches.size())+
+                (v.matches.size()>1?"  /  Tab to cycle":""),l.results.y+(end-first)*l.resultStep+9,16,atlasSecondary);
+    } else {
+        add(star.name,181,30,atlasTextColour);
+        atlasPanel(h,{x,229,8,8},palette.colour);
+        atlasText(h,std::string(palette.name)+"  /  "+std::to_string(star.worlds.size())+" worlds",
+                  x+15,224,w-15,17,glm::mix(atlasTextColour,palette.colour,.37f));
+        add(v.current==v.selected?"Current system":v.route.empty()?"No wormhole route":
+            std::to_string(v.route.size()-1)+(v.route.size()==2?" wormhole hop":" wormhole hops"),251,17,
+            v.route.empty()?atlasSecondary:atlasShip);
+        if (galaxy) {
+            add("Wormholes from the ship",299,20);
+            const auto& nearby=c.star(v.current).wormholes;
+            if(nearby.empty())
+                add("No outbound links",337,17,atlasSecondary);
+            const size_t count=std::min<size_t>(nearby.size(),l.worldRows);
+            for(size_t i=0;i<count;++i) {
+                const double y=l.nearby.y+i*l.worldStep;
+                if(nearby[i]==v.selected)
+                    atlasPanel(h,{x,y,w,l.worldStep-4},selectedRow);
+                atlasPanel(h,{x+10,y+13,8,8},atlasPalette(c.region(nearby[i]).look).colour);
+                atlasText(h,c.star(nearby[i]).name,x+26,y+8,w-36,18,
+                          nearby[i]==v.selected?atlasSelection:atlasTextColour);
+            }
+            if(nearby.size()>count)
+                add("Show Links to see all connections",673,16,atlasSecondary);
+        } else {
+            add("Planets and moons",282,19);
+            size_t index=0,row=0;
+            for (const auto& [id,world] : star.worlds) {
+                if (index++<v.worldScroll)
+                    continue;
+                if (row==l.worldRows)
+                    break;
+                const double y=l.worlds.y+row++*l.worldStep;
+                if(v.selectedWorld==id)
+                    atlasPanel(h,{x,y,w,l.worldStep-4},selectedRow);
+                const double indent=world.primary>=0?36.:24.;
+                atlasDisc(h,{x+indent-13,y+17},world.primary>=0?2.8:3.8,
+                          atlasWorldColour(world,palette),atlasWorldColour(world,palette),12);
+                atlasText(h,world.name,x+indent,y+8,w-indent-70,18,
+                          v.selectedWorld==id?atlasSelection:atlasTextColour);
+                atlasText(h,world.primary>=0?"Moon":world.composition==0?"Gas":"Solid",
+                          x+w-57,y+10,54,14,atlasSecondary);
+            }
+            if(star.worlds.size()>l.worldRows)
+                add(std::to_string(v.worldScroll+1)+"-"+
+                    std::to_string(std::min(star.worlds.size(),size_t(v.worldScroll+l.worldRows)))+
+                    " of "+std::to_string(star.worlds.size())+"  /  Scroll for more",627,15,atlasSecondary);
+            if (v.selectedWorld) {
+                const auto& world=star.worlds.at(*v.selectedWorld);
+                add(world.name,667,22,atlasSelection);
+                add(std::to_string(int(world.temperature))+" K  /  Radius "+flightQuantity(world.radius),696,16,atlasSecondary);
+                add(std::to_string(world.stations)+(world.stations==1?" station":" stations")+
+                    (world.life?"  /  Life detected":""),721,16,atlasSecondary);
+            }
+        }
     }
-    if(s.worlds.size()>l.worldRows)fitted(h,"PGUP / PGDN / "+std::to_string(v.worldScroll+1)+"-"+std::to_string(std::min(s.worlds.size(),size_t(v.worldScroll+l.worldRows))),rx,635,rw,9,muted);
-    if(v.selectedWorld){const auto& w=s.worlds.at(*v.selectedWorld);
-        fitted(h,(w.composition==0?"GAS":"SOLID")+std::string(" / RADIUS ")+flightQuantity(w.radius),rx,659,rw,10,ice);
-        fitted(h,std::to_string(w.communities)+" COMMUNITIES / "+std::to_string(w.stations)+" STATIONS",rx,681,rw,10,muted);
+
+    const bool committed=!v.activeRoute.empty();
+    const auto& destinationStar=c.star(committed?v.destination:v.selected);
+    const auto world=committed?v.activeWorld:v.selectedWorld;
+    const auto destination=world?destinationStar.worlds.at(*world).name:destinationStar.name;
+    const std::string state=v.paused?"Paused":v.arrived?"Arrived":v.finalApproach?"Final approach":
+                            v.flying?"En route":v.route.size()>1?"Planned course":"Selected";
+    atlasPanel(h,{24,771,l.width-48,1},atlasBorder);
+    atlasText(h,state+" / "+destination,24,781,l.width-48,23,v.paused?atlasSelection:active?atlasRoute:atlasTextColour);
+    std::string status;
+    if (committed) {
+        const auto hops=v.activeRoute.size()-1;
+        status=(hops?"Leg "+std::to_string(std::min(v.activeLeg+1,hops))+" of "+std::to_string(hops):"Local flight")+
+               "  /  "+flightQuantity(v.range)+"  /  "+std::to_string(int(v.progress*100))+"%";
+        if(v.eta>=0 && v.eta<86400)
+            status+="  /  ETA "+std::to_string(int(std::ceil(v.eta)))+" s";
+    } else if (!v.message.empty() && v.message!="SELECT A WORLD OR PLOT A WORMHOLE ROUTE") {
+        status=v.message;
+    } else if(v.route.empty()) {
+        status="No wormhole route from the ship";
+    } else if(v.current==v.selected && !v.selectedWorld) {
+        status="Choose a world in System to set a course";
     }
-    const std::string destination=v.activeRoute.empty()?(v.selectedWorld?s.worlds.at(*v.selectedWorld).name:c.star(v.selected).name):
-        v.activeWorld?c.star(v.destination).worlds.at(*v.activeWorld).name:c.star(v.destination).name;
-    std::string state=v.paused?"PAUSED":v.arrived?"ARRIVED":v.finalApproach?"FINAL APPROACH":v.flying?"IN FLIGHT":"PLANNED";
-    fitted(h,state+" / "+destination,24,731,l.width-48,14,v.paused?amber:mint);
-    std::string detail;
-    if(v.flying||v.paused||v.arrived){
-        const size_t hops=v.activeRoute.size()>1?v.activeRoute.size()-1:0;
-        detail=(hops?"LEG "+std::to_string(std::min(v.activeLeg+1,hops))+" OF "+std::to_string(hops):"LOCAL FLIGHT")+
-            " / "+flightQuantity(v.range)+" / "+std::to_string(int(v.progress*100))+"%";
-        if(v.eta>=0&&v.eta<86400)detail+=" / ETA "+std::to_string(int(std::ceil(v.eta)))+"S";
-    }else detail=v.route.empty()?"NO WORMHOLE CONNECTION":v.selectedWorld?"SELECTED / "+s.worlds.at(*v.selectedWorld).name:std::to_string(v.route.size()-1)+" HOPS / SELECT A WORLD FOR A PRECISE ARRIVAL";
-    fitted(h,detail,24,760,l.width-48,11,ice);
-    rect(h.panels,24,785,l.width-48,3,{.05,.10,.13});
-    if(v.flying||v.paused||v.arrived)rect(h.panels,24,785,(l.width-48)*v.progress,3,v.paused?amber:mint);
-    mapButton(h,l.fly,v.current==v.selected?"FLY TO WORLD":"FLY PLANNED ROUTE",true,!v.route.empty()&&(v.query.empty()||!v.matches.empty())&&(v.current!=v.selected||v.selectedWorld.has_value()));
-    mapButton(h,l.pause,v.paused?"RESUME JOURNEY":"PAUSE JOURNEY",false,v.flying||v.paused);
-    mapButton(h,l.cancel,"CANCEL",false,v.flying||v.paused);
+    atlasText(h,status,24,812,l.width-48,16,atlasSecondary);
+    const bool canFly=!v.route.empty()&&(v.query.empty()||!v.matches.empty())&&(v.current!=v.selected||v.selectedWorld);
+    atlasButton(h,l.fly,v.current==v.selected?"Fly to world":"Fly route",false,canFly,!active);
+    if (active) {
+        atlasButton(h,l.pause,v.paused?"Resume":"Pause",false,true,v.paused);
+        atlasButton(h,l.cancel,"Cancel");
+    }
     if(v.wormhole&&v.wormhole->destination==v.selected)
-        mapButton(h,l.wormhole,"TARGET WORMHOLE",false);
-    fitted(h,v.message,24,855,l.width-48,11,amber);
-    fitted(h,"F2 FLIGHT / F3 GALAXY-SYSTEM / ENTER FLY / SPACE PAUSE-RESUME / CTRL-F SEARCH",24,877,l.width-48,9,muted);
-    h.hitRegions.push_back({8,8,l.width-16,884});return h;
+        atlasButton(h,l.wormhole,"Target wormhole");
+    atlasText(h,galaxy?"Drag to pan  /  Scroll to zoom":"Click a world to select it",
+              l.width-260,854,236,15,atlasSecondary);
+    h.hitRegions.push_back({0,0,l.width,900});
+    return h;
 }
 void xalariaFlightOverlay(CockpitOverlay& h,const XalariaMapView& v,double aspect){
     const double width=900*aspect;const CockpitRect box{width-342,145,318,182};
@@ -2608,6 +3135,7 @@ void xalariaFlightOverlay(CockpitOverlay& h,const XalariaMapView& v,double aspec
     std::string info=v.activeRoute.empty()?(v.route.empty()?"NO WORMHOLE ROUTE":std::to_string(v.route.size()-1)+" HOPS PLANNED"):
         (hops?"LEG "+std::to_string(std::min(v.activeLeg+1,hops))+"/"+std::to_string(hops)+" / ":"LOCAL / ")+flightQuantity(v.range)+" / "+std::to_string(int(v.progress*100))+"%";
     fitted(h,info,x,box.y+145,w,10,muted);
+    fitted(h,"F5 WALK SHIP",x,box.y+165,w,9,ice);
     h.hitRegions.push_back(box);
 }
 

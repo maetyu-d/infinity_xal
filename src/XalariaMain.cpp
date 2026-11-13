@@ -2,6 +2,7 @@
 #include "infinity/XalariaEconomy.hpp"
 #include "infinity/Cockpit.hpp"
 #include "infinity/Renderer.hpp"
+#include "infinity/ShipInterior.hpp"
 #include <SDL3/SDL.h>
 #include <algorithm>
 #include <chrono>
@@ -49,7 +50,7 @@ int main(int argc,char** argv){
             else if(a=="--space-test"){spaceProof=true;flightView=true;}
             else if(a=="--sunset-test"){sunsetProof=true;flightView=true;}
             else if(a=="--economy-test")economyProof=true;else if(a=="--checkpoint-test")checkpointProof=true;
-            else if(a=="--help"){std::cout<<"Infinity / Xalaria 0.12.1\nF4 economy. F2 map/flight. F3 galaxy/system. Type to search; Tab cycles results. Click worlds; Enter flies. Space pauses/resumes a course.\nMap: drag pan, scroll zoom, Home locate ship, Page Up/Down world list.\nFlight: WASD and Q/E thrust, arrows turn, U/O or V/Z roll left/right, hold R to level, C mouse steering, hold Shift and move mouse to look around, left Option/Alt boost, B cancel/brake, X cruise, H target manual wormhole, J fly selected world, Y next world, L land, G gear, F1 help.\n--catalog FILE --data DIR --start SEED --fresh --frames N --capture-dir DIR --flight-view --journey-test --atlas-test --economy-test\n";return 0;}
+            else if(a=="--help"){std::cout<<"Infinity / Xalaria 0.14.1\nF4 economy. F2 map/flight. F3 galaxy/system. Type to search; Tab cycles results. Click worlds; Enter flies. Space pauses/resumes a course.\nMap: drag pan, scroll zoom, Home locate ship, Page Up/Down world list.\nFlight: WASD and Q/E thrust, arrows turn, U/O or V/Z roll left/right, hold R to level, C mouse steering, hold Shift and move mouse to look around, left Option/Alt boost, B cancel/brake, X cruise, H target manual wormhole, J fly selected world, Y next world, L land, G gear, F1 help.\nShip interior: F5 stand up, WASD walk, mouse or arrows look, Shift walk faster, E beside the seat to sit.\n--catalog FILE --data DIR --start SEED --fresh --frames N --capture-dir DIR --flight-view --journey-test --atlas-test --economy-test\n";return 0;}
             else throw std::runtime_error("Unknown option: "+a);
         }
         if(!explicitData&&bundle){char* pref=SDL_GetPrefPath("Infinity","Xalaria");if(!pref)throw std::runtime_error(SDL_GetError());save=pref;SDL_free(pref);}
@@ -120,7 +121,7 @@ int main(int argc,char** argv){
         if(!fresh&&!routeSave.empty()&&!course.restore(routeSave))throw std::runtime_error("The saved route could not be read; it has been preserved");map.open=!flightView&&!economyProof;
         if(journeyProof){course.selectSystem(catalog->star(map.current).wormholes.at(0));if(!course.fly())throw std::runtime_error("Test departure refused");}
         if(atlasProof){course.selectSystem(catalog->star(map.current).wormholes.at(0));xalariaFitRoute(map,1.6);}
-        SDL_SetAppMetadata("Infinity / Xalaria","0.12.1","org.infinity.xalaria");
+        SDL_SetAppMetadata("Infinity / Xalaria","0.14.1","org.infinity.xalaria");
         if(!SDL_Init(SDL_INIT_VIDEO|SDL_INIT_EVENTS))throw std::runtime_error(SDL_GetError());
         window=SDL_CreateWindow("INFINITY / XALARIA",1440,900,SDL_WINDOW_RESIZABLE);
         if(!window)throw std::runtime_error(SDL_GetError());SDL_SetWindowMinimumSize(window,960,640);SDL_SyncWindow(window);
@@ -129,11 +130,20 @@ int main(int argc,char** argv){
             int pw,ph;SDL_GetWindowSizeInPixels(window,&pw,&ph);renderer.resize(pw,ph);
             bool running=true,looking=false,searching=false,contactsExpanded=false,dragging=false,moved=false,querySelected=false,swallowSpace=false;
             bool cockpitLookActive = false;
+            bool interiorMouse = true, interiorHelp = false;
+            ShipInterior interior;
+            renderer.setShipInterior(&interior);
             glm::dvec2 cockpitLook{};
             glm::dvec2 mouse{},dragStart{},dragCentre{},cursor{};unsigned frame=0,arrivedFrame=0,manualArrivals=0;
             auto last=std::chrono::steady_clock::now();
             if(!captures.empty())std::filesystem::create_directories(captures);
-            const auto syncMouseMode = [&]() { SDL_SetWindowRelativeMouseMode(window, looking || cockpitLookActive); };
+            const auto syncMouseMode = [&]() {
+                const bool focus=SDL_GetWindowFlags(window)&SDL_WINDOW_INPUT_FOCUS;
+                const bool deck=interior.walking() && interiorMouse && !interiorHelp && !map.open && !economy.view.open;
+                const bool capture=focus && (looking || cockpitLookActive || deck);
+                if (SDL_GetWindowRelativeMouseMode(window)!=capture)
+                    SDL_SetWindowRelativeMouseMode(window,capture);
+            };
             const auto setCockpitLookActive = [&](bool active) {
                 if (cockpitLookActive == active) return;
                 cockpitLookActive = active;
@@ -144,6 +154,15 @@ int main(int argc,char** argv){
                 looking = cockpitLookActive = dragging = false;
                 cockpitLook = mouse = {};
                 syncMouseMode();
+            };
+            const auto useSeat = [&]() {
+                if (!interior.useSeat())
+                    return;
+                interiorMouse=true;
+                interiorHelp=false;
+                contactsExpanded=false;
+                renderer.closeCockpitHelp();
+                releaseMouse();
             };
             const auto saveFlight=[&](){
                 auto port=pendingPort?pendingPort:economy.dockedPlace()?economy.dockedPlace():pilot.instruments().docking.active?serviceDestination:std::nullopt;
@@ -251,32 +270,50 @@ int main(int argc,char** argv){
                 if(l.action.contains(point))economyAction(0);else if(l.secondary.contains(point))economyAction(1);else if(l.tertiary.contains(point))economyAction(2);
             };
             const auto previewVisible=[&](){map.centre={double(map.selected%catalog->grid),double(map.selected/catalog->grid)};};
+            const auto locateShip=[&](){
+                if(map.mode==XalariaMapView::Mode::System){
+                    course.search("");
+                    course.selectSystem(map.current);
+                    if(map.currentWorld)course.selectWorld(*map.currentWorld);
+                }
+                map.centre=map.ship;
+                map.span=26;
+            };
             const auto pick=[&](glm::dvec2 point,bool twice){
                 const XalariaMapLayout l(aspect());
-                if(XalariaMapRect{900*aspect()-342,14,318,60}.contains(point)||l.economy.contains(point)){openEconomy();return;}
+                const bool galaxy=map.mode==XalariaMapView::Mode::Galaxy;
+                if(l.close.contains(point)){toggleMap();return;}
+                if(l.economy.contains(point)){openEconomy();return;}
                 if(l.galaxy.contains(point)){map.mode=XalariaMapView::Mode::Galaxy;return;}
                 if(l.system.contains(point)){map.mode=XalariaMapView::Mode::System;return;}
-                if(l.locate.contains(point)){course.search("");course.selectSystem(map.current);if(map.currentWorld)course.selectWorld(*map.currentWorld);map.centre=map.ship;map.span=26;return;}
-                if(l.fitRoute.contains(point)){map.mode=XalariaMapView::Mode::Galaxy;xalariaFitRoute(map,aspect());return;}
-                if(l.fitGalaxy.contains(point)){map.mode=XalariaMapView::Mode::Galaxy;map.centre={100,100};map.span=210;return;}
+                if((galaxy?l.locate:l.links).contains(point)){locateShip();return;}
+                if(galaxy&&l.fitRoute.contains(point)){xalariaFitRoute(map,aspect());return;}
+                if(galaxy&&l.fitGalaxy.contains(point)){map.centre={100,100};map.span=210;return;}
+                if(galaxy&&l.links.contains(point)){map.showLinks=!map.showLinks;return;}
                 if(l.fly.contains(point)){pendingPort.reset();serviceDestination.reset();course.fly();return;}
-                if(l.pause.contains(point)){if(map.paused)course.resume();else course.pause();return;}
-                if(l.cancel.contains(point)){course.cancel();return;}
+                if((map.flying||map.paused)&&l.pause.contains(point)){if(map.paused)course.resume();else course.pause();return;}
+                if((map.flying||map.paused)&&l.cancel.contains(point)){course.cancel();return;}
                 if(map.wormhole&&map.wormhole->destination==map.selected&&l.wormhole.contains(point)){targetWormhole();return;}
+                if(!map.query.empty()&&l.clearSearch.contains(point)){course.search("");querySelected=false;map.searchFocused=true;return;}
                 if(l.search.contains(point)){map.searchFocused=true;return;}
                 map.searchFocused=false;
-                if(l.results.contains(point)){
-                    const auto& ids=map.query.empty()?catalog->star(map.current).wormholes:map.matches;
-                    const size_t first=map.query.empty()?0:(map.matchIndex/4)*4;
-                    const size_t row=size_t((point.y-l.results.y)/24)+first;
-                    if(row<ids.size()){if(!map.query.empty()){map.matchIndex=row;course.nextMatch(0);}else course.selectSystem(ids[row]);previewVisible();}
+                if(!map.query.empty()&&l.results.contains(point)){
+                    const size_t first=(map.matchIndex/l.resultRows)*l.resultRows;
+                    const size_t row=first+size_t((point.y-l.results.y)/l.resultStep);
+                    if(row<map.matches.size()){map.matchIndex=row;course.nextMatch(0);previewVisible();}
                     return;
                 }
-                if(point.x>=l.details.x&&point.x<l.details.x+l.details.w&&point.y>=l.worldY-5&&point.y<l.worldY+l.worldRows*l.worldStep-5){
-                    const size_t index=size_t((point.y-(l.worldY-5))/l.worldStep)+map.worldScroll;
+                if(map.query.empty()&&galaxy&&l.nearby.contains(point)){
+                    const auto& ids=catalog->star(map.current).wormholes;
+                    const size_t row=size_t((point.y-l.nearby.y)/l.worldStep);
+                    if(row<ids.size()){course.selectSystem(ids[row]);previewVisible();if(twice)map.mode=XalariaMapView::Mode::System;}
+                    return;
+                }
+                if(map.query.empty()&&!galaxy&&l.worlds.contains(point)){
+                    const size_t index=size_t((point.y-l.worlds.y)/l.worldStep)+map.worldScroll;
                     const auto& worlds=catalog->star(map.selected).worlds;if(index<worlds.size()){auto it=worlds.begin();std::advance(it,index);course.search("");course.selectWorld(it->first);map.mode=XalariaMapView::Mode::System;if(twice)course.fly();}return;
                 }
-                if(map.mode==XalariaMapView::Mode::Galaxy){
+                if(galaxy){
                     if(const auto id=xalariaPickStar(map,point,aspect())){course.search("");course.selectSystem(*id);if(twice)map.mode=XalariaMapView::Mode::System;}
                 }else if(const auto id=xalariaPickWorld(map,point,aspect())){course.search("");course.selectWorld(*id);if(twice)course.fly();}
             };
@@ -299,7 +336,10 @@ int main(int argc,char** argv){
                         cursor=canvas(e.motion.x,e.motion.y);
                         if (!map.open && !economy.view.open) {
                             const glm::dvec2 delta(e.motion.xrel, e.motion.yrel);
-                            if (cockpitLookActive) {
+                            if (interior.walking()) {
+                                if (interiorMouse && !interiorHelp && SDL_GetWindowRelativeMouseMode(window))
+                                    interior.look(delta);
+                            } else if (cockpitLookActive) {
                                 cockpitLook += delta * .0028;
                                 cockpitLook.x = std::remainder(cockpitLook.x, 2 * std::numbers::pi);
                                 cockpitLook.y = std::clamp(cockpitLook.y, glm::radians(-78.), glm::radians(78.));
@@ -315,11 +355,11 @@ int main(int argc,char** argv){
                         if(economy.view.open){selectEconomyRow(e.wheel.y>0?-1:1);}
                         else if(map.open){
                             const auto l=XalariaMapLayout(aspect());
-                            if(cursor.x>=l.details.x&&cursor.y>=l.worldY&&cursor.y<660){
+                            if(map.mode==XalariaMapView::Mode::System&&map.query.empty()&&l.worlds.contains(cursor)){
                                 const auto count=catalog->star(map.selected).worlds.size();const auto maximum=count>l.worldRows?count-l.worldRows:0;
                                 map.worldScroll=unsigned(std::clamp(long(map.worldScroll)-long(std::round(e.wheel.y)),0L,long(maximum)));
-                            }else if(map.mode==XalariaMapView::Mode::Galaxy)xalariaZoomMap(map,e.wheel.y,l.chart.contains(cursor)?cursor:glm::dvec2(l.chart.x+l.chart.w/2,l.chart.y+l.chart.h/2),aspect());
-                        }else pilot.adjustDrive(e.wheel.y);
+                            }else if(map.mode==XalariaMapView::Mode::Galaxy&&l.chart.contains(cursor))xalariaZoomMap(map,e.wheel.y,cursor,aspect());
+                        }else if(!interior.walking())pilot.adjustDrive(e.wheel.y);
                     }else if(e.type==SDL_EVENT_MOUSE_BUTTON_DOWN&&e.button.button==SDL_BUTTON_LEFT&&!looking&&!cockpitLookActive){
                         cursor=canvas(e.button.x,e.button.y);
                         if(map.open&&!economy.view.open){dragStart=cursor;dragCentre=map.centre;dragging=xalariaMapContains(cursor,aspect());moved=false;}
@@ -327,7 +367,9 @@ int main(int argc,char** argv){
                         cursor=canvas(e.button.x,e.button.y);
                         if(economy.view.open){economyPick(cursor);}
                         else if(map.open){if(!moved)pick(cursor,e.button.clicks>=2);dragging=false;moved=false;}
-                        else{
+                        else if(interior.walking()){
+                            if(!interiorHelp){interiorMouse=true;syncMouseMode();}
+                        }else{
                             const XalariaMapRect badge{900*aspect()-342,145,318,182};
                             if(badge.contains(cursor)){toggleMap();continue;}
                             if(XalariaMapRect{900*aspect()-342,342,318,68}.contains(cursor)){openEconomy();continue;}
@@ -344,7 +386,14 @@ int main(int argc,char** argv){
                         if(key==SDL_SCANCODE_F4)openEconomy();
                         else if(key==SDL_SCANCODE_F2)toggleMap();
                         else if(key==SDL_SCANCODE_F3){economy.view.open=false;map.mode=map.mode==XalariaMapView::Mode::Galaxy?XalariaMapView::Mode::System:XalariaMapView::Mode::Galaxy;if(!map.open)toggleMap();}
-                        else if(key==SDL_SCANCODE_ESCAPE){if(economy.view.open)economy.view.open=false;else if(looking||cockpitLookActive)releaseMouse();else if(map.open)map.open=false;else running=false;}
+                        else if(key==SDL_SCANCODE_ESCAPE){
+                            if(economy.view.open)economy.view.open=false;
+                            else if(map.open)map.open=false;
+                            else if(interior.walking()){
+                                interiorMouse=false;interiorHelp=false;renderer.closeCockpitHelp();releaseMouse();
+                            }else if(looking||cockpitLookActive)releaseMouse();
+                            else running=false;
+                        }
                         else if(economy.view.open){
                             auto& v=economy.view;
                             if(key>=SDL_SCANCODE_1&&key<=SDL_SCANCODE_5){v.page=XEconomyView::Page(key-SDL_SCANCODE_1);v.good=0;}
@@ -367,13 +416,13 @@ int main(int argc,char** argv){
                             }else if(key==SDL_SCANCODE_R)economy.refuel();
                         }
                         else if(key==SDL_SCANCODE_SPACE&&(map.flying||map.paused)){swallowSpace=true;if(map.paused)course.resume();else course.pause();}
-                        else if(key==SDL_SCANCODE_TAB&&!map.open&&control)contactsExpanded=!contactsExpanded;
+                        else if(key==SDL_SCANCODE_TAB&&!map.open&&!interior.walking()&&control)contactsExpanded=!contactsExpanded;
                         else if(map.open){
                             if(control&&key==SDL_SCANCODE_F){map.searchFocused=true;querySelected=true;}
                             else if(control&&key==SDL_SCANCODE_A){map.searchFocused=true;querySelected=true;}
                             else if(key==SDL_SCANCODE_BACKSPACE){auto q=map.query;if(querySelected||control)q.clear();else eraseCharacter(q);course.search(q);querySelected=false;if(!map.matches.empty())previewVisible();}
                             else if(key==SDL_SCANCODE_TAB){course.nextMatch((e.key.mod&SDL_KMOD_SHIFT)?-1:1);if(!map.matches.empty())previewVisible();}
-                            else if(key==SDL_SCANCODE_HOME){map.centre=map.ship;map.span=26;}
+                            else if(key==SDL_SCANCODE_HOME)locateShip();
                             else if(key==SDL_SCANCODE_LEFT)map.centre.x-=map.span*.12;
                             else if(key==SDL_SCANCODE_RIGHT)map.centre.x+=map.span*.12;
                             else if(key==SDL_SCANCODE_UP)map.centre.y-=map.span*.12;
@@ -381,7 +430,11 @@ int main(int argc,char** argv){
                             else if(key==SDL_SCANCODE_PAGEUP)map.worldScroll=map.worldScroll>5?map.worldScroll-5:0;
                             else if(key==SDL_SCANCODE_PAGEDOWN){const auto count=catalog->star(map.selected).worlds.size();const auto rows=XalariaMapLayout(aspect()).worldRows;map.worldScroll=std::min(unsigned(count>rows?count-rows:0),map.worldScroll+5);}
                             else if(key==SDL_SCANCODE_RETURN){pendingPort.reset();serviceDestination.reset();course.fly();}
+                        }else if(interior.walking()){
+                            if(key==SDL_SCANCODE_E)useSeat();
+                            else if(key==SDL_SCANCODE_F1){interiorHelp=!interiorHelp;renderer.toggleCockpitHelp();syncMouseMode();}
                         }else{
+                            if(key==SDL_SCANCODE_F5){useSeat();continue;}
                             if(key==SDL_SCANCODE_C){looking=!looking;mouse={};syncMouseMode();}
                             else if(key==SDL_SCANCODE_LSHIFT||key==SDL_SCANCODE_RSHIFT)setCockpitLookActive(true);
                             else if(key==SDL_SCANCODE_F1)renderer.toggleCockpitHelp();
@@ -396,10 +449,27 @@ int main(int argc,char** argv){
                         }
                     }
                 }
+                if(interiorHelp&&(map.open||economy.view.open)){
+                    interiorHelp=false;
+                    renderer.closeCockpitHelp();
+                }
+                if(interior.walking())
+                    syncMouseMode();
                 if(map.open&&!economy.view.open&&!searching){SDL_StartTextInput(window);searching=true;}else if((!map.open||economy.view.open)&&searching){SDL_StopTextInput(window);searching=false;}
                 HelmInput input;
+                glm::dvec2 steps{};
+                bool fastWalk=false;
                 if(!smoke&&!map.open&&!economy.view.open&&(SDL_GetWindowFlags(window)&SDL_WINDOW_INPUT_FOCUS)){
                     const auto* keys=SDL_GetKeyboardState(nullptr);
+                    if(interior.walking()){
+                        if(!interiorHelp){
+                            steps={double(keys[SDL_SCANCODE_D])-keys[SDL_SCANCODE_A],
+                                   double(keys[SDL_SCANCODE_W])-keys[SDL_SCANCODE_S]};
+                            fastWalk=keys[SDL_SCANCODE_LSHIFT]||keys[SDL_SCANCODE_RSHIFT];
+                            interior.look(glm::dvec2(double(keys[SDL_SCANCODE_RIGHT])-keys[SDL_SCANCODE_LEFT],
+                                                     double(keys[SDL_SCANCODE_DOWN])-keys[SDL_SCANCODE_UP])*dt*615.);
+                        }
+                    }else{
                     input.throttle=double(keys[SDL_SCANCODE_W])-keys[SDL_SCANCODE_S];input.strafe=double(keys[SDL_SCANCODE_D])-keys[SDL_SCANCODE_A];
                     input.lift=double(keys[SDL_SCANCODE_E])-keys[SDL_SCANCODE_Q];input.yaw=double(keys[SDL_SCANCODE_RIGHT])-keys[SDL_SCANCODE_LEFT];
                     input.pitch=double(keys[SDL_SCANCODE_DOWN])-keys[SDL_SCANCODE_UP];
@@ -410,9 +480,11 @@ int main(int argc,char** argv){
                         input.roll = course.levelRollInput();
                     input.boost=keys[SDL_SCANCODE_LALT];input.precision=keys[SDL_SCANCODE_LCTRL];
                     if(map.flying&&(input.throttle||input.strafe||input.lift||input.yaw||input.pitch||input.roll))course.pause();
+                    }
                 }
                 cache.beginFrame();flight.observeGalaxy(renderer.galaxySamples());
                 const bool crossed=course.advanceFlight(resolveHelmInput(input,mouse,dt),dt,renderer.submittedGeometry(nav.anchor));mouse={};
+                interior.step(steps,dt,fastWalk,pilot.ship().flightSeconds);
                 if(crossed){++manualArrivals;pendingPort.reset();serviceDestination.reset();}
                 economy.useManualFuel(dt,std::min(1.,std::abs(input.throttle)+std::abs(input.strafe)+std::abs(input.lift)),pilot.ship().cruise&&!map.flying);
                 pilot.setSystemAuthority(economy.fuel()>.001?1.:.15,1.);

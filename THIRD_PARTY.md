@@ -15,8 +15,11 @@
 | oneTBB | 2022.1.0 | Apache-2.0 | Background generation |
 | Zstandard | 1.5.7 | BSD-3-Clause or GPL-2.0 | Sparse payload compression (BSD option) |
 | SQLite | system, >=3.35 | Public domain | Sparse modifications and explicit saved state |
+| Inter | Source font hash in `src/AtlasFontData.hpp` | SIL Open Font License 1.1 | Embedded navigation-map lettering |
 
 Major upstream licences are copied into `third_party_licenses/`. Additional bgfx/bimg bundled libraries retain their notices in `external/bgfx/3rdparty`, `external/bimg/3rdparty` and `external/bx/3rdparty`; those notices must accompany redistribution where required. The build includes bgfx renderer code, bx, bimg and its ASTC support; unused tools are disabled. This project does not relicense third-party source or precompiled shaders.
+
+The navigation map uses raster glyphs generated from Inter with `tools/generate_atlas_font.py`. The source font and licence are available from the [Google Fonts repository](https://github.com/google/fonts/tree/main/ofl/inter).
 
 The ORIGINAL-mode shader binaries are unmodified files from the pinned bgfx archive. `vs_debugdraw_lines`/`fs_debugdraw_lines` carry vertex colours; `vs_instancing`/`fs_instancing` use a per-instance matrix and colour. The renderer consumes their existing layouts. Native Metal, GLSL, SPIR-V and Direct3D binaries come from the same pinned revision as the renderer. Shader sources and their upstream build tools are available in the [bgfx repository](https://github.com/bkaradzic/bgfx/tree/fe9bbdec66110f8626b9251a4947fc336ac3f62c).
 

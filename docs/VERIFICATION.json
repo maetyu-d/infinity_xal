@@ -11,10 +11,10 @@
   "runtime": "C++20, SDL3, bgfx Metal, Infinity Hyperion renderer",
   "platform": "macOS 26+, arm64",
   "linked_dependencies": "system libraries and frameworks only",
-  "packaged_app_test": "passed: signed Mac app rendered the rings centred on Stips, a solid moon",
-  "native_keyboard_search": "verified visually in packaged app",
+  "packaged_app_test": "passed: signed Mac app loaded the interior and flew through the Oylanhai\u2013Ziksa gate with four units of cargo",
+  "native_keyboard_search": "verified with native SDL text input, result selection, and Clear",
   "signature": "ad hoc codesign verification passed",
-  "version": "0.12.1",
+  "version": "0.14.1",
   "integration_tests": "passed: immutable destination, two-hop route, final-world handoff, pause/resume, route save/restore, cockpit selection, world search, frame-invariant position, map picking, anchored zoom",
   "test_suites": 3,
   "economy_integration_tests": "passed: physical docking access, conserved transactions, stock and cargo limits, sealed charter, real berth departure and wormhole haul, fuel progress, save validation, construction, vault storage, farms and guards, finite deposits, restoration, culture, galleries, offline settlement, deadlines and UI bounds",
@@ -33,7 +33,7 @@
   "bulk_commodities": 12,
   "economy_source": "https://www.xalaria.com/handbook/",
   "economy_limits": "Offline public-rule implementation with local balance; full server economy not reproduced. See ECONOMY.md.",
-  "binary_sha256": "7abefc8b4977f30d03d3c51da465e5368ffdced678fbca1caaf060ab8be17e45",
+  "binary_sha256": "67e6c45ea26d15d514a447ddaef49e58c7b69cca58361dd501bca49bded4fda0",
   "graphics_style": "Charred Glass, Verdant Fog, Tidal Blue and Acid Etch regional looks with depth-aware camera optics",
   "graphics_scope": [
     "world pigments",
@@ -52,7 +52,7 @@
     "GLSL"
   ],
   "shader_embedding": "Project-local checked-in shaders, source/binary SHA-256 validated at CMake configuration",
-  "shader_manifest_sha256": "2323923e40a6c3b2f15d13dd4a1bb1e5e4798488c4639bc8ce8d044132723664",
+  "shader_manifest_sha256": "2042ca3b0cdc39da2f47bd8cb2c14bb84d4d2439e8187d8304278b5aa9fd8304",
   "native_graphics_checks": {
     "acid_space": 145,
     "acid_orbit": 135,
@@ -189,7 +189,7 @@
   },
   "baseline_reflection_verification_version": "0.4.1",
   "baseline_space_glass_verification_version": "0.4.1",
-  "build_binary_sha256": "caee37500109c34e85e9f9b268dfa65902dae070db08f7dc971330c6f7f72178",
+  "build_binary_sha256": "4868a657026ff9d86b100391b94d3f3e6ca7b833585804eae4a60f867dc0a545",
   "baseline_native_graphics_checks": {
     "version": "0.5.0",
     "lens_open_space_on": 160,
@@ -490,6 +490,102 @@
       "Frak from both sides of its ring plane and from the pole",
       "Efbip, a solid planet",
       "Stips, a solid moon, in the signed game"
-    ]
+    ],
+    "version": "0.12.1"
+  },
+  "atlas_readability_verification": {
+    "platform_tested": "macOS Metal",
+    "test_suites": "3 of 3 passed",
+    "shader_targets_compiled": [
+      "Metal",
+      "SPIR-V",
+      "GLSL"
+    ],
+    "tested_layout_aspects": [
+      1.0,
+      1.25,
+      1.6,
+      2.2
+    ],
+    "native_minimum_window": [
+      960,
+      640
+    ],
+    "native_input_checks": [
+      "Galaxy and System tabs, optional wormhole links, overview, route framing and ship location",
+      "World search, Clear, outbound wormhole selection, world list and moon picking",
+      "Back to flight, F2, Trade and F4",
+      "Fly, pause, resume and cancel course"
+    ],
+    "updated_readme_screenshots": [
+      "Atlas.png",
+      "System.png"
+    ],
+    "version": "0.13.0"
+  },
+  "atlas_colour_verification": {
+    "platform_tested": "macOS Metal",
+    "test_suites": "3 of 3 passed",
+    "regional_system_views": [
+      "Oylanhai",
+      "Ziksa",
+      "Phiat",
+      "Eudaya"
+    ],
+    "galaxy_views": [
+      "whole galaxy overview",
+      "regional boundary near Oylanhai and Ziksa",
+      "wrapped map edges"
+    ],
+    "native_minimum_window": [
+      960,
+      640
+    ],
+    "native_navigation_checks": 20,
+    "updated_readme_screenshots": [
+      "Atlas.png",
+      "System.png",
+      "Galaxy-Regions.png"
+    ],
+    "version": "0.13.1"
+  },
+  "ship_interior_verification": {
+    "platform_tested": "macOS Metal",
+    "test_suites": "3 of 3 passed",
+    "native_walk_test_frames": 778,
+    "rooms": [
+      "Cockpit",
+      "Main passage",
+      "Crew quarters",
+      "Systems alcove",
+      "Cargo bay"
+    ],
+    "native_walk_checks": [
+      "F5 leaves the seat and captures mouse input",
+      "Walk through the hatch and reach every room",
+      "Walls and fixtures constrain walking",
+      "Walking and mouse look send neutral helm input",
+      "Atlas preserves the walking position and releases mouse input",
+      "Walk back to the seat, use E to sit and apply thrust again",
+      "Plotted course keeps flying while the player walks"
+    ],
+    "version": "0.14.0"
+  },
+  "crew_silhouette_verification": {
+    "platform_tested": "macOS Metal",
+    "shader_targets_compiled": [
+      "Metal",
+      "SPIR-V",
+      "GLSL"
+    ],
+    "test_suites": "3 of 3 passed",
+    "native_walk_test_frames": 778,
+    "crew_work_areas": [
+      "Crew quarters",
+      "Systems alcove",
+      "Cargo bay"
+    ],
+    "presentation": "Opaque three-dimensional silhouettes with animated heads and arms, soft edge lighting, and ordinary cabin depth",
+    "updated_readme_screenshot": "Ship-Interior.png"
   }
 }

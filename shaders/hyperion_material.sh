@@ -93,6 +93,23 @@ vec3 shadeCabin(vec3 base,float alpha,vec3 p,vec3 local,vec3 N,vec3 V,vec3 L){
  vec3 downLight=normalize(toLamp+vec3(1e-12));
  float fill=(.04+.17*max(dot(N,downLight),0.))/(.60+range2*1.7);
  lit+=body*(vec3(.044,.064,.079)+vec3(1.,.84,.63)*fill);
+ if(p.z>1.16){
+  bool bay=p.z>3.70;
+  bool alcove=abs(p.x)>.72 && !bay;
+  vec3 deckLight=vec3(p.x<0.?-1.:1.,1.,1.);
+  deckLight.x*=bay?.76:alcove?1.55:.49;
+  deckLight.y=bay?1.12:.91;
+  deckLight.z=bay?clamp(4.45+floor((p.z-3.95)/1.04+.5)*1.04,4.45,6.53):
+                   alcove?clamp(p.z,2.05,3.19):clamp(p.z,1.45,3.53);
+  vec3 deckRay=deckLight-p;
+  float distance2=dot(deckRay,deckRay);
+  float lambert=max(0.,dot(N,normalize(deckRay+vec3(1e-8))));
+  lit+=body*(vec3(.060,.080,.092)+vec3(1.,.81,.57)*(.17+lambert*.76)/(.76+distance2*1.05));
+  float floorRail=exp(-abs(abs(p.x)-.54)*8.)*exp(-abs(p.y+1.10)*5.3);
+  lit+=body*vec3(.075,.46,.55)*floorRail*.27;
+  if(alcove && p.x>.75)
+   lit+=body*vec3(.16,.46,.82)*exp(-dot(p-vec3(1.39,-.11,2.65),p-vec3(1.39,-.11,2.65))*.87)*.33;
+ }
  vec3 screenPosition=vec3(clamp(p.x,-.35,.35),-.420,-1.176);
  vec3 screenRay=screenPosition-p;
  float screenRange=dot(screenRay,screenRay);
@@ -122,6 +139,15 @@ void main(){
  if(primitive< -1.5){float nv=dot(N,V);if(nv<.025)N=normalize(N+V*(.025-nv));}
  else if(dot(N,V)<0.)N=-N;
  if(u_materialDomain.x>4.5 && u_materialDomain.x<5.5 && u_materialDomain.y>.5){
+  if(u_materialDomain.w>.5){
+   // Dark suits retain a soft edge at grazing angles. Their ordinary
+   // cabin depth lets doorways, furniture and other crew occlude them.
+   float edge=1.-smoothstep(.035,.61,clamp(dot(N,V),0.,1.));
+   float top=.52+.48*max(N.y,0.);
+   vec3 rim=mix(u_hyperion[1].rgb,vec3(.67,.79,.82),.24);
+   vec3 suit=base*(.61+.29*max(N.y,0.))+rim*(edge*edge*top*.74+edge*.044);
+   writeSurface(suit,1.,N,.90,0.);return;
+  }
   writeSurface(shadeCabin(base,v_color0.a,v_position,v_pattern,N,V,L),1.,N,.44,0.);return;
  }
  if(u_materialDomain.x>3.5 && u_materialDomain.x<4.5){

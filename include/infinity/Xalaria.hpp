@@ -32,6 +32,7 @@ std::string_view xalariaLookName(XalariaLook);
 // An immutable factual snapshot. Source IDs are addresses; map distance is never a wormhole edge.
 class XalariaCatalog {
   public:
+    static constexpr unsigned regionSide = 20;
     explicit XalariaCatalog(const std::filesystem::path&);
     std::string fingerprint;
     unsigned grid=200;
@@ -42,6 +43,7 @@ class XalariaCatalog {
     XalariaRegion region(uint32_t seed) const;
     std::vector<uint32_t> route(uint32_t from,uint32_t to) const;
     std::vector<uint32_t> search(std::string_view query,size_t limit=20) const;
+    std::optional<uint64_t> searchWorld(uint32_t system,std::string_view query) const;
     glm::dvec3 mapPosition(uint32_t seed) const;
     Address address(uint32_t seed) const;
     void apply(Node&,const Node& parent) const;
@@ -74,6 +76,7 @@ struct XalariaMapView {
     std::optional<XalariaWormholeMouth> wormhole;
     uint32_t destination=0;
     bool flying=false, paused=false, finalApproach=false, arrived=false, searchFocused=true;
+    bool showLinks=false;
     double progress=0, range=0, eta=-1, seconds=0;
     glm::dvec2 ship{100,100};
     glm::dvec3 systemShip{};
@@ -86,9 +89,11 @@ struct XalariaMapRect {
 };
 struct XalariaMapLayout {
     double width;
-    XalariaMapRect chart,details,search,results,galaxy,system,locate,fitRoute,fitGalaxy,economy,fly,pause,cancel,wormhole;
-    double worldY=414,worldStep=27;
-    unsigned worldRows=8;
+    XalariaMapRect chart, details, search, clearSearch, results, nearby, worlds;
+    XalariaMapRect galaxy, system, locate, fitRoute, fitGalaxy, links, economy, close;
+    XalariaMapRect fly, pause, cancel, wormhole;
+    static constexpr unsigned worldRows=8, resultRows=5;
+    static constexpr double worldStep=39, resultStep=43;
     explicit XalariaMapLayout(double aspect);
 };
 struct CockpitOverlay;
@@ -99,6 +104,7 @@ glm::dvec2 xalariaMapPoint(const XalariaMapView&,glm::dvec2 grid,double aspect);
 glm::dvec2 xalariaMapGrid(const XalariaMapView&,glm::dvec2 canvas,double aspect);
 glm::dvec2 xalariaSystemPoint(const XalariaMapView&,uint64_t world,double aspect);
 glm::dvec2 xalariaSystemShipPoint(const XalariaMapView&,double aspect);
+bool xalariaSystemShowsWorld(const XalariaMapView&,uint64_t world);
 std::optional<uint32_t> xalariaPickStar(const XalariaMapView&,glm::dvec2,double aspect);
 std::optional<uint64_t> xalariaPickWorld(const XalariaMapView&,glm::dvec2,double aspect);
 void xalariaZoomMap(XalariaMapView&,double wheel,glm::dvec2 canvas,double aspect);

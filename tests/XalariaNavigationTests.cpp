@@ -1,10 +1,48 @@
 #include "infinity/XalariaNavigation.hpp"
 #include "infinity/Cockpit.hpp"
+#include "infinity/ShipInterior.hpp"
 #include <algorithm>
+#include <numbers>
 #include <iostream>
 #include <stdexcept>
 using namespace infinity;
 void check(bool v,const char* m){if(!v)throw std::runtime_error(m);}
+void checkShipDeck() {
+    ShipInterior deck;
+    check(!deck.walking() && deck.eye()==glm::dvec3(0),"Player should load at the helm");
+    check(deck.useSeat() && deck.seatInReach(),"Could not stand beside the seat");
+    deck.look({(std::numbers::pi-2.68)/.0028,0});
+    deck.step({1,0},.466/1.58);
+    check(deck.position().x>.42,"The player walked through the pilot's seat");
+    deck.step({0,1},.31);
+    deck.step({1,0},deck.position().x/1.58);
+    check(std::abs(deck.position().x)<.001 && deck.hatchOpening()>.99,"Could not line up with the open hatch");
+    const auto aft=[&](double z){deck.step({0,1},(z-deck.position().y)/1.58);};
+    const auto forward=[&](double z){deck.step({0,-1},(deck.position().y-z)/1.58);};
+    const auto across=[&](double x){
+        const auto amount=x-deck.position().x;
+        deck.step({-std::copysign(1.,amount),0},std::abs(amount)/1.58);
+    };
+    aft(2.60);
+    check(deck.room()=="Main passage" && !deck.useSeat(),"Hatch passage or seat reach failed");
+    across(-1.14);
+    check(deck.room()=="Crew quarters","Port quarters are inaccessible");
+    across(-3.);
+    check(deck.position().x>shipDeck::bunk.right,"Bunk did not block walking");
+    across(1.14);
+    check(deck.room()=="Systems alcove","Starboard systems alcove is inaccessible");
+    across(0);
+    aft(5.65);
+    check(deck.room()=="Cargo bay","Cargo bay is inaccessible");
+    across(-3.);
+    check(deck.position().x>shipDeck::cargoCrates[2].right,"Cargo crate did not block walking");
+    across(0);
+    aft(12.);
+    check(deck.position().y<shipDeck::cargoBack,"Player escaped through the aft bulkhead");
+    forward(.67);
+    check(deck.seatInReach() && deck.useSeat() && !deck.walking(),"Could not walk back and sit at the helm");
+    check(deck.eye()==glm::dvec3(0),"Sitting did not restore the seated camera");
+}
 struct Flight {
     Universe universe;
     Navigation nav;
@@ -21,6 +59,7 @@ struct Flight {
 };
 int main(int argc,char** argv){try{
     check(argc==2,"Catalogue required");auto c=std::make_shared<XalariaCatalog>(argv[1]);Flight f(c);
+    checkShipDeck();
     {
         Flight banking(c);
         banking.nav.changeFrame(c->address(14940));
@@ -86,10 +125,37 @@ int main(int argc,char** argv){try{
         auto galaxy=xalariaMapOverlay(v,aspect);v.mode=XalariaMapView::Mode::System;
         auto system=xalariaMapOverlay(v,aspect);
         const auto wp=xalariaSystemPoint(v,0,aspect);check(xalariaPickWorld(v,wp,aspect)==0,"World click mismatch");
-        for(const auto* overlay:{&galaxy,&system})for(const auto& text:overlay->textRuns)
-            check(text.bounds.x>=0&&text.bounds.y>=0&&text.bounds.x+text.bounds.w<=layout.width+.01&&text.bounds.y+text.bounds.h<=900,"Navigation text outside viewport");
+        const auto checkLayout=[&](const CockpitOverlay& overlay) {
+            check(!overlay.atlasGlyphs.empty(),"Atlas lettering missing");
+            check(cockpitTextConflicts(overlay).empty(),"Atlas text overlaps");
+            for(const auto& text:overlay.textRuns)
+                check(text.bounds.x>=0&&text.bounds.y>=0&&text.bounds.x+text.bounds.w<=layout.width+.01&&
+                      text.bounds.y+text.bounds.h<=900,"Navigation text outside viewport");
+        };
+        checkLayout(galaxy);
+        checkLayout(system);
+        auto search=v;
+        search.query="World or star";search.matches={14940,destination};search.matchIndex=1;
+        checkLayout(xalariaMapOverlay(search,aspect));
+        search.matches.clear();
+        checkLayout(xalariaMapOverlay(search,aspect));
+        auto route=v;route.mode=XalariaMapView::Mode::Galaxy;
+        route.selected=destination;route.route={14940,destination};route.activeRoute=route.route;
+        route.destination=destination;route.paused=true;route.showLinks=true;
+        checkLayout(xalariaMapOverlay(route,aspect));
         v.mode=XalariaMapView::Mode::Galaxy;
     }
+    auto system=v;
+    system.selected=destination;system.selectedWorld.reset();system.activeRoute.clear();
+    const auto& systemWorlds=c->star(system.selected).worlds;
+    const auto moon=std::find_if(systemWorlds.begin(),systemWorlds.end(),[](const auto& item){return item.second.primary>=0;});
+    check(moon!=systemWorlds.end(),"Fixture needs a moon");
+    check(!xalariaSystemShowsWorld(system,moon->first),"Unfocused moon clutters the system map");
+    system.selectedWorld=uint64_t(moon->second.primary);
+    check(xalariaSystemShowsWorld(system,moon->first),"Selected planet's moons are missing");
+    system.selectedWorld=moon->first;
+    check(xalariaPickWorld(system,xalariaSystemPoint(system,moon->first,1.6),1.6)==moon->first,
+          "Selected moon cannot be picked");
     restored.course.cancel();
     restored.course.selectFromFlight(c->address(destination).child(Kind::Planet,0));
     const auto target=restored.course.instruments();

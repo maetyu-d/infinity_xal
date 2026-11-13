@@ -14,7 +14,7 @@ if(NOT EXISTS "${INFINITY_ENGINE_BUILD}/libinfinity_core.a")
 endif()
 set(dep "${INFINITY_ENGINE_ROOT}/external")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/EmbedHyperion.cmake")
-add_library(hybrid_objects OBJECT src/Universe.cpp src/Geometry.cpp src/ActivityMeshes.cpp src/Cockpit.cpp src/Xalaria.cpp src/Flight.cpp src/Planetology.cpp src/XalariaMap.cpp src/XalariaNavigation.cpp src/XalariaEconomy.cpp)
+add_library(hybrid_objects OBJECT src/Universe.cpp src/Geometry.cpp src/ActivityMeshes.cpp src/Cockpit.cpp src/ShipInterior.cpp src/AtlasFont.cpp src/Xalaria.cpp src/Flight.cpp src/Planetology.cpp src/XalariaMap.cpp src/XalariaNavigation.cpp src/XalariaEconomy.cpp)
 target_include_directories(hybrid_objects PUBLIC include "${dep}/glm" "${dep}/FastNoise2/include"
   "${dep}/FastSIMD/include" "${dep}/oneTBB/include" "${dep}/zstd/lib"
   "${INFINITY_ENGINE_BUILD}/external/FastNoise2/src/fastsimd/FastSIMD_FastNoise/include")

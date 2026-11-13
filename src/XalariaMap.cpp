@@ -5,14 +5,27 @@
 
 namespace infinity {
 XalariaMapLayout::XalariaMapLayout(double aspect):width(900*aspect){
-    const double sidebar=std::clamp(width*.32,290.,440.);
-    chart={24,154,width-sidebar-72,554};details={chart.x+chart.w+24,130,sidebar,578};
-    search={details.x,132,sidebar,32};results={details.x,172,sidebar,100};
-    galaxy={24,87,112,34};system={144,87,112,34};
-    locate={274,87,100,34};fitRoute={382,87,112,34};fitGalaxy={502,87,112,34};
-    economy={626,87,112,34};
-    fly={24,802,230,38};pause={266,802,174,38};cancel={452,802,140,38};
-    wormhole={604,802,222,38};
+    const double sidebar = std::clamp(width * .285, 278., 408.);
+    chart = {24, 148, width-sidebar-64, 576};
+    details = {chart.x+chart.w+16, 94, sidebar, 662};
+    search = {details.x+16, 111, sidebar-32, 42};
+    clearSearch = {search.x+search.w-72, search.y, 72, search.h};
+    results = {search.x, 204, search.w, resultRows * resultStep};
+    worlds = {search.x, 306, search.w, worldRows * worldStep};
+    nearby = {search.x, 332, search.w, worldRows * worldStep};
+    galaxy = {24, 94, 91, 40};
+    system = {119, 94, 91, 40};
+    const double controls = chart.x + chart.w - 354;
+    locate = {controls, 94, 76, 40};
+    fitRoute = {controls+82, 94, 86, 40};
+    fitGalaxy = {controls+174, 94, 99, 40};
+    links = {controls+279, 94, 75, 40};
+    close = {width-170, 24, 146, 42};
+    economy = {close.x-99, 24, 89, 42};
+    fly = {24, 840, 175, 43};
+    pause = {209, 840, 142, 43};
+    cancel = {361, 840, 94, 43};
+    wormhole = {465, 840, 158, 43};
 }
 glm::dvec2 xalariaMapPoint(const XalariaMapView& v,glm::dvec2 grid,double aspect){
     const auto r=XalariaMapLayout(aspect).chart;
@@ -83,10 +96,25 @@ glm::dvec2 xalariaSystemShipPoint(const XalariaMapView& v,double aspect){
     }
     return radialPoint(s,v.systemShip,XalariaMapLayout(aspect).chart);
 }
+bool xalariaSystemShowsWorld(const XalariaMapView& v,uint64_t id) {
+    const auto& worlds = v.catalog->star(v.selected).worlds;
+    const auto& world = worlds.at(id);
+    if (world.primary < 0 || (v.current == v.selected && v.currentWorld == id) ||
+        (!v.activeRoute.empty() && v.destination == v.selected && v.activeWorld == id))
+        return true;
+    if (!v.selectedWorld)
+        return false;
+    const auto& selected = worlds.at(*v.selectedWorld);
+    return uint64_t(world.primary) == (selected.primary < 0 ? selected.id : uint64_t(selected.primary));
+}
 std::optional<uint64_t> xalariaPickWorld(const XalariaMapView& v,glm::dvec2 p,double aspect){
     if(!xalariaMapContains(p,aspect))return {};
     std::optional<uint64_t> found;double best=14;
-    for(const auto& [id,w]:v.catalog->star(v.selected).worlds){const double d=glm::length(xalariaSystemPoint(v,id,aspect)-p);if(d<best){best=d;found=id;}}
+    for(const auto& [id,w]:v.catalog->star(v.selected).worlds){
+        if(!xalariaSystemShowsWorld(v,id))continue;
+        const double d=glm::length(xalariaSystemPoint(v,id,aspect)-p);
+        if(d<best){best=d;found=id;}
+    }
     return found;
 }
 } // namespace infinity

@@ -2,6 +2,8 @@
 #include "infinity/Xalaria.hpp"
 #include "infinity/XalariaEconomy.hpp"
 #include "HyperionRenderer.hpp"
+#include "infinity/ShipInterior.hpp"
+#include "AtlasFont.hpp"
 #include "infinity/Cockpit.hpp"
 #include "infinity/ExpeditionPlanner.hpp"
 #include "infinity/MiningConsequences.hpp"
@@ -144,7 +146,9 @@ struct Renderer::Impl {
     std::array<GPUMesh, 4> atomSpheres;
     GPUMesh hyperionBillboardMesh;
     GPUMesh pointLightBillboardMesh;
-    GPUMesh cabin, cabinGlazing, cabinYoke, cabinThrottle;
+    GPUMesh cabin, cabinGlazing, cabinYoke, cabinThrottle, cabinHatch, shipDeckMesh, shipSigns;
+    GPUMesh deckCrewBody, deckCrewHead, deckCrewArm;
+    const ShipInterior* shipInterior = nullptr;
     double cabinAspect = 0;
     bool cabinIsXalaria = false;
     std::optional<FlightInstruments> instruments;
@@ -304,6 +308,12 @@ struct Renderer::Impl {
             destroy(cabinGlazing);
             destroy(cabinYoke);
             destroy(cabinThrottle);
+            destroy(cabinHatch);
+            destroy(shipDeckMesh);
+            destroy(shipSigns);
+            destroy(deckCrewBody);
+            destroy(deckCrewHead);
+            destroy(deckCrewArm);
             destroy(probeHousing);destroy(probeCutter);destroy(probeLamps);
             destroy(probeRoller);destroy(probeDrive);destroy(probeActuator);destroy(probeHotTeeth);
             destroy(probeRod);
@@ -2185,6 +2195,9 @@ void Renderer::setCockpit(const FlightInstruments* instruments) {
 void Renderer::setCockpitLook(glm::dvec2 yawPitch) {
     impl_->cockpitLook = yawPitch;
 }
+void Renderer::setShipInterior(const ShipInterior* interior) {
+    impl_->shipInterior = interior;
+}
 void Renderer::setCockpitValidation(bool enabled) {
     impl_->validateCockpit = enabled;
 }
@@ -2388,7 +2401,8 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
     p.frameFrames.clear();
     p.framePoses.clear();
     p.cockpitVisible = p.instruments.has_value() && overlay;
-    if (p.cockpitMotionEnabled && !p.probeRemote && p.cockpitVisible && !p.cockpitHelp && !(p.market && p.market->open)) {
+    const bool walking = p.shipInterior && p.shipInterior->walking() && p.cockpitVisible && !p.probeRemote;
+    if (p.cockpitMotionEnabled && !walking && !p.probeRemote && p.cockpitVisible && !p.cockpitHelp && !(p.market && p.market->open)) {
         const auto& t = *p.instruments;
         p.cockpitMotion.update({t.localAcceleration, t.localAngularVelocity, t.contactImpulse, t.hullMetres,
                                 t.hull, t.engine, t.contactSequence, t.landed},
@@ -2398,7 +2412,10 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
         p.cockpitMotion.reset();
         p.head = {};
     }
-    if (p.cockpitVisible && !p.cockpitHelp && !p.probeRemote && p.cockpitLook != glm::dvec2(0)) {
+    if (walking) {
+        p.head.orientation = p.shipInterior->orientation();
+        p.head.translation = p.shipInterior->eye();
+    } else if (p.cockpitVisible && !p.cockpitHelp && !p.probeRemote && p.cockpitLook != glm::dvec2(0)) {
         const auto yaw = glm::angleAxis(-p.cockpitLook.x, glm::dvec3(0, 1, 0));
         const auto pitch = glm::angleAxis(-p.cockpitLook.y, glm::dvec3(1, 0, 0));
         p.head.orientation = yaw * pitch * p.head.orientation;
@@ -2435,6 +2452,9 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
     p.cameraQ = nav.orientation * stationAim * p.head.orientation;
     p.cameraInverse = glm::inverse(p.cameraQ);
     p.eye = nav.cameraPosition();
+    if (walking)
+        p.eye += nav.orientation * p.head.translation *
+                 (p.instruments->hullMetres / 12. / std::pow(10.,nav.logDistance));
     if (p.instruments && p.instruments->playerGun < maxWeaponMounts)
         p.eye += nav.orientation * glm::dvec3(weaponMountLateralMetres(p.instruments->playerGun), 0, 0) *
                  (p.instruments->hullMetres / 12 / std::pow(10., nav.logDistance));
@@ -3330,21 +3350,34 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
             destroy(p.cabinGlazing);
             destroy(p.cabinYoke);
             destroy(p.cabinThrottle);
+            destroy(p.cabinHatch);
+            destroy(p.shipDeckMesh);
+            destroy(p.shipSigns);
+            destroy(p.deckCrewBody);
+            destroy(p.deckCrewHead);
+            destroy(p.deckCrewArm);
             if (xalaria) {
                 p.cabinGlazing = p.upload(xalariaCockpitGlazing());
                 p.cabinYoke = p.upload(xalariaCockpitYoke());
                 p.cabinThrottle = p.upload(xalariaCockpitThrottle());
+                p.cabinHatch = p.upload(xalariaCockpitHatch());
+                p.shipDeckMesh = p.upload(xalariaShipDeck());
+                p.shipSigns = p.upload(xalariaShipSigns());
+                const auto crew = xalariaShipCrewMeshes();
+                p.deckCrewBody = p.upload(crew.body);
+                p.deckCrewHead = p.upload(crew.head);
+                p.deckCrewArm = p.upload(crew.arm);
             }
             p.cabinAspect = aspect;
             p.cabinIsXalaria = xalaria;
         }
-        // Tiny head translation produces parallax inside the cabin only. The
-        // universe keeps its precision eye; all world optics share head rotation.
+        // Seated head motion stays local. Walking also offsets the exterior
+        // camera, so the view through the windows follows the player's position.
         const auto cabinView = glm::mat4_cast(glm::quat(glm::inverse(p.head.orientation))) *
                                glm::translate(glm::mat4(1), -glm::vec3(p.head.translation));
         const auto cabinProjection = bgfx::getCaps()->homogeneousDepth
-                                         ? glm::perspectiveRH_NO(float(fov), float(aspect), .025f, 6.f)
-                                         : glm::perspectiveRH_ZO(float(fov), float(aspect), .025f, 6.f);
+                                         ? glm::perspectiveRH_NO(float(fov), float(aspect), .025f, 13.f)
+                                         : glm::perspectiveRH_ZO(float(fov), float(aspect), .025f, 13.f);
         bgfx::setViewRect(87, 0, 0, uint16_t(p.width), uint16_t(p.height));
         bgfx::setViewMode(87, bgfx::ViewMode::Sequential);
         bgfx::setViewTransform(87, glm::value_ptr(cabinView), glm::value_ptr(cabinProjection));
@@ -3354,7 +3387,8 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
             hyperionPhase(p.universe.seed()), 1.f, {5.f,xalaria ? 1.f : 0.f,0,0}};
         const auto sun = glm::inverse(nav.orientation * stationAim) * p.lightAt(nav.anchor, nav);
         const auto cabinEye = xalaria ? glm::vec3(p.head.translation) : glm::vec3(0);
-        const auto drawCabin = [&](const GPUMesh& part, const glm::mat4& model, bool glazing = false) {
+        const auto drawCabin = [&](const GPUMesh& part, const glm::mat4& model, bool glazing = false,
+                                   const ScenePresentation* material = nullptr) {
             if (!bgfx::isValid(part.vertices)) return;
             const bool instanced = bgfx::getAvailInstanceDataBuffer(1, 80) > 0;
             if (glazing && !instanced) return;
@@ -3367,7 +3401,8 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
                 bgfx::allocInstanceDataBuffer(&instance, 1, 80);
                 const Instance posed{model, glm::vec4(1)};
                 std::memcpy(instance.data, &posed, sizeof(posed));
-                p.hyperion->bind(presentation, cabinEye, glm::vec3(sun), glm::inverse(model), 0, p.visualTime);
+                p.hyperion->bind(material ? *material : presentation, cabinEye, glm::vec3(sun),
+                                 glm::inverse(model), 0, p.visualTime);
                 bgfx::setInstanceDataBuffer(&instance);
                 if (glazing)
                     p.hyperion->bindCockpitGlazing();
@@ -3381,9 +3416,41 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
         drawCabin(p.cabin, glm::mat4(1));
         if (xalaria) {
             const auto controls = xalariaCockpitControlPoses(*p.instruments);
+            const float door=float(p.shipInterior ? p.shipInterior->hatchOpening() : 0.);
+            const float slide=.47f*float(smoothstep(0.,1.,door));
+            const glm::mat4 identity(1);
+            drawCabin(p.shipDeckMesh, identity);
+            if (walking) {
+                constexpr glm::vec3 neck{0,1.53f,.012f}, up{0,1,0}, armAxis{1,0,0};
+                for (const auto& crew : shipDeckCrew(p.instruments->flightSeconds)) {
+                    const ScenePresentation suit{source,nav.anchor,{crew.rim,0},
+                        hyperionPhase(p.universe.seed()),1.f,{5.f,1.f,0,1.f}};
+                    const float motion=float(crew.taskMotion);
+                    const auto root=glm::scale(glm::rotate(glm::translate(identity,glm::vec3(crew.feet)),
+                                                       float(crew.yaw),up),glm::vec3(float(crew.height/1.79)));
+                    drawCabin(p.deckCrewBody,root,false,&suit);
+                    const auto head=glm::translate(glm::rotate(glm::translate(root,neck),motion*.19f,up),-neck);
+                    drawCabin(p.deckCrewHead,head,false,&suit);
+                    const auto shoulder=glm::translate(root,{.204f,1.405f,0});
+                    const auto right=glm::rotate(glm::rotate(shoulder,.21f+motion*.13f,armAxis),.11f,{0,0,1});
+                    const auto left=glm::rotate(glm::translate(root,{-.204f,1.405f,0}),-.055f-motion*.08f,armAxis);
+                    drawCabin(p.deckCrewArm,right,false,&suit);
+                    drawCabin(p.deckCrewArm,glm::scale(left,glm::vec3(-1,1,1)),false,&suit);
+                }
+            }
+            drawCabin(p.cabinHatch, glm::translate(identity,glm::vec3(slide,0,0)));
+            drawCabin(p.cabinHatch, glm::translate(identity,glm::vec3(-slide,0,0)) *
+                                  glm::scale(identity,glm::vec3(-1,1,1)));
             drawCabin(p.cabinYoke, controls.yoke);
             drawCabin(p.cabinThrottle, controls.throttle);
             drawCabin(p.cabinGlazing, glm::mat4(1), true);
+            if (bgfx::isValid(p.shipSigns.vertices)) {
+                bgfx::setTransform(glm::value_ptr(identity));
+                bgfx::setVertexBuffer(0,p.shipSigns.vertices);
+                bgfx::setIndexBuffer(p.shipSigns.indices);
+                bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_LESS | BGFX_STATE_MSAA);
+                bgfx::submit(87,p.colorProgram);
+            }
             const auto fuel = p.xalariaEconomy ? p.xalariaEconomy->fuel() : 0.;
             const auto capacity = p.xalariaEconomy ? p.xalariaEconomy->fuelCapacity() : 0.;
             p.transient(xalariaCockpitDisplays(*p.instruments, fuel, capacity), 87,
@@ -3408,12 +3475,22 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
         if(cockpit.shrinking){const auto current=p.details.find(nav.anchor);
             const auto geometry=current==p.details.end()?std::shared_ptr<const Geometry>{}:current->second.blend.current;
             micro=extractMicroView(p.universe,nav,cockpit.hullMetres,geometry.get());}
-        auto hud = p.xalariaEconomy&&p.xalariaEconomy->view.open ? xalariaEconomyOverlay(*p.xalariaEconomy,aspect) : p.xalariaMap&&p.xalariaMap->open ? xalariaMapOverlay(*p.xalariaMap,aspect) : cockpitOverlay(cockpit, aspect, p.xalariaMap?"XALARIA":renderModeName(p.mode), notice, p.contacts,
+        const bool economyOpen = p.xalariaEconomy && p.xalariaEconomy->view.open;
+        const bool atlasOpen = !economyOpen && p.xalariaMap && p.xalariaMap->open;
+        const bool deckHud = walking && !atlasOpen && !economyOpen && !p.cockpitHelp;
+        auto hud = deckHud ? CockpitOverlay{} : economyOpen ? xalariaEconomyOverlay(*p.xalariaEconomy,aspect) : atlasOpen ? xalariaMapOverlay(*p.xalariaMap,aspect) : cockpitOverlay(cockpit, aspect, p.xalariaMap?"XALARIA":renderModeName(p.mode), notice, p.contacts,
                                         p.activityContacts, p.cockpitHelp, viewport.projectionScale, p.market,
                                         stationAim * p.head.orientation, p.crew,p.expeditionPlan,&micro);
-        if(p.xalariaMap&&!p.xalariaMap->open&&!(p.xalariaEconomy&&p.xalariaEconomy->view.open)&&!p.cockpitHelp&&!cockpit.contactsExpanded)
+        if (deckHud) {
+            atlasText(hud,p.shipInterior->room(),32,31,320,26,{.90,.95,.96});
+            atlasText(hud,p.shipInterior->seatInReach()?"E   Sit at the helm":"WASD   Walk    /    Mouse   Look",
+                      32,841,420,19,{.90,.95,.96});
+            if (p.xalariaMap && p.xalariaMap->flying)
+                atlasText(hud,"Course active",32,67,320,16,{.62,.88,.87});
+        }
+        if(!walking&&p.xalariaMap&&!p.xalariaMap->open&&!(p.xalariaEconomy&&p.xalariaEconomy->view.open)&&!p.cockpitHelp&&!cockpit.contactsExpanded)
             xalariaFlightOverlay(hud,*p.xalariaMap,aspect);
-        if(p.xalariaEconomy&&!p.xalariaEconomy->view.open)xalariaEconomyHud(hud,*p.xalariaEconomy,aspect,p.xalariaMap&&p.xalariaMap->open);
+        if(!walking&&p.xalariaEconomy&&!economyOpen&&!atlasOpen)xalariaEconomyHud(hud,*p.xalariaEconomy,aspect,false);
         if (p.validateCockpit) {
             const auto conflicts = cockpitTextConflicts(hud);
             if (!conflicts.empty()) {
@@ -3428,9 +3505,8 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
         }
         // Tint the flight HUD with its surroundings while retaining the warm
         // warning colours and the atlas's route colours.
-        const bool menuOpen = (p.xalariaMap && p.xalariaMap->open) ||
-                              (p.xalariaEconomy && p.xalariaEconomy->view.open);
-        const float hudOpacity = p.xalariaMap && !menuOpen && !p.cockpitHelp && !cockpit.contactsExpanded
+        const bool menuOpen = atlasOpen || economyOpen;
+        const float hudOpacity = p.xalariaMap && !walking && !menuOpen && !p.cockpitHelp && !cockpit.contactsExpanded
             ? float(glm::smoothstep(std::cos(glm::radians(58.)), std::cos(glm::radians(28.)),
                                     std::cos(p.cockpitLook.x) * std::cos(p.cockpitLook.y)))
             : 1.f;
@@ -3450,7 +3526,8 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
                 warm + (mist - warm)*hudLook.x + (tide - warm)*hudLook.y + (acid - warm)*hudLook.z;
             vertex.color=rgba(glm::clamp(colour,glm::vec3(0),glm::vec3(1)),float(value>>24)/255.f*hudOpacity);
         }};
-        for(auto* mesh:{&hud.panels,&hud.strokes,&hud.lettering})colourInterface(*mesh);
+        if (!atlasOpen)
+            for(auto* mesh:{&hud.panels,&hud.strokes,&hud.lettering})colourInterface(*mesh);
         colourInterface(p.prospectMarkers);
         p.cockpitHitRegions = hud.hitRegions;
         p.cockpitContactHits = hud.contactHits;
@@ -3465,6 +3542,8 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
         p.transient(hud.panels, 254, false, false, false);
         p.transient(hud.strokes, 254, true, false, false);
         p.transient(hud.lettering, 254, false, false, false);
+        if (atlasOpen || walking)
+            p.hyperion->drawAtlasText(hud.atlasGlyphs, 254);
     }
     auto ortho =
         glm::orthoRH_NO(0.f, static_cast<float>(p.width), static_cast<float>(p.height), 0.f, -1.f, 1.f);
@@ -3477,7 +3556,7 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
     bgfx::setViewRect(253, 0, 0, static_cast<uint16_t>(p.width), static_cast<uint16_t>(p.height));
     if (!p.instruments)
         p.transient(locators, 255, true, false, false);
-    if (overlay && !p.specimen)
+    if (overlay && !p.specimen && !walking)
         p.transient(p.prospectMarkers, p.cockpitVisible ? 253 : 255, true, false, false);
     bgfx::dbgTextClear();
     if (looking && !p.instruments)
