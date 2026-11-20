@@ -44,4 +44,25 @@ double warpTunnelAperture(double reveal, double angularRadius, double fov) {
                         std::tan(std::clamp(fov, .1, 2.8) * .5);
     return std::lerp(.21, std::clamp(disc * 1.14 + .10, .42, 1.4), std::clamp(reveal, 0., 1.));
 }
+void WarpOptics::Track::approach(double target,double response,double seconds) {
+    const double error=value-target;
+    const double slope=velocity+response*error;
+    const double decay=std::exp(-response*seconds);
+    value=target+(error+slope*seconds)*decay;
+    velocity=(velocity-response*slope*seconds)*decay;
+}
+
+WarpOpticsSample WarpOptics::update(bool engaged,bool guided,double speed,double bore,double seconds) {
+    if(std::isfinite(seconds)&&seconds>0.){
+        const double pace=std::isfinite(speed)?std::log10(std::max(1.,speed)):0.;
+        const double energy=smoothstep(3.7,7.3,pace);
+        closure_.approach(engaged?1.:0.,engaged?5.6:guided?2.7:4.4,seconds);
+        light_.approach(engaged?std::lerp(guided?.68:.28,1.,energy):0.,engaged?5.4:guided?2.9:4.1,seconds);
+        // Settle toward the last optical target through drop while the field opens up.
+        if(engaged&&std::isfinite(bore))
+            boreTarget_=std::clamp(bore,.21,1.4);
+        bore_.approach(boreTarget_,10.,seconds);
+    }
+    return {std::clamp(closure_.value,0.,1.),std::clamp(light_.value,0.,1.),std::clamp(bore_.value,.21,1.4)};
+}
 } // namespace infinity

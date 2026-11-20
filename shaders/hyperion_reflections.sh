@@ -7,6 +7,45 @@ float reflectionDepth(vec2 uv){
 vec2 reflectionProject(vec3 p){
  return vec2(p.x/u_reflection[0].x,p.y/(u_reflection[0].y*u_reflection[0].z))/max(-p.z,1e-8)*.5+.5;
 }
+vec3 structureContactLight(vec2 uv,vec3 colour,float built){
+ if(built<.5)return colour;
+ float z=reflectionDepth(uv);
+ if(z>=u_reflection[1].x*.98)return colour;
+ vec2 ndc=uv*2.-1.;
+ vec3 p=vec3(ndc.x*u_reflection[0].x,ndc.y*u_reflection[0].y*u_reflection[0].z,-1.)*z;
+ vec3 dx=dFdx(p),dy=dFdy(p);
+ vec3 crossN=cross(dx,dy);
+ float normalScale=max(max(abs(crossN.x),abs(crossN.y)),max(abs(crossN.z),1e-30));
+ if(normalScale<=1.01e-30)return colour;
+ vec3 N=normalize(crossN/normalScale);
+ if(dot(N,-p)<0.)N=-N;
+ // Bounded metre-scale contact shading. No history, random kernel, or
+ // screen feedback: a camera cut cannot leave an old shadow behind.
+ float metresPerUnit=exp2(clamp(u_regionLook[0].z,-20.,25.)*3.321928);
+ float radius=min(4.5/max(metresPerUnit,1e-20),z*.12);
+ vec2 spread=vec2(radius/(z*u_reflection[0].x),radius/(z*u_reflection[0].y))*.5;
+ float resolved=smoothstep(1.2,3.,length(spread/u_reflection[1].zw));
+ if(resolved<.001)return colour;
+ float sum=0.,weight=0.;
+ for(int tap=0;tap<8;++tap){
+  float angle=float(tap)*2.399963;
+  float reach=.30+float(tap)*.095;
+  vec2 donor=uv+vec2(cos(angle),sin(angle))*spread*reach;
+  if(min(donor.x,donor.y)<.002 || max(donor.x,donor.y)>.998)continue;
+  float sampleZ=reflectionDepth(donor);
+  if(sampleZ>=u_reflection[1].x*.98)continue;
+  vec2 xy=donor*2.-1.;
+  vec3 q=vec3(xy.x*u_reflection[0].x,xy.y*u_reflection[0].y*u_reflection[0].z,-1.)*sampleZ;
+  vec3 delta=q-p;
+  float distance=length(delta);
+  float horizon=max(0.,dot(N,delta)/max(distance,1e-12)-.095);
+  float range=1.-smoothstep(radius*.32,radius,distance);
+  sum+=horizon*range;weight+=1.;
+ }
+ float occlusion=clamp(sum/max(weight,1.)*1.65,0.,.48)*resolved;
+ float lamps=1.-smoothstep(.70,1.8,dot(colour,vec3(.299,.587,.114)));
+ return colour*(1.-occlusion*lamps);
+}
 vec3 sceneReflection(vec2 uv,vec3 original,vec4 surface){
  // Negative roughness tags built surfaces. The magnitude is the actual
  // finish roughness, and its reflection works in every regional light.

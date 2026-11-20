@@ -1,6 +1,10 @@
 #include "infinity/Renderer.hpp"
 #include "infinity/Xalaria.hpp"
 #include "infinity/XalariaEconomy.hpp"
+#include "infinity/XalariaTraffic.hpp"
+#include "infinity/XalariaStories.hpp"
+#include "infinity/XalariaCombat.hpp"
+#include "infinity/ShipTrail.hpp"
 #include "HyperionRenderer.hpp"
 #include "infinity/ShipInterior.hpp"
 #include "AtlasFont.hpp"
@@ -133,7 +137,14 @@ struct Pick {
 struct Renderer::Impl {
     const XalariaMapView* xalariaMap=nullptr;
     glm::vec3 regionalLook{0.f}; // Fog, tidal and acid blend. The remainder is Charred Glass.
+    float dockedFocus=0.f;
     const XalariaEconomy* xalariaEconomy=nullptr;
+    const XalariaRadioView* xalariaRadio=nullptr;
+    const XalariaStories* xalariaStories=nullptr;
+    const XalariaCombat* xalariaCombat=nullptr;
+    StoryContext storyContext;
+    std::string storyRouteAction;
+    std::optional<ActivityId> distressVessel;
     const Universe& universe;
     SDL_Window* window;
     Callbacks callbacks;
@@ -144,17 +155,31 @@ struct Renderer::Impl {
     bgfx::SwapChain swapChain;
     uint32_t resetFlags = BGFX_RESET_VSYNC | BGFX_RESET_MAXANISOTROPY;
     std::array<GPUMesh, 4> atomSpheres;
+    GPUMesh ringMesh;
     GPUMesh hyperionBillboardMesh;
     GPUMesh pointLightBillboardMesh;
-    GPUMesh cabin, cabinGlazing, cabinYoke, cabinThrottle, cabinHatch, shipDeckMesh, shipSigns;
-    GPUMesh deckCrewBody, deckCrewHead, deckCrewArm;
+    GPUMesh cabin, cabinGlazing, cabinYoke, cabinThrottle, cabinHatch, shipDeckMesh;
+    GPUMesh dockingDeckMesh, dockingGlassMesh, airlockDoorMesh, airlockSillMesh, airlockIndicatorMesh, charterCrateMesh;
+    std::optional<std::pair<StationKey,XalariaLook>> renderedBoardingStation;
+    std::vector<CabinDisplay> renderedStationSigns;
+    std::optional<CabinDisplay> renderedStationSurvey;
+    std::optional<CabinDisplay> renderedFreightDispatch;
+    bool renderedFreightClaimed = false;
+    std::optional<XContract> boardingCharter;
+    int64_t boardingCharterDay = 0;
     const ShipInterior* shipInterior = nullptr;
     double cabinAspect = 0;
     bool cabinIsXalaria = false;
     std::optional<FlightInstruments> instruments;
     const ExpeditionPlan* expeditionPlan = nullptr;
     CockpitMotion cockpitMotion;
+    std::vector<ActivityId> explosionImpulses;
     CockpitMotionPose head;
+    SeatTransition seatTransition;
+    FlightHudStability flightHud;
+    DeckHudLabel deckRoomLabel, deckPromptLabel;
+    std::optional<Address> previousHudReference;
+    glm::dquat previousHudView{1,0,0,0};
     glm::dvec2 cockpitLook{};
     bool cockpitMotionEnabled = true;
     bool cockpitHelp = false, cockpitVisible = false, validateCockpit = false;
@@ -204,7 +229,16 @@ struct Renderer::Impl {
     std::vector<ActivityContact> activityContacts;
     std::vector<std::pair<ActivityId, glm::dvec2>> activityPicks;
     static constexpr size_t debrisSurfaceRole = 6;
-    std::array<std::array<GPUMesh, 3>, debrisSurfaceRole + 1> craftMeshes;
+    static constexpr size_t spaceJunkFirstRole = debrisSurfaceRole + 1;
+    static constexpr size_t vesselCollarRole = spaceJunkFirstRole + size_t(SpaceJunkKind::Count);
+    static constexpr size_t vesselCollarMountRole = vesselCollarRole+1;
+    static constexpr size_t evidenceFirstRole = vesselCollarMountRole+1;
+    static constexpr size_t activityRoles = evidenceFirstRole+3;
+    using ActivityBatches = std::array<std::array<std::vector<Instance>, 3>, activityRoles>;
+    std::array<std::array<GPUMesh, 3>, activityRoles> craftMeshes;
+    struct StationMeshEntry { GPUMesh mesh, glass; size_t bytes=0; uint64_t lastFrame=0; };
+    using StationMeshKey=std::pair<StationKey,unsigned>;
+    std::map<StationMeshKey,StationMeshEntry> stationMeshes;
     size_t craftBytes = 0;
     SurfaceLifeCache surfaceLife;
     std::array<std::array<GPUMesh, 3>, size_t(SurfaceMesh::Count)> surfaceMeshes;
@@ -219,16 +253,24 @@ struct Renderer::Impl {
     std::shared_ptr<const std::vector<ProspectSite>> prospectSites;
     Mesh prospectMarkers;
     double visualTime = 0, fixedVisualTime = -1;
-    double warpLight = 0, warpClock = 0, warpTransition = 1;
-    bool warpEngaged = false, warpTransitionVisible = false;
-    bool warpDestinationExit = false;
+    WarpOptics warpOptics;
+    double warpClock = 0;
     std::optional<Address> warpOpticalDestination;
-    double warpExitBore = .21;
     glm::dvec2 warpFocus{};
     bgfx::ViewId atomView = 2;
     std::map<const Geometry*, GPUGeometry> gpu;
     std::vector<Pick> picks;
     std::vector<Instance> billboards;
+    std::vector<Instance> trafficLights;
+    Mesh shieldFields;
+    std::map<ActivityId,ShipTrail> trafficTrails;
+    ShipTrail playerTrail;
+    Mesh trailRibbons;
+    ShieldReadout playerShield;
+    struct ShieldFade {float visibility;uint64_t seen;};
+    std::map<ActivityId,ShieldFade> shieldFades;
+    // Shares the camera-relative effects pass with weapon traces, after opaque actors.
+    static constexpr bgfx::ViewId trafficLightView=63;
     std::vector<Instance> cosmicBillboards;
     std::vector<Instance> pointLightBillboards;
     std::vector<Instance> stellarBillboards;
@@ -252,6 +294,14 @@ struct Renderer::Impl {
         uint64_t used = 0;
     };
     std::map<Address, DetailState> details;
+    struct VisibleRing {
+        Address planet;
+        PlanetTraits traits;
+        Pose pose;
+        double distance;
+        float opacity;
+    };
+    std::vector<VisibleRing> visibleRings;
     std::map<std::string, DetailState> localSections;
     std::chrono::steady_clock::time_point previousTime = std::chrono::steady_clock::now();
     double frameSeconds = 0, fieldOfView = 1;
@@ -304,21 +354,28 @@ struct Renderer::Impl {
             }
             for (auto& mesh : atomSpheres)
                 destroy(mesh);
+            destroy(ringMesh);
             destroy(cabin);
             destroy(cabinGlazing);
             destroy(cabinYoke);
             destroy(cabinThrottle);
             destroy(cabinHatch);
             destroy(shipDeckMesh);
-            destroy(shipSigns);
-            destroy(deckCrewBody);
-            destroy(deckCrewHead);
-            destroy(deckCrewArm);
+            destroy(dockingDeckMesh);
+            destroy(dockingGlassMesh);
+            destroy(airlockDoorMesh);
+            destroy(airlockSillMesh);
+            destroy(airlockIndicatorMesh);
+            destroy(charterCrateMesh);
             destroy(probeHousing);destroy(probeCutter);destroy(probeLamps);
             destroy(probeRoller);destroy(probeDrive);destroy(probeActuator);destroy(probeHotTeeth);
             destroy(probeRod);
             destroy(hyperionBillboardMesh);
             destroy(pointLightBillboardMesh);
+            for (auto& [key,station] : stationMeshes) {
+                destroy(station.mesh);
+                destroy(station.glass);
+            }
             for (auto& role : craftMeshes)
                 for (auto& mesh : role)
                     destroy(mesh);
@@ -379,6 +436,14 @@ struct Renderer::Impl {
         framePoses.emplace(address, pose);
         return pose;
     }
+    Instance billboardInstance(glm::dvec3 p,double radius,glm::vec3 color,float opticalMaterial=0) const {
+        const auto right=cameraQ*glm::dvec3(radius,0,0), up=cameraQ*glm::dvec3(0,radius,0);
+        glm::mat4 transform(1);
+        transform[0]=glm::vec4(glm::vec3(right),0);
+        transform[1]=glm::vec4(glm::vec3(up),0);
+        transform[3]=glm::vec4(glm::vec3(p),1);
+        return {transform,glm::vec4(color,1.f+opticalMaterial)};
+    }
     void addBillboard(glm::dvec3 p, double radius, glm::vec3 color, bool cosmic = false,
                       float opticalMaterial = 0, bool background = false) {
         ++stats.particles;
@@ -394,16 +459,11 @@ struct Renderer::Impl {
                 color *= float(footprint.radianceScale);
             }
         }
-        auto right = cameraQ * glm::dvec3(radius, 0, 0), up = cameraQ * glm::dvec3(0, radius, 0);
-        glm::mat4 transform(1);
-        transform[0] = glm::vec4(glm::vec3(right), 0);
-        transform[1] = glm::vec4(glm::vec3(up), 0);
-        transform[3] = glm::vec4(glm::vec3(p), 1);
         (filteredPoint          ? pointLightBillboards
          : opticalMaterial >= 3 ? stellarBillboards
          : cosmic               ? cosmicBillboards
                                 : billboards)
-            .push_back({transform, glm::vec4(color, 1.f + opticalMaterial)});
+            .push_back(billboardInstance(p,radius,color,opticalMaterial));
     }
     bool prepareGPU(const std::shared_ptr<const Geometry>& geometry) {
         if (!geometry)
@@ -531,7 +591,7 @@ struct Renderer::Impl {
                        BGFX_STATE_MSAA);
         bgfx::submit(worldView(), colorProgram);
     }
-    void transient(const Mesh& mesh, bgfx::ViewId viewId, uint64_t state) {
+    void transient(const Mesh& mesh, bgfx::ViewId viewId, uint64_t state, const glm::mat4* model = nullptr) {
         if (mesh.vertices.empty())
             return;
         uint32_t nv = static_cast<uint32_t>(mesh.vertices.size()),
@@ -547,6 +607,8 @@ struct Renderer::Impl {
         std::memcpy(ib.data, mesh.indexData(), ni * mesh.indexWidth());
         bgfx::setVertexBuffer(0, &vb);
         bgfx::setIndexBuffer(&ib);
+        if (model)
+            bgfx::setTransform(glm::value_ptr(*model));
         bgfx::setState(state);
         bgfx::submit(viewId, colorProgram);
     }
@@ -575,7 +637,7 @@ struct Renderer::Impl {
         const auto& materialAddress = presentation.materialFrame;
         if (materialAddress.kind() == Kind::Planet && node.address != materialAddress)
             describePlanetPresentation(presentation, universe.describe(materialAddress));
-        if (materialAddress.kind() == Kind::Planet && presentation.planetRings[0].z > 0)
+        if (materialAddress.kind() == Kind::Planet)
             presentation.planet[4] =
                 glm::vec4(glm::vec3(glm::inverse(poseFor(materialAddress, nav).orientation) *
                                     lightAt(materialAddress, nav)),
@@ -766,14 +828,16 @@ struct Renderer::Impl {
             stats.atomTriangles += count * rings * sectors * 2;
         }
     }
+    glm::dvec3 wormholePosition(const XalariaWormholeMouth& mouth,const Navigation& nav) const {
+        const double referenceUnits=std::pow(10.,universe.describe(mouth.reference).frame.logRadius);
+        return universe.pointRelative(mouth.reference,mouth.metres/referenceUnits,nav.anchor,nav.logDistance);
+    }
     void drawWormhole(const Navigation& nav) {
         if (!xalariaMap || !xalariaMap->wormhole || exteriorHidden || specimen || probeRemote)
             return;
         const auto& mouth = *xalariaMap->wormhole;
-        const double referenceUnits = std::pow(10., universe.describe(mouth.reference).frame.logRadius);
         const double radius = mouth.radius / std::pow(10., nav.logDistance);
-        const auto centre =
-            universe.pointRelative(mouth.reference, mouth.metres / referenceUnits, nav.anchor, nav.logDistance) - eye;
+        const auto centre = wormholePosition(mouth,nav)-eye;
         const auto cameraCentre = cameraInverse * centre;
         const double range = glm::length(centre);
         const double cullScale = 500. / std::max(range, radius);
@@ -827,52 +891,51 @@ struct Renderer::Impl {
         }
         stats.uploadBytes += sizeof(layers);
     }
-    void drawPlanetRings(const Node& planet, const Navigation& nav) {
-        if (!planetRings || planet.address.kind() != Kind::Planet)
+    void queuePlanetRing(const Node& planet, const Pose& globe, glm::dvec3 cameraCentre, float opacity) {
+        if (!planetRings || specimen || !bgfx::isValid(ringMesh.vertices))
             return;
-        const auto t = planetTraits(planet);
-        if (!t.rings.present())
+        auto traits = planetTraits(planet);
+        if (!traits.rings.present())
             return;
-        auto detail = details.find(planet.address);
-        if (detail == details.end() || !detail->second.blend.current)
+        const auto ring = planetRingPose(globe, traits.rings);
+        const double distance = glm::length(cameraCentre);
+        if (distance - ring.scale > worldFarPlane ||
+            LOD::pixels(ring.scale, distance, height, fieldOfView) < .7 ||
+            !LOD::visible(cameraCentre, ring.scale, double(width) / height, fieldOfView))
             return;
-        const auto globe = poseFor(planet.address, nav);
-        const auto ring = planetRingPose(globe, t.rings);
-        const auto centre = ring.position - eye;
-        if (glm::length(centre) > worldFarPlane * .8 || globe.scale > worldFarPlane ||
-            !LOD::visible(cameraInverse * centre, ring.scale, double(width) / height,
-                          fieldOfView))
+        visibleRings.push_back({planet.address, std::move(traits), ring, distance, opacity});
+    }
+    void drawPlanetRings(const Navigation& nav) {
+        if (visibleRings.empty())
             return;
+        std::stable_sort(visibleRings.begin(), visibleRings.end(),
+                         [](const VisibleRing& a, const VisibleRing& b) { return a.distance > b.distance; });
+        const auto viewId = hyperion->planetRingView();
         const glm::mat4 view = glm::mat4_cast(glm::quat(cameraInverse)), proj(projection);
-        bgfx::setViewTransform(65, glm::value_ptr(view), glm::value_ptr(proj));
-        bgfx::setViewRect(65, 0, 0, uint16_t(width), uint16_t(height));
-        const glm::mat4 model = glm::translate(glm::dmat4(1), centre) * glm::mat4_cast(ring.orientation) *
-                                glm::scale(glm::dmat4(1), glm::dvec3(ring.scale));
-        // Leave room for the filtered silhouette at the outer edge.
-        constexpr float bounds = 1.05f;
-        const Vertex vertices[] = {
-            {-bounds, 0, -bounds, 0xffffffff}, {bounds, 0, -bounds, 0xffffffff},
-            {bounds, 0, bounds, 0xffffffff}, {-bounds, 0, bounds, 0xffffffff}};
-        const uint16_t indices[] = {0, 1, 2, 0, 2, 3};
-        if (bgfx::getAvailTransientVertexBuffer(4, layout) < 4 || bgfx::getAvailTransientIndexBuffer(6) < 6)
-            return;
-        bgfx::TransientVertexBuffer vb;
-        bgfx::TransientIndexBuffer ib;
-        bgfx::allocTransientVertexBuffer(&vb, 4, layout);
-        bgfx::allocTransientIndexBuffer(&ib, 6);
-        std::memcpy(vb.data, vertices, sizeof(vertices));
-        std::memcpy(ib.data, indices, sizeof(indices));
-        bgfx::setTransform(glm::value_ptr(model));
-        bgfx::setVertexBuffer(0, &vb);
-        bgfx::setIndexBuffer(&ib);
-        const auto fromScene = glm::inverse(ring.orientation);
-        const auto light = fromScene * lightAt(planet.address, nav);
-        const auto localEye = fromScene * (-centre / globe.scale);
-        const auto program = hyperion->ringProgram(t, glm::vec3(light), glm::vec3(localEye), 1);
-        bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GEQUAL | BGFX_STATE_BLEND_ALPHA |
-                       BGFX_STATE_MSAA);
-        bgfx::submit(65, program);
-        ++stats.planetRings;
+        bgfx::setViewMode(viewId, bgfx::ViewMode::Sequential);
+        bgfx::setViewTransform(viewId, glm::value_ptr(view), glm::value_ptr(proj));
+        bgfx::setViewRect(viewId, 0, 0, uint16_t(width), uint16_t(height));
+        constexpr uint64_t coverageBlend = BGFX_STATE_BLEND_FUNC_SEPARATE(
+            BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_ALPHA,
+            BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA);
+        for (const auto& ring : visibleRings) {
+            const auto centre = ring.pose.position - eye;
+            const glm::mat4 model = glm::translate(glm::dmat4(1), centre) * glm::mat4_cast(ring.pose.orientation) *
+                                    glm::scale(glm::dmat4(1), glm::dvec3(ring.pose.scale));
+            const auto fromScene = glm::inverse(ring.pose.orientation);
+            const double globeScale = ring.pose.scale / ring.traits.rings.outerRadius;
+            const auto localEye = fromScene * (-centre / globeScale);
+            const auto light = fromScene * lightAt(ring.planet, nav);
+            const auto program = hyperion->ringProgram(ring.traits, glm::vec3(light), glm::vec3(localEye),
+                                                       ring.opacity, float(std::log10(globeScale) + nav.logDistance));
+            bgfx::setTransform(glm::value_ptr(model));
+            bgfx::setVertexBuffer(0, ringMesh.vertices);
+            bgfx::setIndexBuffer(ringMesh.indices);
+            bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GEQUAL | BGFX_STATE_MSAA |
+                           (viewId == ringLayerViewId ? BGFX_STATE_WRITE_A | coverageBlend : BGFX_STATE_BLEND_ALPHA));
+            bgfx::submit(viewId, program);
+            ++stats.planetRings;
+        }
     }
     void drawBlend(DetailState& state, const Node& node, const Navigation& nav, float opacity) {
         if (state.blend.active())
@@ -1066,6 +1129,346 @@ struct Renderer::Impl {
         stats.landingGuideVertices = light.vertices.size();
         transient(light, 62, false, true);
     }
+    void shieldEnvelope(glm::dvec3 centre,glm::dquat axes,glm::dvec3 radii,const ShieldReadout& shield,
+                        float outline,float flash) {
+        if(outline<=.002f&&flash<=.002f)return;
+        static const Mesh envelope=[]{
+            Mesh sphere;
+            appendSphere(sphere,{},1.,glm::vec3(1),24,40,true);
+            return sphere;
+        }();
+        const auto localEye=glm::conjugate(axes)*(-centre);
+        const double inside=1.-smoothstep(.94,1.12,glm::length(localEye/radii));
+        const auto start=uint32_t(shieldFields.vertices.size());
+        const double wave=.09+shield.age*2.18;
+        for(const auto& seed:envelope.vertices){
+            const glm::dvec3 direction(seed.x,seed.y,seed.z);
+            const auto local=direction*radii;
+            const auto toEye=localEye-local;
+            const auto normal=glm::normalize(direction/radii);
+            const double facing=glm::dot(normal,toEye)/std::max(1e-12,glm::length(toEye));
+            const double hemisphere=std::lerp(smoothstep(-.15,.015,facing),1.,inside);
+            const double edgeOn=1.-std::min(1.,std::abs(facing));
+            const double rim=.24*std::pow(edgeOn,2.4)+.60*std::pow(edgeOn,6.);
+            const auto edge=shieldBlue*(outline*float((.017+rim)*hemisphere));
+            glm::vec3 pulse(0);
+            if(flash>.002f){
+                const double angle=std::acos(std::clamp(glm::dot(direction,shield.impactDirection),-1.,1.));
+                const double ridge=std::exp(-std::pow((angle-wave)/.135,2.));
+                const double spread=std::exp(-std::pow(angle/(.22+shield.age*.86),2.));
+                pulse=glm::vec3(.60f,.87f,1.f)*flash*float((.87*ridge+.35*spread)*hemisphere);
+            }
+            const auto point=centre+axes*local;
+            shieldFields.vertices.push_back({float(point.x),float(point.y),float(point.z),rgba(edge+pulse)});
+        }
+        for(const auto i:envelope.indices)shieldFields.indices.push_back(start+i);
+    }
+
+    void renderTraffic(const ActivityId& station,TrafficService service,std::span<const TrafficCraft> traffic,
+                       glm::dvec3 centre,glm::dquat orientation,glm::dvec3 planetEye,glm::dquat planetRotation,
+                       double units,ActivityBatches& batches,Mesh& exhaust,const ActivityBody* overrideBody=nullptr) {
+        const double lens=std::tan(fieldOfView*.5);
+        for (size_t index=0;index<traffic.size();++index) {
+            const auto& ship=traffic[index];
+            auto contact=overrideBody?*overrideBody:xalariaTrafficBody(station,service,index,ship,centre,orientation);
+            if(!overrideBody&&xalariaCombat&&xalariaCombat->strategy().suppresses(contact.id))continue;
+            if(!overrideBody)xalariaEconomy->applyTrafficRecovery(contact,activity->seconds);
+            const auto delta=planetRotation*(contact.position-planetEye);
+            const auto rotation=planetRotation*contact.orientation;
+            const auto id=contact.id;
+            const bool distress=distressVessel==id;
+            const double beaconAge=std::fmod(activity->seconds,2.4);
+            const double signal=distress?(1.-smoothstep(.04,.19,std::min(std::abs(beaconAge-.18),
+                                                                        std::abs(beaconAge-.63)))):0.;
+            if(distress)contact.status="FREIGHTER / DISTRESS BEACON";
+            const bool cargo=ship.kind==ActivityKind::Freighter;
+            const bool patrol=ship.kind==ActivityKind::Patrol, survey=ship.kind==ActivityKind::Survey;
+            const auto nozzle=[&](double side){
+                return glm::dvec3(side*(cargo?.90:patrol?.65:.44),cargo?.045:patrol?-.03:0.,survey?1.44:1.52);
+            };
+            const double speed=glm::length(contact.velocity);
+            if(speed>.18&&glm::length(delta)<100000.){
+                auto& trail=trafficTrails[id];
+                trail.nozzleWidth=.14+.012*ship.radius;
+                const auto emitter=[&](double side){
+                    return contact.position+contact.orientation*(nozzle(side)*ship.radius);
+                };
+                const double power=distress?.20+.80*signal:1.;
+                const auto intensity=float(smoothstep(.18,7.,speed)*(.72+.28*ship.thrust)*power);
+                trail.observe({id.home,{emitter(-1.),emitter(1.)},activity->seconds,intensity});
+            }else if(auto found=trafficTrails.find(id);found!=trafficTrails.end())
+                found->second.cut();
+            const bool tracking=xalariaRadio&&xalariaRadio->dockingTarget==id&&instruments&&instruments->docking.active;
+            const auto shield=xalariaEconomy->trafficShield(contact,activity->seconds,tracking||ship.phase==TrafficPhase::AtBerth);
+            const double dockingHold=xalariaEconomy->trafficDockingHold(contact.id,activity->seconds);
+            const double range=std::max(.01,glm::length(delta));
+            const auto view=cameraInverse*delta/range;
+            const double angular=ship.radius/range;
+            // The lamp tips, exhaust and docking collar extend past the nominal
+            // ship radius. A centre-point test would drop the entire ship mid-pass.
+            const double extent=2.4*ship.radius+2.;
+            const auto occluded=range>extent &&
+                celestialOccluded(view,range-extent,skyOccluders,nullptr,std::asin(extent/range));
+            std::optional<ActivityId> pick;
+            if (range<trafficRadioRange) {
+                const auto relativeVelocity=cameraInverse*(planetRotation*contact.velocity)-
+                    (instruments ? glm::conjugate(instruments->gunAim*head.orientation)*instruments->localVelocity
+                                 : glm::dvec3(0));
+                if(tracking||!occluded){
+                    const bool selected=tracking||(xalariaRadio&&xalariaRadio->selected==contact.id);
+                    pick=contact.id;
+                    activityContacts.push_back({std::move(contact),view,tracking?instruments->docking.range:range,
+                                                glm::length(relativeVelocity),selected,occluded});
+                }
+            }
+            const double pixels=angular*height/lens;
+            const auto relative=delta/units;
+            if(occluded||(!tracking&&(pixels<.22 ||
+               (range>extent && !LOD::visible(cameraInverse*relative,extent/units,double(width)/height,fieldOfView)))))
+                continue;
+            if (pick&&view.z<0.)
+                if(auto screen=project(eye+cameraQ*view*500.))
+                    activityPicks.emplace_back(*pick,*screen);
+            const double scale=ship.radius/units;
+            const auto model=glm::translate(glm::dmat4(1),relative)*glm::mat4_cast(rotation)*
+                             glm::scale(glm::dmat4(1),glm::dvec3(scale));
+            // A single silhouette and finish from subpixel contact to clamp distance.
+            batches[size_t(ship.kind)][2].push_back({glm::mat4(model),glm::vec4(ship.paint,1)});
+            ++stats.activityVisible;
+            if(shield.capacity>0.&&range<1800.&&pixels>3.){
+                const float desired=shield.raised?1.f:0.f;
+                auto& fade=shieldFades.try_emplace(id,ShieldFade{desired,frame}).first->second;
+                fade.seen=frame;
+                fade.visibility=std::lerp(fade.visibility,desired,float(-std::expm1(-frameSeconds/.105)));
+                const float footprint=float(smoothstep(3.,16.,pixels)*(1.-smoothstep(1050.,1800.,range)));
+                const glm::dvec3 radii=ship.kind==ActivityKind::Freighter?glm::dvec3(1.58,.78,2.10):
+                    ship.kind==ActivityKind::Patrol?glm::dvec3(1.25,.66,1.81):glm::dvec3(1.39,.67,1.94);
+                shieldEnvelope(relative,rotation,radii*scale,shield,
+                               footprint*fade.visibility*float(std::sqrt(shield.fraction)),
+                               footprint*float(shield.pulse));
+            }
+            const auto point=[&](glm::dvec3 local) {return relative+rotation*local*scale;};
+            const float signalStrength=float(smoothstep(.22,1.08,pixels));
+            const auto glow=[&](glm::dvec3 position,double radius,glm::vec3 colour) {
+                // Filter very close lights before their billboards fill a window
+                // or hit the near plane. The metal and emissive insets stay put.
+                const double depth=-(cameraInverse*position).z;
+                const float weight=signalStrength*float(smoothstep(worldNearPlane,worldNearPlane+radius,depth));
+                if(weight>0.f)
+                    trafficLights.push_back(billboardInstance(position,
+                        std::min(radius,depth*lens*.075),weight*colour));
+            };
+            if(ship.radius>=minimumTrafficCollarRadius){
+                const auto collar=relative+rotation*glm::dvec3(vesselCollarCentre(ship.radius),0,0)/units;
+                const auto transform=glm::translate(glm::dmat4(1),collar)*glm::mat4_cast(rotation);
+                const auto flange=glm::scale(transform,glm::dvec3(1./units));
+                const auto mount=glm::scale(transform,glm::dvec3(vesselCollarMountLength(ship.radius),1.,1.)/units);
+                batches[vesselCollarRole][1].push_back({glm::mat4(flange),{1.2f,1.27f,1.25f,1.f}});
+                batches[vesselCollarMountRole][1].push_back({glm::mat4(mount),glm::vec4(ship.paint,1.f)});
+                const auto clearTint=tracking?glm::mix(glm::vec3(.28f,1.46f,2.f),glm::vec3(.22f,2.f,.95f),
+                                                    float(instruments->docking.capture)):
+                                         glm::vec3(1.9f,1.21f,.49f);
+                const auto tint=glm::mix(clearTint,glm::vec3(2.3f,.19f,.07f),float(smoothstep(0.,.85,dockingHold)));
+                for(double side:{-1.,1.})
+                    glow(collar+rotation*glm::dvec3(.79,.94,side*1.12)/units,.21/units,tint);
+            }
+            // Keep separate lamps visible on approaching hulls, and let them
+            // resolve into a dim point before the mesh disappears at distance.
+            const double footprint=std::max(.36,std::min(range*lens/height,ship.radius*.12));
+            const auto lamp=[&](glm::dvec3 local,double size,glm::vec3 colour) {
+                glow(point(local),std::max(size*scale,footprint/units),colour);
+            };
+            const double wing=patrol?.85:survey?1.06:1.22, wingZ=patrol?.8:survey?0.:.69, wingY=cargo?-.20:0.;
+            lamp({-wing,wingY,wingZ},.026,{2.6f,.23f,.15f});
+            lamp({ wing,wingY,wingZ},.026,{.23f,2.1f,.74f});
+            const double nose=cargo?-1.62:-1.72;
+            lamp({0,cargo?.30:.16,patrol?-1.32:survey?-1.40:nose},.029,{2.45f,1.81f,1.22f});
+            if (ship.strobe)
+                lamp({0,cargo?.49:.38,0},.038,glm::vec3(2.1f,2.3f,2.6f)*
+                     float(smoothstep(300.,900.,range)));
+            if(signal>0.)
+                lamp({0,.57,0},.062,glm::vec3(3.3f,.44f,.09f)*float(signal));
+            for (double side : {-1.,1.}) {
+                const auto engine=nozzle(side);
+                const auto blue=glm::vec3(.35f,1.25f,2.35f)*float(.22+ship.thrust);
+                lamp(engine,.032+.042*ship.thrust,blue);
+                const auto plume=engine+glm::dvec3(0,0,ship.thrust*.95);
+                const float plumeLight=signalStrength*float(smoothstep(1.25,3.,pixels));
+                if(plumeLight>0.f)
+                    addLine(exhaust,point(engine),point(plume),blue*plumeLight);
+            }
+        }
+    }
+
+    void observePlayerTrail(const Navigation& nav,const Address& system,double seconds,double units) {
+        if(!instruments||instruments->warp!=WarpPhase::Off||instruments->shrinking||instruments->landed||
+           instruments->docking.docked||instruments->hull<=0.||instruments->speed<.22){
+            playerTrail.cut();
+            return;
+        }
+        auto reference=nav.anchor;
+        while(reference.kind()>Kind::Planet)reference=reference.parent();
+        const auto pose=universe.relative(nav.anchor,reference,0.);
+        const auto centre=pose.position+pose.orientation*(nav.cameraPosition()*units);
+        const auto axes=pose.orientation*nav.orientation;
+        const auto engine=[&](double side){return centre+axes*glm::dvec3(side*1.45,-.46,7.85);};
+        const auto& history=playerTrail.points();
+        if(!history.empty()){
+            const auto& last=history.back();
+            if(!system.ancestorOf(last.reference))playerTrail.cut();
+            else {
+                const double elapsed=std::max(0.,seconds-last.seconds);
+                const auto old=universe.relative(last.reference,reference,0.);
+                const auto midpoint=.5*(last.exhaust[0]+last.exhaust[1]);
+                const double step=glm::distance(centre,old.position+old.orientation*midpoint);
+                if(step>std::max(18.,instruments->speed*elapsed*2.4+12.))playerTrail.cut();
+            }
+        }
+        playerTrail.nozzleWidth=.32;
+        const float light=float(smoothstep(.22,9.,instruments->speed)*(.67+.33*instruments->engine));
+        playerTrail.observe({reference,{engine(-1.),engine(1.)},seconds,light});
+    }
+
+    void renderShipTrails(const Navigation& nav) {
+        if(!activity||!activity->enabled||!xalariaMap||probeRemote||exteriorHidden||
+           (instruments&&instruments->shrinking))return;
+        const double seconds=activity->seconds;
+        auto system=nav.anchor;
+        while(system.kind()>Kind::System)system=system.parent();
+        if(system.kind()!=Kind::System){playerTrail.cut();return;}
+        const double units=std::pow(10.,nav.logDistance);
+        observePlayerTrail(nav,system,seconds,units);
+        playerTrail.expire(seconds);
+        for(auto& [id,trail]:trafficTrails)trail.expire(seconds);
+        std::erase_if(trafficTrails,[](const auto& entry){return entry.second.points().empty();});
+
+        struct TrailFrame {glm::dvec3 eye;glm::dquat axes;};
+        struct TrailKnot {std::array<glm::dvec3,2> exhaust;double age;float intensity;bool begins;};
+        std::map<Address,TrailFrame> frames;
+        const double eyeScale=std::pow(10.,nav.logDistance-anchorFrames.back().logRadius);
+        const double aspect=double(width)/height;
+        const double pixel=2.*std::tan(fieldOfView*.5)/height;
+        trailRibbons.vertices.clear();
+        trailRibbons.indices.clear();
+        const auto draw=[&](const ShipTrail& trail){
+            if(trail.points().size()<2)return;
+            std::vector<TrailKnot> knots;
+            knots.reserve(trail.points().size());
+            bool gap=true;
+            for(const auto& point:trail.points()){
+                if(!system.ancestorOf(point.reference)){gap=true;continue;}
+                auto frame=frames.find(point.reference);
+                if(frame==frames.end())
+                    frame=frames.emplace(point.reference,TrailFrame{
+                        universe.pointRelative(nav.anchor,eye*eyeScale,point.reference,0.),
+                        poseFor(point.reference,nav).orientation}).first;
+                const auto relative=[&](glm::dvec3 p){return frame->second.axes*(p-frame->second.eye)/units;};
+                knots.push_back({{relative(point.exhaust[0]),relative(point.exhaust[1])},
+                                 std::max(0.,seconds-point.seconds),point.intensity,gap||point.begins});
+                gap=false;
+            }
+            constexpr std::array offsets{-3.,-.78,0.,.78,3.};
+            constexpr std::array profile{0.f,.21f,1.f,.21f,0.f};
+            for(size_t side=0;side<2;++side){
+                const auto emit=[&](size_t i,glm::dvec3 direction){
+                    const auto& knot=knots[i];
+                    const auto point=knot.exhaust[side];
+                    const double depth=-(cameraInverse*point).z;
+                    const double distance=glm::length(point);
+                    auto across=glm::cross(direction,-point);
+                    const double span=glm::length(across);
+                    across=span>1e-24?across/span:cameraQ*glm::dvec3(1,0,0);
+                    const double size=std::max((trail.nozzleWidth+knot.age*.065)/units,
+                                               std::max(depth,worldNearPlane)*pixel*.59);
+                    const double width=std::min(size,std::max(1e-12,distance*.10));
+                    const float light=knot.intensity*float((1.-smoothstep(.9,shipTrailLifetime,knot.age))*
+                        (1.-smoothstep(18000.,60000.,distance*units))*
+                        smoothstep(worldNearPlane,worldNearPlane+width*2.,depth));
+                    for(size_t j=0;j<offsets.size();++j){
+                        const auto p=point+across*(width*offsets[j]);
+                        trailRibbons.vertices.push_back({float(p.x),float(p.y),float(p.z),
+                                                         rgba(glm::vec3(light*profile[j]))});
+                    }
+                };
+                for(size_t i=1;i<knots.size();++i){
+                    if(knots[i].begins)continue;
+                    const auto a=knots[i-1].exhaust[side],b=knots[i].exhaust[side];
+                    const auto chord=b-a;
+                    const double length=glm::length(chord);
+                    if(length<1e-15||std::min(glm::length(a),glm::length(b))*units-length*units>60000.||
+                       !LOD::visible(cameraInverse*((a+b)*.5),length*.5+10./units,aspect,fieldOfView))continue;
+                    const auto previous=i>1&&!knots[i-1].begins?knots[i-2].exhaust[side]:a;
+                    const auto next=i+1<knots.size()&&!knots[i+1].begins?knots[i+1].exhaust[side]:b;
+                    const auto base=uint32_t(trailRibbons.vertices.size());
+                    emit(i-1,b-previous);
+                    emit(i,next-a);
+                    for(uint32_t j=0;j<4;++j){
+                        const auto k=base+j;
+                        trailRibbons.indices.insert(trailRibbons.indices.end(),{k,k+5,k+1,k+1,k+5,k+6});
+                    }
+                }
+            }
+        };
+        draw(playerTrail);
+        for(const auto& [id,trail]:trafficTrails)draw(trail);
+        stats.shipTrailTriangles=trailRibbons.indexCount()/3;
+        if(!trailRibbons.vertices.empty()){
+            const auto view=hyperion->shipTrailView();
+            const auto rotationView=glm::mat4_cast(glm::quat(cameraInverse));
+            const glm::mat4 trailProjection(projection);
+            bgfx::setViewTransform(view,glm::value_ptr(rotationView),glm::value_ptr(trailProjection));
+            transient(trailRibbons,view,false,true);
+        }
+    }
+
+    void renderWormholeTraffic(const XalariaWormholeMouth& mouth,glm::dvec3 planetEye,
+                               glm::dquat planetRotation,double units,ActivityBatches& batches,Mesh& exhaust) {
+        const auto origin=planetRotation*(mouth.metres-planetEye);
+        if (glm::length(origin)>trafficRadioRange+5000.) return;
+        const auto axes=planetRotation*mouth.orientation;
+        const XPlace port{uint32_t(mouth.reference.parent().id()),mouth.reference.id(),0,false};
+        if(const auto station=xalariaEconomy->orbitalStationId(port))
+            renderTraffic(*station,TrafficService::Wormhole,
+                          sampleWormholeTraffic(mouth.radius,xalariaEconomy->trafficClock(*station,activity->seconds).first),
+                          mouth.metres,mouth.orientation,planetEye,planetRotation,units,batches,exhaust);
+        const auto buoys=wormholeBuoys(mouth.radius);
+        for (size_t i=0;i<buoys.size();++i) {
+            const auto relative=(origin+axes*buoys[i])/units;
+            const auto view=cameraInverse*relative;
+            if (-view.z<=worldNearPlane || !LOD::visible(view,18./units,double(width)/height,fieldOfView))
+                continue;
+            const double range=glm::length(relative);
+            if (celestialOccluded(view/range,range*units,skyOccluders)) continue;
+            const glm::vec3 tint=i<2 ? glm::vec3(1.28f,.58f,.18f) : glm::vec3(.24f,.88f,1.32f);
+            const auto model=glm::translate(glm::dmat4(1),relative)*glm::mat4_cast(axes)*
+                             glm::scale(glm::dmat4(1),glm::dvec3(13./units));
+            batches[size_t(ActivityKind::Survey)][1].push_back({glm::mat4(model),glm::vec4(tint,1)});
+            const double pulse=.34+.66*smoothstep(.1,1.,std::cos(activity->seconds*2.2-double(i)*.63));
+            const auto lamp=relative+axes*glm::dvec3(0,5.5/units,0);
+            trafficLights.push_back(billboardInstance(lamp,
+                std::max(1.7/units,range*std::tan(fieldOfView*.5)*1.3/height),tint*float(3.8*pulse)));
+        }
+    }
+
+    void renderSpaceJunk(StationKey key,glm::dvec3 origin,glm::dquat axes,
+                         double units,ActivityBatches& batches) {
+        for (const auto& piece : sampleSpaceJunk(key,activity->seconds)) {
+            const auto delta=origin+axes*piece.position;
+            const double range=glm::length(delta);
+            const auto view=cameraInverse*(delta/units);
+            const double radius=piece.radius/units;
+            const double pixels=LOD::pixels(radius,range/units,height,fieldOfView);
+            if (pixels<.90 || !LOD::visible(view,radius*1.6,double(width)/height,fieldOfView) ||
+                celestialOccluded(view/(range/units),range,skyOccluders))
+                continue;
+            const auto model=glm::translate(glm::dmat4(1),delta/units)*
+                             glm::mat4_cast(axes*piece.orientation)*glm::scale(glm::dmat4(1),glm::dvec3(radius));
+            batches[spaceJunkFirstRole+size_t(piece.kind)][pixels>26.?2:1].push_back(
+                {glm::mat4(model),{1.22f,1.22f,1.22f,1.f}});
+            ++stats.activityVisible;
+        }
+    }
+
     void renderActivity(const std::vector<Node>& nodes, const Navigation& nav, RegionCache& cache) {
         activityContacts.clear();
         weaponTargets.clear();
@@ -1076,14 +1479,22 @@ struct Renderer::Impl {
         if (!activity || !activity->enabled ||
             materialInspectionView(nav.anchor.kind(), bool(instruments), instruments && instruments->shrinking))
             return;
-        std::array<std::array<std::vector<Instance>, 3>, debrisSurfaceRole + 1> batches;
         // Like the terrain pass, subtract the double-precision eye before
         // uploading floats. Derivative normals then remain stable near a hull.
         const auto rotationView = glm::mat4_cast(glm::quat(cameraInverse));
         const glm::mat4 actorProjection(projection);
         bgfx::setViewTransform(62, glm::value_ptr(rotationView), glm::value_ptr(actorProjection));
         bgfx::setViewRect(62, 0, 0, uint16_t(width), uint16_t(height));
+        bgfx::setViewTransform(trafficLightView,glm::value_ptr(rotationView),glm::value_ptr(actorProjection));
+        bgfx::setViewRect(trafficLightView,0,0,uint16_t(width),uint16_t(height));
+        bgfx::setViewTransform(stationGlassViewId,glm::value_ptr(rotationView),glm::value_ptr(actorProjection));
+        bgfx::setViewRect(stationGlassViewId,0,0,uint16_t(width),uint16_t(height));
+        bgfx::setViewMode(stationGlassViewId,bgfx::ViewMode::Sequential);
+        const auto* boardedStation=cockpitVisible && !probeRemote && shipInterior?shipInterior->station():nullptr;
+        const auto boardedId=boardedStation && xalariaEconomy && xalariaEconomy->dockedPlace()
+            ?xalariaEconomy->orbitalStationId(*xalariaEconomy->dockedPlace()):std::nullopt;
         Mesh exhaust;
+        Mesh trafficExhaust;
         Mesh dockingLights;
         std::vector<ActivityContact> debrisContacts;
         const double units = std::pow(10., nav.logDistance);
@@ -1096,11 +1507,21 @@ struct Renderer::Impl {
             const auto* offence = weapons && npcCombat
                                       ? weapons->hunterOffence(system.address, activity->seconds)
                                       : nullptr;
-            for (const auto& planet : *planets) {
+            ActivityBatches batches;
+            std::map<StationMeshKey,std::vector<Instance>> stationBatches;
+            auto activityFrames=*planets;
+            if((xalariaStories&&!xalariaStories->evidenceBodies(system.address).empty())||(xalariaCombat&&!xalariaEconomy->orbitalBodies(system,activity->seconds).empty()))activityFrames.push_back(system);
+            for (const auto& planet : activityFrames) {
                 const bool moon = isMoon(planet.address);
                 const bool pinned = activity->selected && activity->selected->home == planet.address;
                 const bool pinnedDebris = pinned && isOrbitalDebris(*activity->selected);
-                if (moon && !pinnedDebris && !planet.address.ancestorOf(nav.anchor) &&
+                std::vector<ActivityBody> bodies;
+                if (xalariaEconomy)
+                    bodies=xalariaEconomy->orbitalBodies(planet,activity->seconds);
+                if(xalariaStories)
+                    for(auto& evidence:xalariaStories->evidenceBodies(planet.address))bodies.push_back(std::move(evidence));
+                if (moon && !pinnedDebris && !(xalariaEconomy && (pinned || !bodies.empty())) &&
+                    !planet.address.ancestorOf(nav.anchor) &&
                     !(nav.selected && planet.address.ancestorOf(*nav.selected)))
                     continue;
                 const auto pose = poseFor(planet.address, nav);
@@ -1112,13 +1533,13 @@ struct Renderer::Impl {
                         std::pow(10.,shipNavigation->logDistance-universe.describe(shipNavigation->anchor).frame.logRadius),
                         planet.address,0):planetEye;
                 const double localRange = glm::length(planetEye);
+                if (xalariaEconomy && xalariaMap && xalariaMap->wormhole && xalariaMap->wormhole->reference==planet.address)
+                    renderWormholeTraffic(*xalariaMap->wormhole,planetEye,pose.orientation,units,batches,trafficExhaust);
                 const double planetRadius = std::pow(10., planet.frame.logRadius);
                 const bool local = !moon && std::min(localRange, glm::length(shipEye)) <
                                                std::max(2e7, planetRadius * 6);
                 const bool pinnedTraffic = pinned && !pinnedDebris;
-                std::vector<ActivityBody> bodies;
-                if (xalariaEconomy) bodies=xalariaEconomy->orbitalBodies(planet,activity->seconds);
-                else if (!moon) {
+                if (!xalariaEconomy && !moon) {
                     if (local || pinnedTraffic)
                         bodies = sampleActivity(planet, activity->seconds);
                     else {
@@ -1187,7 +1608,7 @@ struct Renderer::Impl {
                     for (auto& body : bodies)
                         if (body.kind == ActivityKind::Harbour)
                             annotateEconomicPort(body, *economy);
-                if (!probeRemote && (!instruments || !instruments->shrinking)) {
+                if (planet.address.kind()==Kind::Planet&&!probeRemote && (!instruments || !instruments->shrinking)) {
                     if (localRange > planetRadius * 1.03 && localRange < planetRadius * 4.5) {
                         for (auto& body : sampleOrbitalDebris(planet, activity->seconds))
                             bodies.push_back(std::move(body));
@@ -1196,7 +1617,16 @@ struct Renderer::Impl {
                     }
                 }
                 for (auto body : bodies) {
+                    if(isCombatActor(body.id)||isConvoyActor(body.id)){
+                        TrafficCraft craft{body.position,body.orientation,body.tint,body.kind==ActivityKind::Raider?ActivityKind::Patrol:body.kind,body.radius,
+                            std::min(1.,glm::length(body.velocity)/140.),true,body.velocity,TrafficPhase::OnCircuit};
+                        renderTraffic(trafficStation(body.id),TrafficService::Orbital,std::span<const TrafficCraft>(&craft,1),{},
+                            {1,0,0,0},planetEye,pose.orientation,units,batches,trafficExhaust,&body);
+                        continue;
+                    }
                     const bool natural = isOrbitalDebris(body.id);
+                    const bool evidence=isInvestigationEvidence(body.id);
+                    const bool identifiedEvidence=evidence&&body.status.starts_with("EVIDENCE");
                     if (npcCombat && !natural) {
                         auto physical=body;
                         npcCombat->apply(physical);
@@ -1222,8 +1652,23 @@ struct Renderer::Impl {
                         continue;
                     const auto direction = cameraInverse * (deltaSI / distance);
                     const bool selected = activity->selected && *activity->selected == body.id;
-                    const bool occulted = celestialOccluded(direction, distance, skyOccluders);
-                    if (body.kind != ActivityKind::Debris || (natural && (!occulted || selected))) {
+                    const bool modular = xalariaEconomy && body.kind==ActivityKind::Harbour;
+                    const bool attached = modular && boardedId && body.id==*boardedId;
+                    const bool occulted = !attached && celestialOccluded(direction, distance, skyOccluders);
+                    if (modular && distance<trafficRadioRange+18000.)
+                        if (const auto berth=dockingBerth(body)) {
+                            const auto key=xalariaEconomy->stationDesignKey(berth->id);
+                            const auto schedule=xalariaEconomy->trafficClock(berth->id,activity->seconds).first;
+                            const auto axes=pose.orientation*berth->orientation;
+                            const auto origin=pose.orientation*(berth->metres-planetEye);
+                            renderTraffic(berth->id,TrafficService::Orbital,sampleOrbitalTraffic(key,schedule),
+                                          berth->metres,berth->orientation,planetEye,pose.orientation,units,batches,trafficExhaust);
+                            if (distance<38000.)
+                                renderSpaceJunk(key,origin,axes,units,batches);
+                            renderTraffic(berth->id,TrafficService::Port,sampleStationTraffic(key,schedule),
+                                          berth->metres,berth->orientation,planetEye,pose.orientation,units,batches,trafficExhaust);
+                        }
+                    if (body.kind != ActivityKind::Debris || identifiedEvidence || (natural && (!occulted || selected))) {
                         const auto velocity = cameraInverse * (pose.orientation * body.velocity);
                         auto& contacts = natural ? debrisContacts : activityContacts;
                         contacts.push_back(
@@ -1239,6 +1684,30 @@ struct Renderer::Impl {
                         if (const auto berth = dockingBerth(body)) {
                             const auto phase = instruments ? instruments->docking.phase : DockingPhase::None;
                             const auto lane = dockingLane(*berth, activity->seconds, phase);
+                            if (manualDocking(phase)) {
+                                const auto lamp = [&](glm::dvec3 local, double radius, glm::vec3 colour) {
+                                    const auto relative = pose.orientation *
+                                        ((berth->metres - planetEye) + berth->orientation * local) / units;
+                                    const double depth = -(cameraInverse * relative).z;
+                                    if (depth > worldNearPlane)
+                                        addBillboard(eye + relative, std::max(radius / units, depth * .0024),
+                                                     colour);
+                                };
+                                const auto guideColour = phase == DockingPhase::ManualCapture
+                                    ? glm::vec3(.38,2.8,.95) : glm::vec3(.30,1.9,3.2);
+                                const auto threshold = phase == DockingPhase::ManualCapture
+                                    ? guideColour : glm::vec3(2.7,1.5,.17);
+                                const double length = berth->laneLength(), width = berth->halfWidth();
+                                for (const double z : {30.,86.,156.,260.,430.,680.,length}) {
+                                    const auto spread = std::lerp(12.,width,z/length);
+                                    const auto elevation = std::lerp(6.,width*.52,z/length);
+                                    for (double side : {-1.,1.})
+                                        lamp({side*spread,-elevation,z},z==length ? 4.5 : 1.25,guideColour);
+                                }
+                                for (double side : {-1.,1.})
+                                    for (double level : {-1.,1.})
+                                        lamp({side*11.,level*6.,2.2},.42,threshold);
+                            }
                             stats.dockingGuideVertices += lane.vertices.size();
                             const auto base = uint32_t(dockingLights.vertices.size());
                             for (auto vertex : lane.vertices) {
@@ -1254,26 +1723,27 @@ struct Renderer::Impl {
                                 dockingLights.indices.push_back(base + lane.index(i));
                         }
                     const bool closeRock = landableDebris(body) && distance < body.radius * 2.2;
-                    if ((!closeRock && direction.z >= 0) || occulted ||
+                    // A docked player can look at the near gantry with the station's centre behind them.
+                    if ((!attached && !closeRock && direction.z >= 0) || occulted ||
                         (distance > 2e6 && body.kind != ActivityKind::Harbour && !selected))
                         continue;
                     const double angular = body.radius / distance;
-                    if (!closeRock && !LOD::visible(direction * 500., std::max(.5, angular * 500.), double(width) / height,
+                    if (!attached && !closeRock && !LOD::visible(direction * 500., std::max(.5, angular * (modular?900.:500.)), double(width) / height,
                                       fieldOfView))
                         continue;
                     const auto point = eye + deltaSI / units;
                     const auto shell = eye + cameraQ * direction * 500.;
                     const double pixels = angular * height / std::tan(fieldOfView * .5);
-                    if (body.kind != ActivityKind::Debris || (natural && (selected || pixels > 1.6)))
+                    if (body.kind != ActivityKind::Debris || identifiedEvidence || (natural && (selected || pixels > 1.6)))
                         if (auto screen = project(shell))
                             activityPicks.emplace_back(body.id, *screen);
                     if (natural && pixels < .20 && !selected)
                         continue;
-                    const auto role = landableDebris(body) ? debrisSurfaceRole :
+                    const auto role = evidence?evidenceFirstRole+(body.id.slot&3u):landableDebris(body) ? debrisSurfaceRole :
                         size_t(body.kind == ActivityKind::Raider ? ActivityKind::Patrol : body.kind);
-                    const unsigned detail = pixels > 48 ? 2 : pixels > 8 ? 1 : 0;
-                    if ((closeRock || (pixels > 1.6 && -cameraSpace(point).z > .00005)) &&
-                        distance / units < 8000) {
+                    const unsigned detail = attached || pixels > 48 ? 2 : pixels > 8 ? 1 : 0;
+                    if (attached || ((closeRock || (pixels > 1.6 && -cameraSpace(point).z > worldNearPlane)) &&
+                                     distance / units < 8000)) {
                         const Random shape{body.seed};
                         auto axes = natural ? glm::dvec3(1., landableDebris(body) ? 1. : .66 + .34 * shape.unit(40),
                                                                 .54 + .46 * shape.unit(41))
@@ -1291,7 +1761,9 @@ struct Renderer::Impl {
                                      glm::mat4_cast(pose.orientation * body.orientation) *
                                      glm::scale(glm::dmat4(1), axes * (body.radius / units));
                         const auto paint = body.kind == ActivityKind::Harbour ? glm::vec3(1) : body.tint;
-                        batches[role][detail].push_back({glm::mat4(model), glm::vec4(paint, 1)});
+                        const Instance instance{glm::mat4(model),glm::vec4(paint,1)};
+                        if (modular) stationBatches[{xalariaEconomy->stationDesignKey(body.id),detail}].push_back(instance);
+                        else batches[role][detail].push_back(instance);
                     } else {
                         const double footprint =
                             std::max(angular, 2 * std::tan(fieldOfView * .5) / height * .85);
@@ -1327,7 +1799,12 @@ struct Renderer::Impl {
                                         engine + rotation * glm::dvec3(0, 0, pulse) * (body.radius / units),
                                         body.tint * 1.3f);
                             }
-                        if (body.kind == ActivityKind::Harbour) {
+                        if (modular) {
+                            for (double side : {-1.,1.}) {
+                                const auto lamp=point+rotation*glm::dvec3(side*.177,.157,1.62)*(body.radius/units);
+                                addBillboard(lamp,std::max(1.8/units,distance/units*.00035),body.tint*.82f);
+                            }
+                        } else if (body.kind == ActivityKind::Harbour) {
                             for (int side : {-1, 1}) {
                                 const auto lamp =
                                     point + rotation * glm::dvec3(side * .82, .15, 0) * (body.radius / units);
@@ -1348,41 +1825,97 @@ struct Renderer::Impl {
                     }
                 }
             }
-            for (size_t role = 0; role < batches.size(); role++)
-                for (unsigned detail = 0; detail < 3; detail++) {
-                    const auto& instances = batches[role][detail];
-                    if (instances.empty())
-                        continue;
-                    auto& mesh = craftMeshes[role][detail];
-                    if (!bgfx::isValid(mesh.vertices)) {
-                        const auto source = role == debrisSurfaceRole ? landableDebrisMesh(detail) :
-                                                                       activityMesh(ActivityKind(role), detail);
-                        mesh = upload(source);
-                        craftBytes += source.bytes();
+            const auto drawActors=[&](const GPUMesh& mesh,const std::vector<Instance>& instances,size_t role,
+                                      bool glass=false,bool stationHull=false) {
+                const auto count = bgfx::getAvailInstanceDataBuffer(uint32_t(instances.size()), 80);
+                if (!count || !bgfx::isValid(mesh.vertices)) return;
+                bgfx::InstanceDataBuffer buffer;
+                bgfx::allocInstanceDataBuffer(&buffer, count, 80);
+                if (glass) {
+                    const auto toBerth=glm::translate(glm::mat4(1),glm::vec3(dockingBerthOffset)) *
+                                       glm::scale(glm::mat4(1),glm::vec3(1.f/orbitalStationRadius));
+                    for (uint32_t i=0;i<count;++i) {
+                        const Instance pane{instances[i].transform*toBerth,instances[i].color};
+                        std::memcpy(buffer.data+i*sizeof(Instance),&pane,sizeof(pane));
                     }
-                    const auto count = bgfx::getAvailInstanceDataBuffer(uint32_t(instances.size()), 80);
-                    if (!count)
-                        continue;
-                    bgfx::InstanceDataBuffer buffer;
-                    bgfx::allocInstanceDataBuffer(&buffer, count, 80);
+                } else {
                     std::memcpy(buffer.data, instances.data(), count * sizeof(Instance));
-                    bgfx::setVertexBuffer(0, mesh.vertices);
-                    bgfx::setIndexBuffer(mesh.indices);
-                    bgfx::setInstanceDataBuffer(&buffer);
-                    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER |
-                                   BGFX_STATE_MSAA);
-                    {
-                        Geometry source;
-                        ScenePresentation presentation{
-                            source, system.address, {.085, .82, .035, .01}, float(role) / 6, 1.f,
-                            {role==size_t(ActivityKind::Harbour)?4.f:3.f,role==size_t(ActivityKind::Harbour)?-1.f:float(role),float(units),0}};
-                        presentation.environment={0,1,0,.45f};presentation.surface.x=.25f;
-                        hyperion->bind(presentation, {}, glm::vec3(lightAt(system.address, nav)),
-                                       glm::mat4(1), 0, activity->seconds);
-                    }
-                    bgfx::submit(62, hyperion->geometryProgram());
-                    stats.activityTriangles += count * mesh.count / 3;
                 }
+                bgfx::setVertexBuffer(0, mesh.vertices);
+                bgfx::setIndexBuffer(mesh.indices);
+                bgfx::setInstanceDataBuffer(&buffer);
+                bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_MSAA |
+                               (glass?BGFX_STATE_BLEND_ALPHA:BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z));
+                {
+                    const bool protectedPaint=role>=spaceJunkFirstRole || role==size_t(ActivityKind::Harbour) ||
+                        (xalariaEconomy && (role==size_t(ActivityKind::Freighter) || role==size_t(ActivityKind::Ferry) ||
+                                           role==size_t(ActivityKind::Patrol) || role==size_t(ActivityKind::Survey)));
+                    const bool vessel=role==size_t(ActivityKind::Freighter) || role==size_t(ActivityKind::Ferry) ||
+                                      role==size_t(ActivityKind::Patrol) || role==size_t(ActivityKind::Survey);
+                    const float materialRole=stationHull?-2.f:vessel?-3.f:protectedPaint?-1.f:float(role);
+                    Geometry source;
+                    ScenePresentation presentation{
+                        source, system.address, {.085, .82, .035, .01}, float(role) / 6, 1.f,
+                        {protectedPaint?4.f:3.f,materialRole,float(units),0}};
+                    presentation.environment={0,1,0,.45f};presentation.surface.x=.25f;
+                    hyperion->bind(presentation, {}, glm::vec3(lightAt(system.address, nav)),
+                                   glm::mat4(1), 0, activity->seconds);
+                }
+                if (glass) {
+                    hyperion->bindCockpitGlazing(GlazingView::TunnelExterior);
+                    bgfx::submit(stationGlassViewId,hyperion->cockpitGlazingProgram());
+                } else {
+                    bgfx::submit(62, hyperion->geometryProgram());
+                }
+                stats.activityTriangles += count * mesh.count / 3;
+            };
+            for (size_t role = 0; role < batches.size(); ++role)
+                for (unsigned detail = 0; detail < 3; ++detail) {
+                    const auto& instances=batches[role][detail];
+                    if (instances.empty()) continue;
+                    auto& mesh=craftMeshes[role][detail];
+                    if (!bgfx::isValid(mesh.vertices)) {
+                        const auto source=role>=evidenceFirstRole?investigationMesh(unsigned(role-evidenceFirstRole),detail):
+                                          role==vesselCollarRole?xalariaVesselCollar():
+                                          role==vesselCollarMountRole?xalariaVesselCollarMount():
+                                          role>=spaceJunkFirstRole?spaceJunkMesh(SpaceJunkKind(role-spaceJunkFirstRole),detail):
+                                          role==debrisSurfaceRole?landableDebrisMesh(detail):activityMesh(ActivityKind(role),detail);
+                        mesh=upload(source);
+                        craftBytes+=source.bytes();
+                    }
+                    drawActors(mesh,instances,role);
+                }
+            for (const auto& [key,instances] : stationBatches) {
+                auto [entry,created]=stationMeshes.try_emplace(key);
+                auto& station=entry->second;
+                if (created) {
+                    const auto plan=generateStation(key.first);
+                    const auto source=modularStationHull(plan,key.second);
+                    station.mesh=upload(source);
+                    station.bytes=source.bytes();
+                    if (key.second>0) {
+                        const auto panes=stationGlazing(plan);
+                        station.glass=upload(panes);
+                        station.bytes+=panes.bytes();
+                    }
+                    craftBytes+=station.bytes;
+                }
+                station.lastFrame=frame;
+                drawActors(station.mesh,instances,size_t(ActivityKind::Harbour),false,true);
+                // Boarded glass uses the same pane mesh in the cabin pass, where it can refract the exterior.
+                if ((!boardedStation || boardedStation->key!=key.first) && bgfx::isValid(station.glass.vertices))
+                    drawActors(station.glass,instances,size_t(ActivityKind::Harbour),true);
+            }
+        }
+        while (stationMeshes.size()>48) {
+            const auto oldest=std::min_element(stationMeshes.begin(),stationMeshes.end(),[](const auto& a,const auto& b){
+                return a.second.lastFrame < b.second.lastFrame;
+            });
+            if (oldest->second.lastFrame==frame) break;
+            craftBytes-=oldest->second.bytes;
+            destroy(oldest->second.mesh);
+            destroy(oldest->second.glass);
+            stationMeshes.erase(oldest);
         }
         std::sort(activityContacts.begin(), activityContacts.end(),
                   [](const auto& a, const auto& b) { return a.distance < b.distance; });
@@ -1392,10 +1925,12 @@ struct Renderer::Impl {
             if (port != activityContacts.end())
                 activityContacts[78] = *port;
             auto pinned = std::find_if(activityContacts.begin() + 80, activityContacts.end(),
-                                       [](const auto& c) { return c.selected; });
+                                       [](const auto& c) { return c.selected&&!isXalariaTraffic(c.body.id); });
             if (pinned != activityContacts.end())
                 activityContacts[79] = *pinned;
-            activityContacts.resize(80);
+            activityContacts.erase(std::remove_if(activityContacts.begin()+80,activityContacts.end(),[](const auto& c){
+                return !isXalariaTraffic(c.body.id);
+            }),activityContacts.end());
         }
         std::sort(debrisContacts.begin(), debrisContacts.end(), [](const auto& a, const auto& b) {
             return a.selected != b.selected ? a.selected : a.distance < b.distance;
@@ -1404,7 +1939,32 @@ struct Renderer::Impl {
             debrisContacts.resize(orbitalDebrisCapacity);
         for (auto& contact : debrisContacts)
             activityContacts.push_back(std::move(contact));
+        if(xalariaRadio&&xalariaRadio->dockingTarget&&xalariaEconomy&&xalariaMap&&instruments&&instruments->docking.active){
+            const auto vessel=xalariaTrafficContact(*xalariaEconomy,*xalariaRadio->dockingTarget,xalariaMap->wormhole,activity->seconds);
+            if(vessel)
+                if(const auto berth=xalariaVesselBerth(vessel->body)){
+                    const auto rotation=poseFor(berth->id.home,nav).orientation;
+                    const auto eyeLocal=universe.pointRelative(nav.anchor,
+                        eye*std::pow(10.,nav.logDistance-anchorFrames.back().logRadius),berth->id.home,0.);
+                    const double range=glm::length(berth->metres-eyeLocal);
+                    const float fade=float(1.-smoothstep(1050.,1800.,range));
+                    if(fade>0.f){
+                        const auto& docking=instruments->docking;
+                        auto lane=dockingLane(*berth,activity->seconds,docking.phase,docking.capture,fade);
+                        const auto toScene=[&](glm::dvec3 local){
+                            return rotation*(berth->metres-eyeLocal+berth->orientation*local)/units;
+                        };
+                        for(auto& v:lane.vertices){
+                            const auto point=toScene({v.x,v.y,v.z});
+                            v.x=float(point.x);v.y=float(point.y);v.z=float(point.z);
+                        }
+                        stats.dockingGuideVertices+=lane.vertices.size();
+                        transient(lane,62,true,true);
+                    }
+                }
+        }
         transient(exhaust, worldView(), true, true);
+        transient(trafficExhaust,trafficLightView,true,true);
         transient(dockingLights, 62, true, true);
         stats.activityBytes = craftBytes;
     }
@@ -1436,9 +1996,7 @@ struct Renderer::Impl {
                              3.f + hyperionPhase(node.seed) * .25f);
         } else if (node.address == nav.anchor && pixels < 1.5 && cp.z < 0 && kind != Kind::Cosmic)
             addBillboard(pose.position, -cp.z * .0015, material(node.environment.mineral).color);
-        if (kind != Kind::Cosmic &&
-            (r < 1e-8 || (r > 1e4 && !compactStellar) || pixels < .7 ||
-             !LOD::visible(cp, bounds, static_cast<double>(width) / height, fieldOfView)))
+        if (kind != Kind::Cosmic && (r < 1e-8 || (r > 1e4 && !compactStellar)))
             return;
         const double materialScale = kind >= Kind::Rock && kind <= Kind::Grain
             ? r / std::max(1e-100, glm::length(eye)) : r;
@@ -1451,6 +2009,12 @@ struct Renderer::Impl {
             opacity = 1;
         if (opacity < .005)
             return;
+        if (kind != Kind::Cosmic &&
+            (pixels < .7 || !LOD::visible(cp, bounds, double(width) / height, fieldOfView))) {
+            if (kind == Kind::Planet)
+                queuePlanetRing(node, pose, cp, opacity);
+            return;
+        }
         if (kind == Kind::Mountain && node.address != nav.anchor && pixels < 160)
             return;
         if (kind == Kind::Surface && node.address != nav.anchor && pixels < 100)
@@ -1476,6 +2040,8 @@ struct Renderer::Impl {
                 ++stats.moonWorlds;
             if (!streamedTerrain)
                 drawBlend(state, node, nav, opacity);
+            if (kind == Kind::Planet)
+                queuePlanetRing(node, pose, cp, opacity);
         }
     }
     void renderSection(const Node& parent, const Navigation& nav, RegionCache& cache) {
@@ -1693,6 +2259,7 @@ struct Renderer::Impl {
                 continue;
             auto presentation = extractPresentation(planet, g, mode);
             const auto light = lightAt(planet.address, nav);
+            presentation.planet[4] = glm::vec4(glm::vec3(glm::inverse(poseFor(planet.address, nav).orientation)*light),0);
             glm::vec4 cavity{};
             if (materialInspectionView(nav.anchor.kind(), bool(instruments), instruments && instruments->shrinking))
                 cavity = glm::vec4(glm::vec3(-eye), float(std::max(1.3, glm::length(eye) * 1.1)));
@@ -2111,7 +2678,7 @@ Renderer::Renderer(SDL_Window* window, const Universe& universe, bool benchmark)
         throw std::runtime_error("bgfx could not initialize a graphics device");
     // Shadow casters are submitted during extraction but execute before colour
     // draws. Materials sample this frame's map using their actual positions.
-    std::array<bgfx::ViewId, 88> order{};
+    std::array<bgfx::ViewId, cabinViewId+4> order{};
     order[0] = 70;
     size_t next = 1;
     for (bgfx::ViewId id = 0; id < order.size(); id++)
@@ -2154,6 +2721,18 @@ Renderer::Renderer(SDL_Window* window, const Universe& universe, bool benchmark)
     for (auto& vertex : quad.vertices)
         vertex.color = rgba({1, 1, 1});
     p.hyperionBillboardMesh = p.upload(quad);
+    Mesh annulus;
+    constexpr uint32_t ringSegments = 128;
+    for (uint32_t i = 0; i < ringSegments; ++i) {
+        const double angle = 2. * std::numbers::pi * i / ringSegments;
+        const auto x = float(std::cos(angle)), z = float(std::sin(angle));
+        const uint32_t a = 2 * i, b = 2 * ((i + 1) % ringSegments);
+        annulus.vertices.push_back({x, 0, z, 0xffffffff});
+        annulus.vertices.push_back({x, 1, z, 0xffffffff});
+        annulus.indices.insert(annulus.indices.end(), {a, b, b + 1, a, b + 1, a + 1});
+    }
+    annulus.compact();
+    p.ringMesh = p.upload(annulus);
     for (size_t i = 1; i < quad.vertices.size(); ++i) {
         quad.vertices[i].x *= float(pointLightSupport);
         quad.vertices[i].y *= float(pointLightSupport);
@@ -2197,6 +2776,14 @@ void Renderer::setCockpitLook(glm::dvec2 yawPitch) {
 }
 void Renderer::setShipInterior(const ShipInterior* interior) {
     impl_->shipInterior = interior;
+    if (interior)
+        impl_->hyperion->prepareDeckCrew();
+}
+void Renderer::beginSeatTransition(bool standing) {
+    impl_->seatTransition.begin(impl_->head,standing);
+}
+bool Renderer::seatTransitionActive() const {
+    return impl_->seatTransition.active();
 }
 void Renderer::setCockpitValidation(bool enabled) {
     impl_->validateCockpit = enabled;
@@ -2224,6 +2811,16 @@ void Renderer::toggleCockpitHelp() {
 void Renderer::closeCockpitHelp(){impl_->cockpitHelp=false;}
 void Renderer::setXalariaMap(const XalariaMapView* map){impl_->xalariaMap=map;}
 void Renderer::setXalariaEconomy(const XalariaEconomy* economy){impl_->xalariaEconomy=economy;}
+void Renderer::setXalariaCombat(const XalariaCombat* combat){impl_->xalariaCombat=combat;}
+void Renderer::setXalariaRadio(const XalariaRadioView* radio){impl_->xalariaRadio=radio;}
+void Renderer::setXalariaStories(const XalariaStories* stories,const StoryContext& context,std::string_view next) {
+    impl_->xalariaStories=stories;
+    impl_->storyContext=context;
+    impl_->storyRouteAction=next;
+}
+void Renderer::setXalariaDistress(std::optional<ActivityId> vessel){impl_->distressVessel=std::move(vessel);}
+void Renderer::setXalariaShield(const ShieldReadout& shield){impl_->playerShield=shield;}
+void Renderer::cutPlayerTrail(){impl_->playerTrail.cut();}
 std::shared_ptr<const Geometry> Renderer::galaxySamples() const {
     return impl_->skyGeometry;
 }
@@ -2378,6 +2975,7 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
     auto start = std::chrono::steady_clock::now();
     auto& p = *impl_;
     ++p.frame;
+    p.visibleRings.clear();
     if (p.skyGeometry && !p.skyGeometry->address.ancestorOf(nav.anchor))
         p.skyGeometry.reset();
     p.frameSeconds = std::clamp(std::chrono::duration<double>(start - p.previousTime).count(), 0.0, .1);
@@ -2395,6 +2993,10 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
     p.staticUploadBytes = 0;
     p.picks.clear();
     p.billboards.clear();
+    p.trafficLights.clear();
+    p.shieldFields.vertices.clear();
+    p.shieldFields.indices.clear();
+    std::erase_if(p.shieldFades,[&](const auto& entry){return p.frame-entry.second.seen>90;});
     p.cosmicBillboards.clear();
     p.pointLightBillboards.clear();
     p.stellarBillboards.clear();
@@ -2402,7 +3004,41 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
     p.framePoses.clear();
     p.cockpitVisible = p.instruments.has_value() && overlay;
     const bool walking = p.shipInterior && p.shipInterior->walking() && p.cockpitVisible && !p.probeRemote;
-    if (p.cockpitMotionEnabled && !walking && !p.probeRemote && p.cockpitVisible && !p.cockpitHelp && !(p.market && p.market->open)) {
+    const bool seatMoving = p.shipInterior && p.seatTransition.active() && p.cockpitVisible && !p.probeRemote;
+    const auto* boarding = p.shipInterior ? p.shipInterior->station() : nullptr;
+    const double shipOpening=p.shipInterior?p.shipInterior->shipDoorOpening():0.;
+    const double bridgeOpening=p.shipInterior?p.shipInterior->bridgeDoorOpening():0.;
+    const auto boardedVessel=boarding&&boarding->key.vessel&&p.xalariaEconomy&&p.xalariaMap&&p.activity&&
+        p.xalariaRadio&&p.xalariaRadio->dockingTarget?
+        xalariaTrafficContact(*p.xalariaEconomy,*p.xalariaRadio->dockingTarget,p.xalariaMap->wormhole,
+                              p.activity->seconds):std::nullopt;
+    const bool prize=boardedVessel&&p.xalariaCombat&&p.xalariaCombat->shieldsLowered(boardedVessel->body.id);
+    if(boardedVessel){
+        const auto parcel=xalariaVesselParcel(*p.xalariaEconomy,*boardedVessel);
+        if(!p.boardingCharter||p.boardingCharter->id!=parcel.id){
+            p.boardingCharter=parcel;
+            p.renderedFreightDispatch.reset();
+        }
+    }else if (boarding && p.xalariaEconomy && p.xalariaEconomy->dockedPlace()) {
+        const auto& port=*p.xalariaEconomy->dockedPlace();
+        const auto day=p.xalariaEconomy->day();
+        if (!p.boardingCharter || p.boardingCharter->origin!=port || p.boardingCharterDay!=day) {
+            p.boardingCharter=p.xalariaEconomy->offer(port);
+            p.boardingCharterDay=day;
+            p.renderedFreightDispatch.reset();
+        }
+    } else {
+        p.boardingCharter.reset();
+        p.renderedFreightDispatch.reset();
+    }
+    const auto& loadingCharter=p.boardingCharter;
+    const bool freightClaimed=loadingCharter && loadingCharter->units>0 &&
+                              p.xalariaEconomy->charterClaimed(loadingCharter->id);
+    if (!walking) {
+        p.deckRoomLabel={};
+        p.deckPromptLabel={};
+    }
+    if (p.cockpitMotionEnabled && !walking && !seatMoving && !p.probeRemote && p.cockpitVisible && !p.cockpitHelp && !(p.market && p.market->open)) {
         const auto& t = *p.instruments;
         p.cockpitMotion.update({t.localAcceleration, t.localAngularVelocity, t.contactImpulse, t.hullMetres,
                                 t.hull, t.engine, t.contactSequence, t.landed},
@@ -2420,6 +3056,8 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
         const auto pitch = glm::angleAxis(-p.cockpitLook.y, glm::dvec3(1, 0, 0));
         p.head.orientation = yaw * pitch * p.head.orientation;
     }
+    if (seatMoving)
+        p.head = p.seatTransition.pose(p.head);
     p.stats.cockpitMotionDegrees = glm::length(p.head.angles) * 180 / std::numbers::pi;
     p.stats.cockpitMotionMetres = glm::length(p.head.translation);
     p.hudViewport = p.cockpitViewport();
@@ -2439,6 +3077,12 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
         std::erase_if(nodes, [&](const Node& node) { return !p.specimen->ancestorOf(node.address); });
         if (nodes.empty()) throw std::runtime_error("Specimen view escaped its source lineage");
     }
+    const Node* scopeStar=nullptr;
+    if(p.cockpitVisible&&p.xalariaMap&&p.xalariaMap->observingStar&&!p.xalariaMap->open&&!p.probeRemote&&!walking&&!seatMoving){
+        const auto node=std::find_if(nodes.begin(),nodes.end(),[](const Node& n){return n.address.kind()==Kind::System;});
+        if(node!=nodes.end()&&p.xalariaMap->catalog->star(node->address.id()).surveyStar)
+            scopeStar=&*node;
+    }
     cache.beginFrame();
     // Queue the actual destination before it enters the ordinary camera LOD.
     // Existing async generation, cache eviction and upload budgets still apply.
@@ -2452,7 +3096,7 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
     p.cameraQ = nav.orientation * stationAim * p.head.orientation;
     p.cameraInverse = glm::inverse(p.cameraQ);
     p.eye = nav.cameraPosition();
-    if (walking)
+    if (walking || seatMoving)
         p.eye += nav.orientation * p.head.translation *
                  (p.instruments->hullMetres / 12. / std::pow(10.,nav.logDistance));
     if (p.instruments && p.instruments->playerGun < maxWeaponMounts)
@@ -2638,9 +3282,12 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
     for (const auto& contact : p.contacts)
         if (contact.angularRadius > pixelAngle * .125)
             p.skyOccluders.push_back(contact);
-    if (!p.exteriorHidden && p.instruments && !p.instruments->shrinking && p.stellarOptics)
-        p.hyperion->stellar(extractStellarImage(p.universe, nav, p.contacts, stationAim * p.head.orientation),
-                            float(p.width) / p.height, float(std::tan(fov * .5)), p.visualTime);
+    StellarImage localStar;
+    if (!p.exteriorHidden && p.instruments && !p.instruments->shrinking && (p.stellarOptics || boarding)) {
+        localStar=extractStellarImage(p.universe,nav,p.contacts,stationAim*p.head.orientation);
+        if (p.stellarOptics)
+            p.hyperion->stellar(localStar,float(p.width)/p.height,float(std::tan(fov*.5)),p.visualTime);
+    }
     p.stats.celestialContacts = p.contacts.size();
     p.stats.lifeWorlds = std::count_if(p.contacts.begin(), p.contacts.end(), hasSurfaceLife);
     p.stats.lifeScanning = std::count_if(p.contacts.begin(), p.contacts.end(),
@@ -2681,21 +3328,37 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
             p.stellarSky(node, nav, cache);
     for (const auto& contact : p.contacts) {
         if(p.exteriorHidden)continue;
+        // The disc can leave the viewport or pass behind another body while
+        // part of its ring is still in view.
         const auto direction = contact.localDirection;
+        if (contact.address.kind() == Kind::Planet && !rendered.contains(contact.address)) {
+            bool visibleRing = false;
+            if (p.planetRings && p.universe.xalaria()) {
+                const auto& source = p.universe.xalaria()->world(contact.address);
+                const double units = std::pow(10., nav.logDistance);
+                const double ringRadius = source.radius * source.ringOuter / units;
+                const double distance = contact.distanceMetres / units;
+                visibleRing = source.ringOuter > source.ringInner &&
+                    LOD::pixels(ringRadius, distance, p.height, fov) >= .7 &&
+                    LOD::visible(direction * distance, ringRadius, double(p.width) / p.height, fov);
+            }
+            if (visibleRing || (contact.angularRadius >= .008 && direction.z < 0 && !contact.occluded)) {
+                p.renderNode(p.universe.describe(contact.address), nav, cache);
+                rendered.insert(contact.address);
+            }
+        }
         if (direction.z >= 0 || contact.occluded)
             continue;
-        if (contact.address.kind() == Kind::Planet && contact.angularRadius >= .008 &&
-            !rendered.contains(contact.address)) {
-            p.renderNode(p.universe.describe(contact.address), nav, cache);
-            rendered.insert(contact.address);
-        }
         const auto point = p.eye + p.cameraQ * direction * 500.;
         if (auto screen = p.project(point)) {
             p.picks.push_back({contact.address, *screen, contact.distanceMetres});
             // Large resolved planets keep their generated mesh. Unresolved
             // planets and the actual sun retain a legible angular light proxy
             // even when their physical distance exceeds the local depth range.
-            if (contact.angularRadius < .008 || contact.address.kind() == Kind::System) {
+            const auto detail = p.details.find(contact.address);
+            const bool resolved = detail != p.details.end() && detail->second.used == p.frame &&
+                                  detail->second.blend.current;
+            if (!resolved || contact.address.kind() == Kind::System) {
                 const double pixelAngle = 2 * std::tan(fov * .5) / p.height;
                 const bool star = contact.address.kind() == Kind::System;
                 const double angular = std::clamp(contact.angularRadius * (star ? 2.5 : 1.),
@@ -2905,11 +3568,16 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
     for (const auto& node : rootNodes)
         if (node.address != root)
             candidates(node);
-    if(!p.exteriorHidden)
-        for (const auto& a : rendered)
-            if (a.kind() == Kind::Planet)
-                p.drawPlanetRings(p.universe.describe(a), nav);
+    p.drawPlanetRings(nav);
     p.renderActivity(nodes, nav, cache);
+    p.renderShipTrails(nav);
+    if(p.playerShield.pulse>0.&&p.cockpitVisible&&!p.exteriorHidden&&!p.probeRemote){
+        const double scale=p.instruments->hullMetres/12./std::pow(10.,nav.logDistance);
+        const auto centre=(nav.cameraPosition()-p.eye)+nav.orientation*glm::dvec3(0,0,1.6*scale);
+        p.shieldEnvelope(centre,nav.orientation,glm::dvec3(3.45,2.70,6.2)*scale,p.playerShield,0.f,
+                         .83f*float(p.playerShield.pulse));
+    }
+    p.transient(p.shieldFields,p.trafficLightView,false,true);
     p.drawWormhole(nav);
     p.renderLanding(nav, terrainPlanet);
     // Nearby visible worlds claim the two existing workers first. Surveying
@@ -2925,7 +3593,7 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
     p.stats.surfacePending = surfaceStats.pending;
     p.stats.surfaceGpuBytes = p.surfaceMeshBytes;
     auto drawBillboards = [&](const std::vector<Instance>& instances, bool cosmic, bool stellar = false,
-                              bool compact = false) {
+                              bool compact = false, std::optional<bgfx::ViewId> localView = std::nullopt) {
         uint32_t count = bgfx::getAvailInstanceDataBuffer(static_cast<uint32_t>(instances.size()), 80);
         if (count) {
             bgfx::InstanceDataBuffer buffer;
@@ -2956,7 +3624,7 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
                     p.hyperion->bindEmissions(node, glm::inverse(focusModel), p.visualTime);
                 }
             }
-            bgfx::submit(cosmic && p.instruments ? 0 : p.worldView(),
+            bgfx::submit(localView.value_or(cosmic && p.instruments ? 0 : p.worldView()),
                          stellar ? p.hyperion->coronaProgram() : p.hyperion->glowProgram());
         }
     };
@@ -2964,33 +3632,18 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
     drawBillboards(p.cosmicBillboards, true);
     drawBillboards(p.billboards, false);
     drawBillboards(p.stellarBillboards, false, true);
-    const bool warpView = p.instruments && !p.probeRemote && !p.specimen && !p.exteriorHidden &&
-                          p.instruments->warp != WarpPhase::Off;
-    const bool engaged = warpView && p.instruments->warp != WarpPhase::Drop;
-    if (engaged != p.warpEngaged) {
-        p.warpDestinationExit = !engaged && p.instruments && p.instruments->warpDestination.has_value();
-        if (p.warpDestinationExit)
-            p.warpExitBore = warpTunnelAperture(1, p.instruments->warpAngularRadius, fov);
-        p.warpEngaged = engaged;
-        p.warpTransition = 0;
-        p.warpTransitionVisible = !p.probeRemote && !p.specimen && !p.exteriorHidden;
-    }
-    p.warpTransition = std::min(1., p.warpTransition + p.frameSeconds /
-        (engaged ? 1.05 : p.warpDestinationExit ? 2.8 : .85));
-    const double transition = p.warpTransitionVisible ? std::sin(std::numbers::pi * p.warpTransition) : 0.;
-    const double warpSpeed = warpView ? p.instruments->speed : 0.;
+    drawBillboards(p.trafficLights,false,false,false,p.trafficLightView);
+    const bool canShowWarp=p.instruments && !p.probeRemote && !p.specimen && !p.exteriorHidden && !scopeStar;
+    const bool engaged=canShowWarp && (p.instruments->warp==WarpPhase::Route || p.instruments->warp==WarpPhase::Manual);
     if (engaged)
         p.warpOpticalDestination = p.instruments->warpDestination;
-    const double warpTarget = engaged
-        ? std::max(p.instruments->warpDestination ? .72 : 0.,
-                   smoothstep(3.7, 7.3, std::log10(std::max(1., warpSpeed)))) : 0.;
-    p.warpLight = std::lerp(p.warpLight, warpTarget,
-        -std::expm1(-p.frameSeconds * (!engaged && p.warpDestinationExit ? 1.1 : 4.)));
-    if (p.instruments && !p.probeRemote && !p.specimen && !p.exteriorHidden && (p.warpLight > .005 || transition > .005)) {
-        // Camera-facing optical trails. Their animation survives frame rebases
-        // and the opaque scene depth still masks them against nearby bodies.
+    const auto warp=p.warpOptics.update(engaged,p.warpOpticalDestination.has_value(),
+        engaged?p.instruments->speed:0.,engaged?warpTunnelAperture(p.instruments->warpReveal,
+            p.instruments->warpAngularRadius,fov):.21,p.frameSeconds);
+    if (canShowWarp && (warp.light>.001 || warp.closure>.001)) {
+        // Camera-relative coordinates keep the streak field stable across reference frames.
         Mesh streaks;
-        p.warpClock = std::fmod(p.warpClock + p.frameSeconds * (.55 + p.warpLight * 3.1), 1.);
+        p.warpClock = std::fmod(p.warpClock + p.frameSeconds * (.42 + warp.light * 2.55), 1.);
         const auto velocity = p.cameraInverse * (nav.orientation * p.instruments->localVelocity);
         const double aspect = double(p.width) / p.height;
         const double tanFov = std::tan(fov * .5);
@@ -3009,11 +3662,10 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
                                            glm::dvec2(-.8), glm::dvec2(.8));
             desiredFocus = glm::mix(desiredFocus, centre, engaged ? travel.warpReveal : 1.);
         }
-        if (engaged || forward > 1e-12)
-            p.warpFocus = glm::mix(p.warpFocus, desiredFocus, -std::expm1(-p.frameSeconds * 9.));
+        p.warpFocus = glm::mix(p.warpFocus,desiredFocus,-std::expm1(-p.frameSeconds*6.));
         const auto focus = p.warpFocus;
         const auto world = [&](glm::dvec2 screen) {
-            return p.eye + p.cameraQ * glm::dvec3(screen.x * aspect * tanFov, screen.y * tanFov, -1) * 500.;
+            return p.cameraQ * glm::dvec3(screen.x * aspect * tanFov, screen.y * tanFov, -1) * 500.;
         };
         constexpr double turn = 2. * std::numbers::pi;
         const double twist = p.visualTime * .48;
@@ -3047,19 +3699,16 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
             }
         };
 
-        // A perspective bore around the vanishing point. The sky still
-        // shows through the opening, and opaque scene depth masks the field.
-        constexpr bgfx::ViewId warpPass = 66;
+        // The opening stays on the destination as the field falls away.
+        constexpr auto warpPass=warpFieldViewId;
+        const auto rotationView=glm::mat4_cast(glm::quat(p.cameraInverse));
         bgfx::setViewMode(warpPass, bgfx::ViewMode::Sequential);
         bgfx::setViewRect(warpPass, 0, 0, uint16_t(p.width), uint16_t(p.height));
-        bgfx::setViewTransform(warpPass, glm::value_ptr(v), glm::value_ptr(proj));
+        bgfx::setViewTransform(warpPass,glm::value_ptr(rotationView),glm::value_ptr(proj));
         const double outerRadius = std::hypot(aspect * (1. + std::abs(focus.x)),
                                               1. + std::abs(focus.y)) + .28;
-        const double shutter = smoothstep(.04, .96, p.warpTransition);
-        const double destinationBore = !engaged && p.warpDestinationExit ? p.warpExitBore :
-            warpTunnelAperture(travel.warpReveal, travel.warpAngularRadius, fov);
-        const double aperture = std::lerp(outerRadius, destinationBore, engaged ? shutter : 1. - shutter);
-        if (p.warpLight > .015 && aperture < outerRadius - .001) {
+        const double aperture=std::lerp(outerRadius,warp.bore,warp.closure);
+        if (warp.light>.001 && aperture<outerRadius-.001) {
             Mesh wall;
             constexpr unsigned sectors = 80, slices = 24, row = sectors + 1;
             wall.vertices.reserve((slices + 1) * row);
@@ -3069,7 +3718,7 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
             for (unsigned slice = 0; slice <= slices; ++slice) {
                 const double t = double(slice) / slices;
                 const double radius = aperture * std::pow(ratio, t);
-                const float opacity = float(p.warpLight * .82 * smoothstep(0., .16, t));
+                const float opacity = float(warp.light * .82 * smoothstep(0., .24, t));
                 const auto colour = glm::vec3(.006f, .002f, .001f) + pigment * float(.08 + .12 * t);
                 for (unsigned j = 0; j <= sectors; ++j) {
                     const double angle = j * turn / sectors;
@@ -3083,26 +3732,27 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
                     }
                 }
             }
-            p.transient(wall, warpPass, false, false, !p.warpOpticalDestination, false, true);
+            p.transient(wall,warpPass,false,false,false,false,true);
         }
 
-        for (unsigned i = 0; i < 148; ++i) {
+        for (unsigned i = 0; i < 220; ++i) {
             const Random random{mix64(0x574152505354524bULL + i)};
             const double angle = random.unit(0) * turn;
             const double age = std::fmod(p.warpClock + random.unit(1), 1.);
             const double radius = (.14 + age * age * 3.15) * (.67 + .55 * random.unit(2));
-            const double span = (.055 + .95 * age * age) * (p.warpLight + transition * .22);
+            const double span=(.035+(i%3==0?1.28:.69)*age*age)*warp.light;
             const double inner = aperture * 1.08;
             if (radius <= inner)
                 continue;
             const auto head = focus + polar(radius, angle);
             const auto tail = focus + polar(std::max(inner, radius - span), angle);
-            const float fade = float((p.warpLight + transition * .20) * smoothstep(.04, .22, age) *
-                                     (1. - smoothstep(.78, 1., age)));
-            const auto colour = glm::mix(embers(angle + twist), glm::vec3(1, .78f, .18f), .16f);
+            const float fade=float(warp.light*smoothstep(.04,.22,age)*(1.-smoothstep(.78,1.,age))*
+                                   smoothstep(inner,inner+.16,radius));
+            const auto colour = glm::mix(embers(angle + twist),glm::vec3(1,.82f,.36f),
+                                         float(.08+random.unit(3)*.42));
             addLine(streaks, world(tail), world(glm::mix(tail, head, .72)), colour * (fade * .38f));
             addLine(streaks, world(glm::mix(tail, head, .72)), world(head), colour * fade);
-            if (i % 4 == 0 && fade > .06f) {
+            if (i % 4 == 0) {
                 strip(2, [&](double t) {
                     return std::tuple{glm::mix(tail, head, t), polar(.008 + .012 * age, angle + turn * .25),
                                       colour * (fade * float(t) * .60f)};
@@ -3110,12 +3760,15 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
             }
         }
 
-        p.transient(ribbons, warpPass, false, true, !p.warpOpticalDestination);
-        p.transient(streaks, warpPass, true, true, !p.warpOpticalDestination);
+        p.transient(ribbons,warpPass,false,true,false);
+        p.transient(streaks,warpPass,true,true,false);
     } else {
         p.warpFocus = {};
+        if(!engaged && warp.light<=.001 && warp.closure<=.001)
+            p.warpOpticalDestination.reset();
     }
-    if (p.instruments && p.warpLight < .12 && !p.instruments->shrinking &&
+    const double normalTrails=1.-smoothstep(.02,.24,warp.light);
+    if (p.instruments && normalTrails>.001 && !p.instruments->shrinking &&
         !p.instruments->landed && p.instruments->speed > 24) {
         // Hyperion drawMotion's bounded, world-grid-anchored navigation streaks.
         // These are optical cues, never additional stars or collision objects.
@@ -3127,7 +3780,8 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
         const auto velocity = nav.orientation * p.instruments->localVelocity;
         const auto direction = glm::normalize(velocity);
         const auto forward = nav.orientation * glm::dvec3(0, 0, -1);
-        const double strength = std::clamp(p.instruments->speed / (450. * driveScale), 0., 1.);
+        const double strength=normalTrails*smoothstep(24.,95.,p.instruments->speed)*
+                              std::clamp(p.instruments->speed/(450.*driveScale),0.,1.);
         for (int x = -2; x <= 2; x++)
             for (int y = -2; y <= 2; y++)
                 for (int z = -2; z <= 2; z++) {
@@ -3149,9 +3803,18 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
                 }
         p.transient(trails, p.worldView(), true, true);
     }
+    if(!p.xalariaCombat)p.explosionImpulses.clear();
+    else std::erase_if(p.explosionImpulses,[&](const auto& id){
+        const auto events=p.xalariaCombat->explosions();
+        return std::none_of(events.begin(),events.end(),[&](const auto& event){return event.source==id;});
+    });
     if ((p.weapons && (!p.weapons->shots().empty() || !p.weapons->missiles().empty() || !p.weapons->decoys().empty())) ||
+        (p.xalariaCombat&&!p.xalariaCombat->explosions().empty()) ||
         (p.npcCombat && !p.npcCombat->shots().empty())) {
-        Mesh beams, weaponGlow, miningChips, miningDust;
+        Mesh beams, weaponGlow, miningChips, miningDust, explosionGlow, explosionGas;
+        Mesh* glowTarget=&weaponGlow;
+        struct ExplosionVapour {glm::dvec3 point;double radius;glm::vec3 colour;float opacity;};
+        std::vector<ExplosionVapour> explosionVapour;
         const auto rotation = glm::mat4_cast(glm::quat(p.cameraInverse));
         const glm::mat4 projection(p.projection);
         bgfx::setViewTransform(63, glm::value_ptr(rotation), glm::value_ptr(projection));
@@ -3164,24 +3827,26 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
                    p.height;
         };
         const auto vertex = [&](glm::dvec3 point, glm::vec3 colour) {
-            weaponGlow.vertices.push_back({float(point.x), float(point.y), float(point.z), rgba(colour)});
+            const float coverage=glowTarget==&explosionGlow?std::clamp(std::max({colour.r,colour.g,colour.b})*1.25f,0.f,.98f):1.f;
+            const auto radiance=glowTarget==&explosionGlow?colour*2.8f:colour;
+            glowTarget->vertices.push_back({float(point.x),float(point.y),float(point.z),rgba(radiance,coverage)});
         };
         const auto ribbon = [&](glm::dvec3 from, glm::dvec3 to, double startWidth, double endWidth,
                                 glm::vec3 startColour, glm::vec3 endColour) {
             auto side = glm::cross(to - from, from + to);
             const double length = glm::length(side);
             side = length > 1e-20 ? side / length : cameraRight;
-            const auto first = uint32_t(weaponGlow.vertices.size());
+            const auto first = uint32_t(glowTarget->vertices.size());
             for (int edge = -1; edge <= 1; ++edge) {
                 vertex(from + side * (startWidth * edge), edge ? glm::vec3(0) : startColour);
                 vertex(to + side * (endWidth * edge), edge ? glm::vec3(0) : endColour);
             }
-            weaponGlow.indices.insert(weaponGlow.indices.end(),
+            glowTarget->indices.insert(glowTarget->indices.end(),
                                       {first, first + 1, first + 2, first + 1, first + 3, first + 2,
                                        first + 2, first + 3, first + 4, first + 3, first + 5, first + 4});
         };
         const auto flash = [&](glm::dvec3 point, double radius, glm::vec3 colour) {
-            const auto centre = uint32_t(weaponGlow.vertices.size());
+            const auto centre = uint32_t(glowTarget->vertices.size());
             vertex(point, colour);
             constexpr unsigned sides = 10;
             for (unsigned j = 0; j <= sides; ++j) {
@@ -3189,9 +3854,119 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
                 vertex(point + radius * (cameraRight * std::cos(angle) + cameraUp * std::sin(angle)),
                        glm::vec3(0));
                 if (j)
-                    weaponGlow.indices.insert(weaponGlow.indices.end(), {centre, centre + j, centre + j + 1});
+                    glowTarget->indices.insert(glowTarget->indices.end(), {centre, centre + j, centre + j + 1});
             }
         };
+        glowTarget=&explosionGlow;
+        if(p.xalariaCombat)for(const auto& explosion:p.xalariaCombat->explosions()){
+            const double sourceUnits=std::pow(10.,p.universe.describe(explosion.source.home).frame.logRadius);
+            const auto centre=p.universe.pointRelative(explosion.source.home,
+                (explosion.position+explosion.velocity*explosion.age)/sourceUnits,nav.anchor,nav.logDistance)-p.eye;
+            const double distance=glm::length(centre),metres=distance*units;
+            if(distance<1e-12||metres>60000.)continue;
+            const auto axes=p.poseFor(explosion.source.home,nav).orientation*explosion.orientation;
+            const auto localDirection=p.cameraInverse*(centre/distance);
+            if(celestialOccluded(localDirection,metres,p.skyOccluders,nullptr,
+                                 std::atan2(explosion.radius*9.6,metres)))continue;
+            const auto image=sampleShipExplosion(explosion);
+            if(explosion.age<.25&&metres<2500.&&p.explosionImpulses.size()<maxShipExplosions&&
+               std::find(p.explosionImpulses.begin(),p.explosionImpulses.end(),explosion.source)==p.explosionImpulses.end()){
+                p.explosionImpulses.push_back(explosion.source);
+                if(p.cockpitMotionEnabled)p.cockpitMotion.impulse(CockpitImpulse::Impact,
+                    std::clamp(explosion.radius*5./std::max(100.,metres),.025,.65),
+                    glm::inverse(nav.orientation)*(centre/distance));
+            }
+            // Smooth, overlapping incandescent volumes, not flat polygon stars.
+            const auto fireball=[&](glm::dvec3 point,double radius,glm::vec3 colour,float energy){
+                if(radius<=0.||energy<=.001f)return;
+                constexpr unsigned sides=20;
+                const auto first=uint32_t(glowTarget->vertices.size());
+                vertex(point,glm::mix(colour,image.coreColour,.38f)*energy);
+                for(unsigned ring=0;ring<2;++ring)for(unsigned i=0;i<=sides;++i){
+                    const double angle=double(i)*2.*std::numbers::pi/sides;
+                    const double extent=radius*(ring?1.:.34);
+                    vertex(point+extent*(cameraRight*std::cos(angle)+cameraUp*std::sin(angle)),
+                        ring?glm::vec3(0):colour*(energy*.52f));
+                    if(i&&ring==0)glowTarget->indices.insert(glowTarget->indices.end(),{first,first+i,first+i+1});
+                    if(i&&ring==1){const auto inner=first+i,outer=first+1+(sides+1)+i;
+                        glowTarget->indices.insert(glowTarget->indices.end(),{inner,outer-1,outer,inner,outer,inner+1});}
+                }
+            };
+            fireball(centre,image.haloRadius/units,image.haloColour,image.flash*.29f+image.afterglow*.15f);
+            for(size_t i=0;i<image.count;++i){
+                const auto& mote=image.particles[i];
+                const auto point=centre+axes*(mote.offset/units);
+                const auto colour=mote.colour*mote.opacity;
+                if(mote.kind==ExplosionParticleKind::Vapour){
+                    explosionVapour.push_back({point,mote.radius/units,mote.colour,mote.opacity});
+                }else if(mote.kind==ExplosionParticleKind::Fire){
+                    fireball(point,mote.radius/units,mote.colour,mote.opacity);
+                }else{
+                    const auto velocity=axes*mote.velocity;
+                    const auto tail=point-velocity*(.10/units);
+                    const double width=std::max(mote.radius/units,screenWidth(point)*.65);
+                    const float hot=float(1.-smoothstep(.6,7.,explosion.age));
+                    ribbon(tail,point,width*.18,width*.45,glm::vec3(0),colour*hot);
+                    if(mote.kind==ExplosionParticleKind::Ember){
+                        flash(point,width*2.,colour*(hot*.7f));
+                    }else{
+                        const auto spin=glm::angleAxis(mote.spin*explosion.age,mote.axis);
+                        constexpr std::array corners{glm::dvec3(1.5,0,0),glm::dvec3(-.6,.6,0),
+                            glm::dvec3(-.5,-.5,.45),glm::dvec3(-.4,0,-.65)};
+                        const auto first=uint32_t(miningChips.vertices.size());
+                        for(unsigned j=0;j<corners.size();++j){
+                            const auto v=point+axes*(spin*corners[j])*(mote.radius/units);
+                            const auto shade=glm::vec3(.035,.023,.019)+mote.colour*(hot*(j==0?.46f:.09f));
+                            miningChips.vertices.push_back({float(v.x),float(v.y),float(v.z),rgba(shade,mote.opacity)});
+                        }
+                        miningChips.indices.insert(miningChips.indices.end(),{first,first+1,first+2,first,first+3,first+1,
+                            first,first+2,first+3,first+1,first+3,first+2});
+                    }
+                }
+            }
+            fireball(centre,image.coreRadius/units,image.coreColour,image.flash*.95f);
+            // A thin spherical shock front expands in world space. Its grazing
+            // rim is brightest; it never rotates to face the cockpit.
+            if(image.shock>.001f){
+                constexpr unsigned rows=12,columns=40;
+                const auto first=uint32_t(glowTarget->vertices.size());
+                for(unsigned y=0;y<=rows;++y)for(unsigned x=0;x<=columns;++x){
+                    const double latitude=std::numbers::pi*double(y)/rows,longitude=2.*std::numbers::pi*double(x)/columns;
+                    const auto normal=axes*glm::dvec3(std::sin(latitude)*std::cos(longitude),std::cos(latitude),
+                                                     std::sin(latitude)*std::sin(longitude));
+                    const auto point=centre+normal*(image.shockRadius/units);
+                    const auto toward=glm::length(point)>1e-12?glm::normalize(-point):normal;
+                    const double rim=std::pow(std::max(0.,1.-std::abs(glm::dot(normal,toward))),7.);
+                    const float ripple=float(.78+.22*std::sin(longitude*7.+latitude*11.+explosion.age*4.));
+                    vertex(point,image.shockColour*float(rim)*image.shock*ripple);
+                    if(y&&x){const auto n=first+y*(columns+1)+x;
+                        glowTarget->indices.insert(glowTarget->indices.end(),{n,n-1,n-columns-1,n-1,n-columns-2,n-columns-1});}
+                }
+            }
+            p.stats.particles+=image.count;
+        }
+        // Brown released oxidizer and charcoal soot absorb light; adding their
+        // RGB values to the glow buffer would turn them into luminous orange.
+        std::sort(explosionVapour.begin(),explosionVapour.end(),[](const auto& a,const auto& b){
+            return glm::dot(a.point,a.point)>glm::dot(b.point,b.point);
+        });
+        for(const auto& cloud:explosionVapour){
+            constexpr unsigned sides=20;
+            const auto first=uint32_t(explosionGas.vertices.size());
+            const auto add=[&](glm::dvec3 point,float opacity){
+                explosionGas.vertices.push_back({float(point.x),float(point.y),float(point.z),rgba(cloud.colour*opacity,opacity)});
+            };
+            add(cloud.point,cloud.opacity);
+            for(unsigned ring=0;ring<2;++ring)for(unsigned i=0;i<=sides;++i){
+                const double angle=double(i)*2.*std::numbers::pi/sides;
+                add(cloud.point+cloud.radius*(ring?1.:.45)*(cameraRight*std::cos(angle)+cameraUp*std::sin(angle)),
+                    ring?0.f:cloud.opacity*.65f);
+                if(i&&ring==0)explosionGas.indices.insert(explosionGas.indices.end(),{first,first+i,first+i+1});
+                if(i&&ring==1){const auto inner=first+i,outer=first+1+(sides+1)+i;
+                    explosionGas.indices.insert(explosionGas.indices.end(),{inner,outer-1,outer,inner,outer,inner+1});}
+            }
+        }
+        glowTarget=&weaponGlow;
         auto drawShot = [&](const WeaponShot& shot) {
             const auto source = p.universe.describe(shot.reference);
             const double sourceUnits = std::pow(10., source.frame.logRadius);
@@ -3314,6 +4089,16 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
         if (p.npcCombat)
             for (const auto& shot : p.npcCombat->shots())
                 drawShot(shot);
+        if(!explosionGlow.vertices.empty()||!explosionGas.vertices.empty()){
+            const auto view=p.hyperion->shipBlastView();
+            for(unsigned pass=0;pass<2;++pass)
+                bgfx::setViewTransform(bgfx::ViewId(view+pass),glm::value_ptr(rotation),glm::value_ptr(projection));
+            const uint64_t state=BGFX_STATE_WRITE_RGB|BGFX_STATE_WRITE_A|BGFX_STATE_DEPTH_TEST_GEQUAL|BGFX_STATE_MSAA;
+            p.transient(explosionGlow,view,state|BGFX_STATE_BLEND_FUNC_SEPARATE(
+                BGFX_STATE_BLEND_ONE,BGFX_STATE_BLEND_ONE,BGFX_STATE_BLEND_ONE,BGFX_STATE_BLEND_INV_SRC_ALPHA));
+            p.transient(explosionGas,bgfx::ViewId(view+1),state|
+                BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE,BGFX_STATE_BLEND_INV_SRC_ALPHA));
+        }
         p.transient(weaponGlow, 63, false, true);
         p.transient(beams, 63, true, true);
         p.transient(miningChips,63,false,false,true,true,true);
@@ -3340,8 +4125,21 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
                                p.polarLights ? extractPolarLight(planet) : PolarLight{}, p.visualTime);
         ++p.stats.atmospheres;
     }
-    p.hyperion->finish();
-    if (p.instruments && overlay && !p.probeRemote) {
+    const float focusTarget=boarding && p.cockpitVisible && !p.probeRemote ? 1.f : 0.f;
+    const float focusStep=float(p.frameSeconds/.24);
+    p.dockedFocus+=std::clamp(focusTarget-p.dockedFocus,-focusStep,focusStep);
+    p.hyperion->resolveExterior(std::max(p.dockedFocus,float(smoothstep(.06,.82,warp.closure))));
+    const bool cabinEffects = !scopeStar && p.instruments && overlay && !p.probeRemote && p.xalariaMap &&
+                              p.hyperion->beginCabin(float(std::tan(fov*.5)),
+                                  boarding?float(10.-boarding->freightBay().floor.left):13.f);
+    if(scopeStar){
+        p.hyperion->showStellarScope(*scopeStar,p.visualTime);
+    }else if (!cabinEffects) {
+        p.hyperion->presentExterior();
+        bgfx::setViewFrameBuffer(cabinViewId,BGFX_INVALID_HANDLE);
+        bgfx::setViewClear(cabinViewId,BGFX_CLEAR_DEPTH,0,1.f,0);
+    }
+    if (!scopeStar && p.instruments && overlay && !p.probeRemote) {
         const double aspect = double(p.width) / p.height;
         const bool xalaria = p.xalariaMap != nullptr;
         if (!bgfx::isValid(p.cabin.vertices) || p.cabinIsXalaria != xalaria || (!xalaria && p.cabinAspect != aspect)) {
@@ -3352,21 +4150,25 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
             destroy(p.cabinThrottle);
             destroy(p.cabinHatch);
             destroy(p.shipDeckMesh);
-            destroy(p.shipSigns);
-            destroy(p.deckCrewBody);
-            destroy(p.deckCrewHead);
-            destroy(p.deckCrewArm);
+            destroy(p.dockingDeckMesh);
+            destroy(p.dockingGlassMesh);
+            destroy(p.airlockDoorMesh);
+            destroy(p.airlockSillMesh);
+            destroy(p.airlockIndicatorMesh);
+            destroy(p.charterCrateMesh);
+            p.renderedBoardingStation.reset();
+            p.renderedStationSigns.clear();
+            p.renderedStationSurvey.reset();
+            p.renderedFreightDispatch.reset();
             if (xalaria) {
                 p.cabinGlazing = p.upload(xalariaCockpitGlazing());
                 p.cabinYoke = p.upload(xalariaCockpitYoke());
                 p.cabinThrottle = p.upload(xalariaCockpitThrottle());
                 p.cabinHatch = p.upload(xalariaCockpitHatch());
                 p.shipDeckMesh = p.upload(xalariaShipDeck());
-                p.shipSigns = p.upload(xalariaShipSigns());
-                const auto crew = xalariaShipCrewMeshes();
-                p.deckCrewBody = p.upload(crew.body);
-                p.deckCrewHead = p.upload(crew.head);
-                p.deckCrewArm = p.upload(crew.arm);
+                p.airlockDoorMesh = p.upload(xalariaAirlockDoor());
+                p.airlockSillMesh = p.upload(xalariaAirlockSill());
+                p.airlockIndicatorMesh = p.upload(xalariaAirlockIndicators());
             }
             p.cabinAspect = aspect;
             p.cabinIsXalaria = xalaria;
@@ -3375,42 +4177,87 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
         // camera, so the view through the windows follows the player's position.
         const auto cabinView = glm::mat4_cast(glm::quat(glm::inverse(p.head.orientation))) *
                                glm::translate(glm::mat4(1), -glm::vec3(p.head.translation));
+        const float cabinFar=boarding?float(10.-boarding->freightBay().floor.left):13.f;
         const auto cabinProjection = bgfx::getCaps()->homogeneousDepth
-                                         ? glm::perspectiveRH_NO(float(fov), float(aspect), .025f, 13.f)
-                                         : glm::perspectiveRH_ZO(float(fov), float(aspect), .025f, 13.f);
-        bgfx::setViewRect(87, 0, 0, uint16_t(p.width), uint16_t(p.height));
-        bgfx::setViewMode(87, bgfx::ViewMode::Sequential);
-        bgfx::setViewTransform(87, glm::value_ptr(cabinView), glm::value_ptr(cabinProjection));
-        bgfx::setViewClear(87, BGFX_CLEAR_DEPTH, 0, 1.f, 0);
+                                         ? glm::perspectiveRH_NO(float(fov), float(aspect), .025f, cabinFar)
+                                         : glm::perspectiveRH_ZO(float(fov), float(aspect), .025f, cabinFar);
+        bgfx::setViewRect(cabinViewId, 0, 0, uint16_t(p.width), uint16_t(p.height));
+        bgfx::setViewMode(cabinViewId, bgfx::ViewMode::Sequential);
+        bgfx::setViewTransform(cabinViewId, glm::value_ptr(cabinView), glm::value_ptr(cabinProjection));
         const Geometry source;
         const ScenePresentation presentation{source, nav.anchor, {.09f,.82f,.20f,0},
-            hyperionPhase(p.universe.seed()), 1.f, {5.f,xalaria ? 1.f : 0.f,0,0}};
-        const auto sun = glm::inverse(nav.orientation * stationAim) * p.lightAt(nav.anchor, nav);
+            hyperionPhase(p.universe.seed()), 1.f, {5.f,xalaria ? 1.f : 0.f,0,cabinEffects ? 1.f : 0.f}};
+        const auto intoCabin=glm::inverse(nav.orientation*stationAim);
+        auto sun=intoCabin*p.lightAt(nav.anchor,nav);
         const auto cabinEye = xalaria ? glm::vec3(p.head.translation) : glm::vec3(0);
-        const auto drawCabin = [&](const GPUMesh& part, const glm::mat4& model, bool glazing = false,
-                                   const ScenePresentation* material = nullptr) {
+        const auto annexLighting=boarding?xalariaStationAnnexLighting(*boarding):StationAnnexLighting{};
+        auto windows=boarding?xalariaStationWindows(*boarding):StationWindowLighting{};
+        const std::array<glm::vec4,2> doors{{
+            {stationDeck::shipDoor,stationDeck::bridgeDoor,stationDeck::centre,stationDeck::doorHalf},
+            {shipOpening,bridgeOpening,stationDeck::doorTop,stationDeck::doorTravel}
+        }};
+        if (boarding) {
+            if (localStar.angularRadius>0.) {
+                sun=p.head.orientation*localStar.direction;
+                const double visible=stellarDiscVisibility(localStar.direction,localStar.angularRadius,
+                                                           localStar.distanceMetres,p.contacts);
+                const float peak=std::max({localStar.color.r,localStar.color.g,localStar.color.b,.001f});
+                const double exposure=std::clamp(std::pow(localStar.angularRadius/.00465,.42),.21,2.2);
+                windows[4]={localStar.color/peak*float(visible*exposure*1.28),float(localStar.angularRadius)};
+            }
+            if (p.xalariaMap && p.xalariaMap->wormhole) {
+                const auto& mouth=*p.xalariaMap->wormhole;
+                const auto delta=p.wormholePosition(mouth,nav)-nav.cameraPosition();
+                const double distance=glm::length(delta)*std::pow(10.,nav.logDistance);
+                if (distance>mouth.radius) {
+                    const auto direction=glm::normalize(delta);
+                    const double angular=std::atan(mouth.radius/distance);
+                    if (!celestialOccluded(p.cameraInverse*direction,distance,p.contacts,nullptr,angular))
+                        windows[5]={intoCabin*direction,float(angular)};
+                }
+            }
+        }
+        glm::vec3 sourceColour(1.f);
+        float sourcePower=1.f,sourceRadius=.00465f;
+        if(localStar.angularRadius>0.){
+            const auto visible=stellarDiscVisibility(localStar.direction,localStar.angularRadius,
+                                                     localStar.distanceMetres,p.contacts);
+            const auto peak=std::max({localStar.color.r,localStar.color.g,localStar.color.b,.001f});
+            sourceColour=localStar.color/peak;
+            sourcePower=float(visible*std::clamp(std::pow(localStar.angularRadius/.00465,.35),.35,2.));
+            sourceRadius=float(localStar.angularRadius);
+        }
+        p.hyperion->cabinSun(glm::inverse(cabinView),glm::vec3(sun),sourceColour,sourcePower,sourceRadius);
+        const auto drawCabin = [&](const GPUMesh& part,const glm::mat4& model,std::optional<GlazingView> glazing={},
+                                   float clipAbove=0.f,glm::vec3 tint=glm::vec3(1)) {
             if (!bgfx::isValid(part.vertices)) return;
             const bool instanced = bgfx::getAvailInstanceDataBuffer(1, 80) > 0;
             if (glazing && !instanced) return;
             bgfx::setVertexBuffer(0, part.vertices);
             bgfx::setIndexBuffer(part.indices);
+            constexpr uint64_t coverageBlend = BGFX_STATE_BLEND_FUNC_SEPARATE(
+                BGFX_STATE_BLEND_SRC_ALPHA,BGFX_STATE_BLEND_INV_SRC_ALPHA,
+                BGFX_STATE_BLEND_ONE,BGFX_STATE_BLEND_INV_SRC_ALPHA);
             bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_LESS | BGFX_STATE_MSAA |
-                           (glazing ? BGFX_STATE_BLEND_ALPHA : BGFX_STATE_WRITE_Z));
+                           (cabinEffects ? BGFX_STATE_WRITE_A : 0) |
+                           (glazing ? (cabinEffects ? coverageBlend : BGFX_STATE_BLEND_ALPHA) : BGFX_STATE_WRITE_Z));
             if (instanced) {
                 bgfx::InstanceDataBuffer instance;
                 bgfx::allocInstanceDataBuffer(&instance, 1, 80);
-                const Instance posed{model, glm::vec4(1)};
+                const Instance posed{model,glm::vec4(tint,1)};
                 std::memcpy(instance.data, &posed, sizeof(posed));
-                p.hyperion->bind(material ? *material : presentation, cabinEye, glm::vec3(sun),
-                                 glm::inverse(model), 0, p.visualTime);
+                auto material=presentation;
+                material.domain.z=clipAbove;
+                p.hyperion->bind(material, cabinEye, glm::vec3(sun), glm::inverse(model), 0, p.visualTime);
                 bgfx::setInstanceDataBuffer(&instance);
+                p.hyperion->bindStationLighting(windows,annexLighting,doors);
                 if (glazing)
-                    p.hyperion->bindCockpitGlazing();
-                bgfx::submit(87, glazing ? p.hyperion->cockpitGlazingProgram() : p.hyperion->cockpitProgram());
+                    p.hyperion->bindCockpitGlazing(*glazing);
+                bgfx::submit(cabinViewId,glazing ? p.hyperion->cockpitGlazingProgram() : p.hyperion->cockpitProgram());
                 p.stats.uploadBytes += 80;
             } else {
                 bgfx::setTransform(glm::value_ptr(model));
-                bgfx::submit(87, p.colorProgram);
+                bgfx::submit(cabinViewId, p.colorProgram);
             }
         };
         drawCabin(p.cabin, glm::mat4(1));
@@ -3420,44 +4267,122 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
             const float slide=.47f*float(smoothstep(0.,1.,door));
             const glm::mat4 identity(1);
             drawCabin(p.shipDeckMesh, identity);
-            if (walking) {
-                constexpr glm::vec3 neck{0,1.53f,.012f}, up{0,1,0}, armAxis{1,0,0};
-                for (const auto& crew : shipDeckCrew(p.instruments->flightSeconds)) {
-                    const ScenePresentation suit{source,nav.anchor,{crew.rim,0},
-                        hyperionPhase(p.universe.seed()),1.f,{5.f,1.f,0,1.f}};
-                    const float motion=float(crew.taskMotion);
-                    const auto root=glm::scale(glm::rotate(glm::translate(identity,glm::vec3(crew.feet)),
-                                                       float(crew.yaw),up),glm::vec3(float(crew.height/1.79)));
-                    drawCabin(p.deckCrewBody,root,false,&suit);
-                    const auto head=glm::translate(glm::rotate(glm::translate(root,neck),motion*.19f,up),-neck);
-                    drawCabin(p.deckCrewHead,head,false,&suit);
-                    const auto shoulder=glm::translate(root,{.204f,1.405f,0});
-                    const auto right=glm::rotate(glm::rotate(shoulder,.21f+motion*.13f,armAxis),.11f,{0,0,1});
-                    const auto left=glm::rotate(glm::translate(root,{-.204f,1.405f,0}),-.055f-motion*.08f,armAxis);
-                    drawCabin(p.deckCrewArm,right,false,&suit);
-                    drawCabin(p.deckCrewArm,glm::scale(left,glm::vec3(-1,1,1)),false,&suit);
+            const auto drawAirlockDoor=[&](double x,double opening) {
+                const auto threshold=glm::translate(identity,glm::vec3(x,0,0));
+                drawCabin(p.airlockSillMesh,threshold);
+                const auto tint=glm::mix(glm::vec3(1.f,.58f,.19f),glm::vec3(.28f,1.f,.53f),
+                                         float(smoothstep(stationDeck::doorClear,1.,opening)))*(boarding?1.f:.37f);
+                drawCabin(p.airlockIndicatorMesh,threshold,std::nullopt,0.f,tint);
+                if (opening >= 1.) return;
+                // The leaf retracts into its header and stays below the glass.
+                drawCabin(p.airlockDoorMesh,glm::translate(identity,glm::vec3(x,stationDeck::doorTravel*opening,0)),
+                          std::nullopt,float(stationDeck::doorTop));
+            };
+            drawAirlockDoor(stationDeck::shipDoor,shipOpening);
+            if (boarding) {
+                const auto visualKey=std::pair(boarding->key,look);
+                if (p.renderedBoardingStation!=visualKey) {
+                    destroy(p.dockingDeckMesh);
+                    destroy(p.dockingGlassMesh);
+                    destroy(p.charterCrateMesh);
+                    p.dockingDeckMesh=p.upload(xalariaDockingDeck(*boarding,look));
+                    p.dockingGlassMesh=p.upload(stationGlazing(*boarding));
+                    p.charterCrateMesh=p.upload(xalariaCharterCrate(*boarding));
+                    p.renderedBoardingStation=visualKey;
+                    p.renderedStationSigns=xalariaStationSigns(*boarding);
+                    p.renderedFreightDispatch.reset();
+                    p.renderedStationSurvey.reset();
+                    if (p.xalariaMap && p.xalariaMap->catalog)
+                        for (const auto& annex : boarding->annexes)
+                            if (annex.room.kind==StationModuleKind::Analysis)
+                                p.renderedStationSurvey=xalariaStationSurveyDisplay(annex,*p.xalariaMap);
                 }
+                drawCabin(p.dockingDeckMesh,identity);
+                drawAirlockDoor(stationDeck::bridgeDoor,bridgeOpening);
+                if (loadingCharter && loadingCharter->units && !freightClaimed)
+                    drawCabin(p.charterCrateMesh,identity);
             }
             drawCabin(p.cabinHatch, glm::translate(identity,glm::vec3(slide,0,0)));
             drawCabin(p.cabinHatch, glm::translate(identity,glm::vec3(-slide,0,0)) *
                                   glm::scale(identity,glm::vec3(-1,1,1)));
             drawCabin(p.cabinYoke, controls.yoke);
             drawCabin(p.cabinThrottle, controls.throttle);
-            drawCabin(p.cabinGlazing, glm::mat4(1), true);
-            if (bgfx::isValid(p.shipSigns.vertices)) {
-                bgfx::setTransform(glm::value_ptr(identity));
-                bgfx::setVertexBuffer(0,p.shipSigns.vertices);
-                bgfx::setIndexBuffer(p.shipSigns.indices);
-                bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_LESS | BGFX_STATE_MSAA);
-                bgfx::submit(87,p.colorProgram);
+            if (walking || seatMoving)
+                p.hyperion->drawDeckCrew(p.shipInterior->crew(),p.head.translation,cabinViewId);
+            if(boardedVessel&&(walking||seatMoving)){
+                DeckCrewPose officer;
+                officer.position={boarding->freightPad.left-.47,stationDeck::centre+1.18};
+                officer.yaw=std::numbers::pi*.5;
+                officer.rim=glm::mix(stationAccent(boarding->key.role),glm::vec3(.69f,.90f,1.f),.38f);
+                officer.taskPhase=std::fmod(p.visualTime*.74,2.*std::numbers::pi);
+                p.hyperion->drawDeckCrew(std::span(&officer,1),p.head.translation,cabinViewId);
             }
+            const auto drawDisplay = [&](const CabinDisplay& display,bool opaque=false,bool plaque=false) {
+                p.transient(display.content.panels,cabinViewId,
+                            BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_LESS | BGFX_STATE_MSAA |
+                                (opaque && cabinEffects ? BGFX_STATE_WRITE_A : 0) |
+                                (plaque ? BGFX_STATE_WRITE_Z : 0),
+                            &display.model);
+                float pixelsPerUnit=plaque?.001f:0.f;
+                const auto panelProjection=cabinProjection*cabinView*display.model;
+                const auto centre=panelProjection*glm::vec4(float(display.size.x)*.5f,float(display.size.y)*.5f,0,1);
+                const auto down=centre+panelProjection[1];
+                if (centre.w>.025f && down.w>.025f) {
+                    const auto size=glm::vec2(p.width,p.height)*.5f;
+                    const auto point=glm::vec2(centre)/centre.w;
+                    const auto vertical=(glm::vec2(down)/down.w-point)*size;
+                    pixelsPerUnit=std::max(.001f,glm::length(vertical));
+                    if (plaque) {
+                        const auto right=centre+panelProjection[0];
+                        if (right.w>.025f) {
+                            const auto horizontal=(glm::vec2(right)/right.w-point)*size;
+                            const float area=std::abs(horizontal.x*vertical.y-horizontal.y*vertical.x);
+                            // A plaque seen edge-on has too little width for legible glyphs.
+                            pixelsPerUnit=std::max(.001f,area/std::max(pixelsPerUnit,glm::length(horizontal)));
+                        }
+                    }
+                }
+                p.hyperion->drawAtlasText(display.content.atlasGlyphs,cabinViewId,&display.model,pixelsPerUnit);
+            };
+            const auto drawDirectionalSign=[&](const CabinDisplay& display) {
+                const auto offset=cabinEye-glm::vec3(display.model[3]);
+                if (glm::dot(offset,glm::vec3(display.model[2]))>0.f)
+                    drawDisplay(display,true,true);
+            };
+            for (const auto& sign : xalariaShipSigns())
+                drawDirectionalSign(sign);
+            const auto& boardingSigns=xalariaAirlockSigns();
+            const size_t signCount=boarding?boardingSigns.size():1;
+            for (size_t i=0;i<signCount;++i)
+                drawDirectionalSign(boardingSigns[i]);
+            if (boarding)
+                for (const auto& sign : p.renderedStationSigns)
+                    drawDirectionalSign(sign);
+            if (boarding)
+                drawCabin(p.dockingGlassMesh,identity,GlazingView::TunnelInterior);
+            drawCabin(p.cabinGlazing,identity,GlazingView::Cabin);
             const auto fuel = p.xalariaEconomy ? p.xalariaEconomy->fuel() : 0.;
             const auto capacity = p.xalariaEconomy ? p.xalariaEconomy->fuelCapacity() : 0.;
-            p.transient(xalariaCockpitDisplays(*p.instruments, fuel, capacity), 87,
-                        BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_LESS | BGFX_STATE_MSAA);
+            for (const auto& display : xalariaCockpitDisplays(*p.instruments,fuel,capacity))
+                drawDisplay(display);
+            if ((walking || seatMoving) && p.xalariaEconomy)
+                for (const auto& display : xalariaDeckDisplays(*p.instruments,*p.xalariaMap,*p.xalariaEconomy))
+                    drawDisplay(display);
+            if(prize)drawDisplay(xalariaPrizeDisplay(*boarding,*boardedVessel,*p.xalariaCombat));
+            else if (loadingCharter) {
+                if (!p.renderedFreightDispatch || p.renderedFreightClaimed!=freightClaimed) {
+                    p.renderedFreightDispatch=xalariaLoadingBayDisplay(*boarding,*p.xalariaEconomy,*loadingCharter,freightClaimed,
+                        boardedVessel?std::string_view(boardedVessel->body.name):std::string_view{});
+                    p.renderedFreightClaimed=freightClaimed;
+                }
+                drawDisplay(*p.renderedFreightDispatch);
+            }
+            if (boarding && p.renderedStationSurvey)
+                drawDisplay(*p.renderedStationSurvey,true);
         }
-    } else
-        bgfx::setViewClear(87, BGFX_CLEAR_NONE);
+    }
+    if (cabinEffects)
+        p.hyperion->finishCabin();
 
     if (p.instruments && overlay) {
         const auto& viewport = p.hudViewport;
@@ -3475,22 +4400,119 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
         if(cockpit.shrinking){const auto current=p.details.find(nav.anchor);
             const auto geometry=current==p.details.end()?std::shared_ptr<const Geometry>{}:current->second.blend.current;
             micro=extractMicroView(p.universe,nav,cockpit.hullMetres,geometry.get());}
-        const bool economyOpen = p.xalariaEconomy && p.xalariaEconomy->view.open;
-        const bool atlasOpen = !economyOpen && p.xalariaMap && p.xalariaMap->open;
-        const bool deckHud = walking && !atlasOpen && !economyOpen && !p.cockpitHelp;
-        auto hud = deckHud ? CockpitOverlay{} : economyOpen ? xalariaEconomyOverlay(*p.xalariaEconomy,aspect) : atlasOpen ? xalariaMapOverlay(*p.xalariaMap,aspect) : cockpitOverlay(cockpit, aspect, p.xalariaMap?"XALARIA":renderModeName(p.mode), notice, p.contacts,
-                                        p.activityContacts, p.cockpitHelp, viewport.projectionScale, p.market,
-                                        stationAim * p.head.orientation, p.crew,p.expeditionPlan,&micro);
-        if (deckHud) {
-            atlasText(hud,p.shipInterior->room(),32,31,320,26,{.90,.95,.96});
-            atlasText(hud,p.shipInterior->seatInReach()?"E   Sit at the helm":"WASD   Walk    /    Mouse   Look",
-                      32,841,420,19,{.90,.95,.96});
-            if (p.xalariaMap && p.xalariaMap->flying)
-                atlasText(hud,"Course active",32,67,320,16,{.62,.88,.87});
+        const bool strategyOpen=p.xalariaCombat&&p.xalariaCombat->strategy().open;
+        const bool convoysOpen=!strategyOpen&&p.xalariaCombat&&p.xalariaCombat->convoys().open;
+        const bool combatOpen=!strategyOpen&&!convoysOpen&&p.xalariaCombat&&p.xalariaCombat->open;
+        const bool storiesOpen = !strategyOpen&&!convoysOpen&&!combatOpen&&p.xalariaStories && p.xalariaStories->open;
+        const bool economyOpen = !strategyOpen&&!convoysOpen&&!combatOpen&&!storiesOpen && p.xalariaEconomy && p.xalariaEconomy->view.open;
+        const bool atlasOpen = !strategyOpen&&!convoysOpen&&!combatOpen&&!storiesOpen && !economyOpen && p.xalariaMap && p.xalariaMap->open;
+        const bool menuOpen = strategyOpen||convoysOpen||combatOpen||atlasOpen || economyOpen || storiesOpen;
+        const bool flightHud = p.xalariaMap && !walking && !seatMoving && !menuOpen && !p.cockpitHelp && !scopeStar;
+        if (p.xalariaMap) {
+            const double seconds = p.frameSeconds;
+            // Precision rebases change the local axes even when the ship is flying straight.
+            // Keep the HUD in system axes across terrain tiles and planetary frames.
+            const auto system = std::find_if(nodes.begin(), nodes.end(), [](const Node& node) {
+                return node.address.kind() == Kind::System;
+            });
+            const auto& reference = system == nodes.end() ? nav.anchor : system->address;
+            const auto view = glm::conjugate(p.poseFor(reference, nav).orientation) * p.cameraQ;
+            const bool sameReference = p.previousHudReference == reference;
+            const auto delta = glm::normalize(glm::conjugate(p.previousHudView) * view);
+            const double turn = 2.*std::atan2(glm::length(glm::dvec3(delta.x,delta.y,delta.z)),std::abs(delta.w));
+            const double turnRate = std::max(turn/std::max(.001,seconds),glm::length(cockpit.localAngularVelocity));
+            p.flightHud.update(seconds, turnRate, flightHud && sameReference);
+            p.previousHudReference = reference;
+            p.previousHudView = view;
         }
-        if(!walking&&p.xalariaMap&&!p.xalariaMap->open&&!(p.xalariaEconomy&&p.xalariaEconomy->view.open)&&!p.cockpitHelp&&!cockpit.contactsExpanded)
+        const bool showFlightMarkers = !p.xalariaMap || p.flightHud.showMarkers();
+        const bool deckHud = walking && !seatMoving && !menuOpen && !p.cockpitHelp;
+        auto hud = (scopeStar || deckHud || (seatMoving && !menuOpen)) ? CockpitOverlay{} :
+                   strategyOpen?xalariaStrategyOverlay(p.xalariaCombat->strategy(),*p.xalariaEconomy,aspect):
+                   convoysOpen?xalariaConvoyOverlay(p.xalariaCombat->convoys(),*p.xalariaEconomy,aspect,p.activity?p.activity->seconds:0.):
+                   combatOpen?xalariaCombatOverlay(*p.xalariaCombat,*p.xalariaEconomy,aspect):
+                   storiesOpen ? xalariaStoryOverlay(*p.xalariaStories,p.storyContext,
+                                 p.activity?p.activity->seconds:0.,aspect,p.storyRouteAction) :
+                   economyOpen ? xalariaEconomyOverlay(*p.xalariaEconomy,aspect) : atlasOpen ? xalariaMapOverlay(*p.xalariaMap,aspect) : cockpitOverlay(cockpit, aspect, p.xalariaMap?"XALARIA":renderModeName(p.mode), notice, p.contacts,
+                                        p.activityContacts, p.cockpitHelp, viewport.projectionScale, p.market,
+                                        stationAim * p.head.orientation, p.crew,p.expeditionPlan,&micro,showFlightMarkers);
+        if(flightHud)xalariaShieldHud(hud,aspect,p.playerShield);
+        if(scopeStar){
+            const double room=900*aspect-64;
+            const glm::vec3 ink{.83f,.90f,.96f};
+            atlasText(hud,"Stellar survey",32,28,room,19,{.47f,.69f,.83f});
+            atlasText(hud,scopeStar->label(),32,53,room,35,ink);
+            atlasText(hud,stellarKindName(scopeStar->stellar->kind),32,99,room,22,ink);
+            atlasText(hud,std::to_string(int(std::round(scopeStar->temperatureK)))+" K   /   Radius "+
+                      std::to_string(int(std::round(scopeStar->stellarRadiusMetres/1000.)))+" km",32,798,room,19,ink);
+            atlasText(hud,"F6 or Esc   Return to flight",32,839,room,18,{.47f,.69f,.83f});
+        }
+        if (deckHud) {
+            p.deckRoomLabel.update(p.shipInterior->room(),p.frameSeconds);
+            if(boardedVessel){
+                xalariaStationLocation(hud,p.deckRoomLabel.text(),boardedVessel->body.name,
+                                      boarding->key.role,p.deckRoomLabel.opacity());
+            }else if (boarding && p.xalariaEconomy && p.xalariaEconomy->dockedPlace()) {
+                xalariaStationLocation(hud,p.deckRoomLabel.text(),
+                    p.xalariaEconomy->placeName(*p.xalariaEconomy->dockedPlace()),boarding->key.role,p.deckRoomLabel.opacity());
+            } else {
+                atlasText(hud,p.deckRoomLabel.text(),32,31,320,26,{.90,.95,.96},p.deckRoomLabel.opacity());
+                if (p.xalariaMap && p.xalariaMap->flying)
+                    atlasText(hud,"Course active",32,67,320,16,{.62,.88,.87});
+            }
+            const bool atTerminal=p.xalariaEconomy && p.shipInterior->cargoTerminalInReach();
+            const bool linked=atTerminal && p.xalariaEconomy->dockedPlace().has_value();
+            constexpr std::string_view movementHint="WASD   Walk    /    Mouse   Look";
+            std::string_view prompt=movementHint;
+            switch (p.shipInterior->boardingInteraction()) {
+            case BoardingInteraction::ShipDoor:
+                if (!boarding) prompt="Airlock sealed   /   Dock to board";
+                else if (shipOpening>=stationDeck::doorClear)
+                    prompt=p.shipInterior->position().x>stationDeck::shipDoor?"E   Seal ship door":"Walk through to the ship";
+                else prompt="E   Open ship door";
+                break;
+            case BoardingInteraction::BridgeDoor:
+                prompt=bridgeOpening>=stationDeck::doorClear?"Walk through the bridge door":"E   Cycle bridge door";
+                break;
+            case BoardingInteraction::Freight:
+                if(prize)prompt=p.xalariaCombat->prizeCargo(boardedVessel->body.id)>0?"E   Seize prize cargo":"Prize cargo already transferred";
+                else if (loadingCharter)
+                    prompt=freightClaimed?"Today's freight collected":boardedVessel?"E   Collect courier parcel":
+                           loadingCharter->units?"E   Collect sealed freight":"No charter available today";
+                break;
+            case BoardingInteraction::None:
+                if (p.shipInterior->seatInReach()) prompt="E   Sit at the helm";
+                else if (atTerminal) prompt=linked?"E   Cargo market    /    B   Case files":"B   Case files    /    Dock to trade";
+                break;
+            }
+            const auto deckPosition=p.shipInterior->position();
+            if (boarding && deckPosition.x>stationDeck::bridgeDoor-1.10 &&
+                deckPosition.x<stationDeck::shipDoor+1.10 &&
+                std::abs(deckPosition.y-stationDeck::centre)<stationDeck::doorHalf+.35) {
+                switch (p.shipInterior->airlockMotion()) {
+                case AirlockMotion::SealingShip: prompt="Sealing ship door"; break;
+                case AirlockMotion::SealingBridge: prompt="Sealing bridge door"; break;
+                case AirlockMotion::OpeningShip: prompt="Opening ship door"; break;
+                case AirlockMotion::OpeningBridge: prompt="Opening bridge door"; break;
+                case AirlockMotion::Holding: break;
+                }
+            }
+            p.deckPromptLabel.update(prompt,p.frameSeconds);
+            atlasText(hud,p.deckPromptLabel.text(),32,841,520,19,{.90,.95,.96},p.deckPromptLabel.opacity());
+            if (!cockpit.stationStatus.empty())
+                atlasText(hud,cockpit.stationStatus,32,806,900*aspect-64,19,{.97,.78,.43});
+        }
+        if(flightHud&&!cockpit.contactsExpanded)
             xalariaFlightOverlay(hud,*p.xalariaMap,aspect);
-        if(!walking&&p.xalariaEconomy&&!economyOpen&&!atlasOpen)xalariaEconomyHud(hud,*p.xalariaEconomy,aspect,false);
+        if(flightHud&&p.xalariaCombat){
+            const auto selected=std::find_if(p.activityContacts.begin(),p.activityContacts.end(),[&](const auto& c){return p.xalariaCombat->target==c.body.id;});
+            xalariaCombatHud(hud,*p.xalariaCombat,aspect,selected==p.activityContacts.end()?nullptr:&*selected,viewport.projectionScale);
+        }
+        if(flightHud&&p.xalariaCombat)xalariaConvoyHud(hud,p.xalariaCombat->convoys(),aspect,p.activity?p.activity->seconds:0.);
+        if(flightHud&&p.xalariaEconomy)xalariaEconomyHud(hud,*p.xalariaEconomy,aspect,false);
+        const bool radioShown=(flightHud||deckHud)&&p.xalariaRadio&&p.xalariaRadio->open;
+        if(radioShown)
+            xalariaRadioOverlay(hud,*p.xalariaRadio,aspect);
         if (p.validateCockpit) {
             const auto conflicts = cockpitTextConflicts(hud);
             if (!conflicts.empty()) {
@@ -3505,11 +4527,15 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
         }
         // Tint the flight HUD with its surroundings while retaining the warm
         // warning colours and the atlas's route colours.
-        const bool menuOpen = atlasOpen || economyOpen;
-        const float hudOpacity = p.xalariaMap && !walking && !menuOpen && !p.cockpitHelp && !cockpit.contactsExpanded
+        const float lookOpacity = flightHud && !cockpit.contactsExpanded
             ? float(glm::smoothstep(std::cos(glm::radians(58.)), std::cos(glm::radians(28.)),
                                     std::cos(p.cockpitLook.x) * std::cos(p.cockpitLook.y)))
             : 1.f;
+        const float hudOpacity = flightHud ? lookOpacity*p.flightHud.opacity() : 1.f;
+        for(size_t i=0;i<hud.atlasGlyphs.size();++i) {
+            auto& colour=hud.atlasGlyphs[i].colour;
+            colour=(colour&0x00ffffffu)|(uint32_t(float(colour>>24)*hudOpacity)<<24);
+        }
         const auto hudLook = menuOpen ? glm::vec3(0.f) : p.regionalLook;
         const auto colourInterface = [hudLook,hudOpacity](Mesh& mesh) { for(auto& vertex:mesh.vertices){
             const auto value=vertex.color;
@@ -3526,7 +4552,7 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
                 warm + (mist - warm)*hudLook.x + (tide - warm)*hudLook.y + (acid - warm)*hudLook.z;
             vertex.color=rgba(glm::clamp(colour,glm::vec3(0),glm::vec3(1)),float(value>>24)/255.f*hudOpacity);
         }};
-        if (!atlasOpen)
+        if (!strategyOpen && !convoysOpen && !combatOpen && !atlasOpen && !storiesOpen)
             for(auto* mesh:{&hud.panels,&hud.strokes,&hud.lettering})colourInterface(*mesh);
         colourInterface(p.prospectMarkers);
         p.cockpitHitRegions = hud.hitRegions;
@@ -3541,8 +4567,27 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
         bgfx::setViewMode(254, bgfx::ViewMode::Sequential);
         p.transient(hud.panels, 254, false, false, false);
         p.transient(hud.strokes, 254, true, false, false);
-        p.transient(hud.lettering, 254, false, false, false);
-        if (atlasOpen || walking)
+        if(p.xalariaMap){
+            // Shape the surviving flight text only after modal occlusion and
+            // regional tinting. Hit regions and the tested layout stay exact;
+            // the same high-resolution atlas used by physical displays draws
+            // the glyphs instead of thousands of block-font rectangles.
+            CockpitOverlay type;
+            for(const auto& run:hud.textRuns){
+                if(!run.vertexCount || run.firstVertex>=hud.lettering.vertices.size())continue;
+                const auto colour=hud.lettering.vertices[run.firstVertex].color;
+                const glm::vec3 rgb=glm::vec3(colour&255,(colour>>8)&255,(colour>>16)&255)/255.f;
+                const double nominal=run.bounds.h*1.20;
+                const double fontSize=nominal*std::min(1.,run.bounds.w/
+                                                       std::max(.001,atlasTextWidth(run.value,nominal)));
+                atlasText(type,run.value,run.bounds.x,run.bounds.y,run.bounds.w+.01,
+                          fontSize,rgb,float(colour>>24)/255.f);
+            }
+            hud.atlasGlyphs.insert(hud.atlasGlyphs.end(),type.atlasGlyphs.begin(),type.atlasGlyphs.end());
+        }else{
+            p.transient(hud.lettering, 254, false, false, false);
+        }
+        if (!hud.atlasGlyphs.empty())
             p.hyperion->drawAtlasText(hud.atlasGlyphs, 254);
     }
     auto ortho =
@@ -3556,7 +4601,8 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
     bgfx::setViewRect(253, 0, 0, static_cast<uint16_t>(p.width), static_cast<uint16_t>(p.height));
     if (!p.instruments)
         p.transient(locators, 255, true, false, false);
-    if (overlay && !p.specimen && !walking)
+    if (!scopeStar && overlay && !p.specimen && !walking && !seatMoving &&
+        (!p.xalariaMap || p.flightHud.showMarkers()))
         p.transient(p.prospectMarkers, p.cockpitVisible ? 253 : 255, true, false, false);
     bgfx::dbgTextClear();
     if (looking && !p.instruments)
@@ -3624,6 +4670,7 @@ FrameStats Renderer::render(const Navigation& nav, RegionCache& cache, bool over
     p.stats.cpuMs =
         std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
     bgfx::frame();
+    p.seatTransition.update(p.frameSeconds);
     p.stats.submitMs =
         std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count() -
         p.stats.cpuMs;

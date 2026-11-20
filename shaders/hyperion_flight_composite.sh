@@ -4,8 +4,9 @@
 SAMPLER2D(s_scene,0);
 SAMPLER2D(s_bloom,1);
 SAMPLER2D(s_opaqueDepth,2);
+SAMPLER2D(s_ringLayer,4);
 uniform vec4 u_lens[2];
-uniform vec4 u_post[2]; // texel.xy, strength, surface buffer available; reserved
+uniform vec4 u_post[2]; // texel.xy, strength, surface buffer available; polar texel.xy, rings, docked focus
 #include "hyperion_optical_ray.sh"
 // Exponential atmosphere along a solar ray. The fit tends to H/cos(theta)
 // overhead and to the half Gaussian column of a curved limb at grazing angles.
@@ -33,15 +34,23 @@ vec3 atmosphere(vec2 uv, vec2 cloudClip, out vec3 transmission) {
     if(depth>0.){float near=u_atmosphere[2].y,far=u_atmosphere[2].z;float z=near*far/(near+depth*(far-near));end=min(end,z/max(-cameraRay.z,.0001)/u_atmosphere[2].x);}
     end=mix(end,min(end,cloudClip.x),smoothstep(.10,.85,cloudClip.y));
     if(end<=start || end-start<H*.00001)return vec3(0.);
-    float stepSize=(end-start)/14.,optical=0.,aerosolDepth=0.;
-    float kmStep=stepSize*u_atmosphere[3].w;
+    float spanLength=end-start,optical=0.,aerosolDepth=0.;
     vec3 direct=vec3(0.),diffuse=vec3(0.);
     float airglow=0.;
     vec3 beta=vec3(.0058,.0135,.029)*u_atmosphere[0].w;
     vec3 hazeExtinction=vec3(.0040,.0030,.0024)*u_atmosphere[0].w;
     float mu=dot(d,L),rayleigh=.05968*(1.+mu*mu),mie=.012*pow(max(.02,1.-.84*mu),-1.5);
+    // Weight samples toward the ray's tangent altitude, where grazing light
+    // crosses the densest part of the atmosphere.
+    float pivot=clamp((-dot(o,d)-start)/spanLength,.0001,.9999);
+    float ua=0.;
     for(int i=0;i<14;i++){
-        vec3 p=o+d*(start+(float(i)+.5)*stepSize);
+        float b=(float(i)+1.)/14.;
+        float w=b<pivot?(pivot-b)/pivot:(b-pivot)/(1.-pivot);
+        float ub=mix(b,pivot,.72*(1.-w));
+        float kmStep=(ub-ua)*spanLength*u_atmosphere[3].w;
+        vec3 p=o+d*(start+(ua+ub)*.5*spanLength);
+        ua=ub;
         float radius=max(1.,length(p)),height=(radius-1.)/H;
         float density=exp(-height),aerosol=exp(-height*2.4);
         float molecularStep=density*kmStep,aerosolStep=aerosol*kmStep;
@@ -59,7 +68,7 @@ vec3 atmosphere(vec2 uv, vec2 cloudClip, out vec3 transmission) {
                     (beta*(molecularStep*rayleigh)+hazeExtinction*(aerosolStep*mie));
         }
         float twilight=smoothstep(-.20,.13,zenith);
-        diffuse+=viewTransmission*beta*molecularStep*(.017+.045*twilight)*twilight;
+        diffuse+=viewTransmission*beta*molecularStep*(.013+.058*twilight)*twilight;
         float upper=(height-3.85)*1.70;
         airglow+=viewTransmission.g*exp(-upper*upper)*kmStep*(.45+.55*twilight);
     }
@@ -75,7 +84,7 @@ vec3 atmosphere(vec2 uv, vec2 cloudClip, out vec3 transmission) {
     vec3 upperTint=mix(vec3(.65,.15,.052),vec3(.21,.78,.28),u_regionLook[0].x);
     upperTint=mix(upperTint,vec3(.14,.54,.88),u_regionLook[1].x);
     upperTint=mix(upperTint,vec3(.74,.26,.47),u_regionLook[1].z);
-    scattering+=upperTint*(1.-exp(-airglow*u_atmosphere[0].w*.012))*.23;
+    scattering+=upperTint*(1.-exp(-airglow*u_atmosphere[0].w*.015))*.25;
     transmission=exp(-beta*optical-hazeExtinction*aerosolDepth);
     return scattering;
 }
@@ -95,10 +104,15 @@ void main() {
     vec2 uv=v_texcoord0;
     vec4 surface=u_post[0].w>.5?texture2D(s_reflectionSurface,uv):vec4(0.);
     float built=surface.w<0.&&texture2D(s_opaqueDepth,uv).r>0.?1.:0.;
-    vec3 c=refractSpace(uv,sceneReflection(uv,resolveScene(uv),surface));
+    vec3 c=refractSpace(uv,sceneReflection(uv,structureContactLight(uv,resolveScene(uv),built),surface));
     c=resolveStellarDisc(uv,c);
     c+=stellarProminences(uv);
     c=regionalFog(uv,c,built);
+    if(u_post[1].z>.5){
+        vec4 rings=texture2D(s_ringLayer,uv);
+        c=c*(1.-rings.a)+rings.rgb;
+        built*=1.-rings.a;
+    }
     c=wormholeOptics(uv,c);
     c+=texture2D(s_bloom,uv).rgb*(u_lens[0].x>.5?.30:.50);
     if(u_atmosphere[0].w>0.){

@@ -1,5 +1,7 @@
 #include "HyperionRenderer.hpp"
 #include "AtlasFontData.hpp"
+#include "CrewSilhouette.hpp"
+#include "infinity/ShipInterior.hpp"
 #include "infinity/Cockpit.hpp"
 #include "infinity/MaterialTexture.hpp"
 #include "infinity/StellarEvolution.hpp"
@@ -7,6 +9,7 @@
 #include <HyperionShaders.hpp>
 #include <algorithm>
 #include <cstring>
+#include <numbers>
 #include <glm/gtc/type_ptr.hpp>
 #include <stdexcept>
 
@@ -17,6 +20,8 @@ bgfx::ShaderHandle shader(const char* name) {
     if (std::strcmp(name, #NAME) == 0)                                                                       \
     return bgfx::createShader(bgfx::copy(NAME##_##BACKEND, sizeof(NAME##_##BACKEND)))
 #define LOAD_BACKEND(BACKEND)                                                                                \
+    LOAD_SHADER(vs_xalaria_crew, BACKEND);                                                                \
+    LOAD_SHADER(fs_xalaria_crew, BACKEND);                                                                \
     LOAD_SHADER(vs_xalaria_atlas, BACKEND);                                                                \
     LOAD_SHADER(fs_xalaria_atlas, BACKEND);                                                                \
     LOAD_SHADER(vs_planet_rings, BACKEND);                                                                   \
@@ -33,6 +38,9 @@ bgfx::ShaderHandle shader(const char* name) {
     LOAD_SHADER(fs_hyperion_blur_solar, BACKEND);                                                            \
     LOAD_SHADER(fs_hyperion, BACKEND);                                                                       \
     LOAD_SHADER(fs_cockpit_glazing, BACKEND);                                                                \
+    LOAD_SHADER(fs_xalaria_cabin_composite, BACKEND);                                                       \
+    LOAD_SHADER(fs_xalaria_cabin, BACKEND);                                                                 \
+    LOAD_SHADER(fs_xalaria_stellar_scope, BACKEND);                                                          \
     LOAD_SHADER(fs_xalaria_wormhole, BACKEND);                                                               \
     LOAD_SHADER(fs_hyperion_flight, BACKEND);                                                                \
     LOAD_SHADER(fs_hyperion_flight_post, BACKEND);                                                           \
@@ -144,14 +152,25 @@ void HyperionRenderer::init() {
     blur_ = program("vs_hyperion_screen", "fs_hyperion_blur");
     post_ = program("vs_hyperion_screen", "fs_hyperion_post");
     sceneSampler_ = bgfx::createUniform("s_scene", bgfx::UniformType::Sampler);
+    ringSampler_ = bgfx::createUniform("s_ringLayer", bgfx::UniformType::Sampler);
+    shipTrailSampler_ = bgfx::createUniform("s_shipTrail", bgfx::UniformType::Sampler);
+    shipBlastSampler_ = bgfx::createUniform("s_shipBlast", bgfx::UniformType::Sampler);
+    shipBlastParams_ = bgfx::createUniform("u_shipBlastParams", bgfx::UniformType::Vec4);
     wormholeParams_ = bgfx::createUniform("u_wormholeOptics", bgfx::UniformType::Vec4, 5);
     glazingParams_ = bgfx::createUniform("u_glazing", bgfx::UniformType::Vec4);
+    cabinSunParams_=bgfx::createUniform("u_cabinSun",bgfx::UniformType::Vec4,2);
+    cabinFromEyeParams_=bgfx::createUniform("u_cabinFromEye",bgfx::UniformType::Mat4);
     bloomSampler_ = bgfx::createUniform("s_bloom", bgfx::UniformType::Sampler);
     depthSampler_ = bgfx::createUniform("s_opaqueDepth", bgfx::UniformType::Sampler);
     reflectionSampler_=bgfx::createUniform("s_reflectionSurface",bgfx::UniformType::Sampler);
     reflectionParams_=bgfx::createUniform("u_reflection",bgfx::UniformType::Vec4,2);
     spaceGlassParams_=bgfx::createUniform("u_spaceGlass",bgfx::UniformType::Vec4);
     regionLook_ = bgfx::createUniform("u_regionLook", bgfx::UniformType::Vec4, 2);
+    stationWindows_ = bgfx::createUniform("u_stationWindows", bgfx::UniformType::Vec4,
+                                         uint16_t(std::tuple_size_v<StationWindowLighting>));
+    stationAnnexes_ = bgfx::createUniform("u_stationAnnexes", bgfx::UniformType::Vec4,
+                                        uint16_t(std::tuple_size_v<StationAnnexLighting>));
+    stationDoors_ = bgfx::createUniform("u_stationDoors", bgfx::UniformType::Vec4, 2);
     spaceGlassMatrix_=bgfx::createUniform("u_spaceGlassRotation",bgfx::UniformType::Mat4);
     atmosphere_ = bgfx::createUniform("u_atmosphere", bgfx::UniformType::Vec4, 4);
     polar_ = bgfx::createUniform("u_polar", bgfx::UniformType::Vec4, 2);
@@ -182,10 +201,25 @@ void HyperionRenderer::init() {
         .end();
 }
 void HyperionRenderer::clearTargets() {
+    if (bgfx::isValid(ringLayer_))
+        bgfx::destroy(ringLayer_);
+    if (bgfx::isValid(ringColour_))
+        bgfx::destroy(ringColour_);
+    ringLayer_ = BGFX_INVALID_HANDLE;
+    ringColour_ = BGFX_INVALID_HANDLE;
+    if (bgfx::isValid(shipTrailLayer_))
+        bgfx::destroy(shipTrailLayer_);
+    if (bgfx::isValid(shipTrailMask_))
+        bgfx::destroy(shipTrailMask_);
+    shipTrailLayer_ = BGFX_INVALID_HANDLE;
+    shipTrailMask_ = BGFX_INVALID_HANDLE;
+    if(bgfx::isValid(shipBlastLayer_))bgfx::destroy(shipBlastLayer_);
+    if(bgfx::isValid(shipBlastColour_))bgfx::destroy(shipBlastColour_);
+    shipBlastLayer_=BGFX_INVALID_HANDLE;shipBlastColour_=BGFX_INVALID_HANDLE;
     if (bgfx::isValid(scene_))
         bgfx::destroy(scene_);
     scene_ = BGFX_INVALID_HANDLE;
-    for(auto* target:{&optical_,&lensSeed_,&bokeh_,&display_}){
+    for(auto* target:{&optical_,&lensSeed_,&bokeh_,&display_,&cabin_}){
         if(bgfx::isValid(*target))bgfx::destroy(*target);
         *target=BGFX_INVALID_HANDLE;
     }
@@ -204,6 +238,9 @@ void HyperionRenderer::clearTargets() {
     width_ = height_ = 0;
 }
 HyperionRenderer::~HyperionRenderer() {
+    if(bgfx::isValid(cabinSunParams_))bgfx::destroy(cabinSunParams_);
+    if(bgfx::isValid(cabinFromEyeParams_))bgfx::destroy(cabinFromEyeParams_);
+    if(bgfx::isValid(cabinGeometry_))bgfx::destroy(cabinGeometry_);
     if (detailBake_)
         detailBake_->cancel.store(true);
     detailTasks_.wait();
@@ -215,6 +252,12 @@ HyperionRenderer::~HyperionRenderer() {
         bgfx::destroy(atlasTextProgram_);
     if (bgfx::isValid(atlasTextSampler_))
         bgfx::destroy(atlasTextSampler_);
+    if (bgfx::isValid(deckCrewTexture_))
+        bgfx::destroy(deckCrewTexture_);
+    if (bgfx::isValid(deckCrewProgram_))
+        bgfx::destroy(deckCrewProgram_);
+    if (bgfx::isValid(deckCrewSampler_))
+        bgfx::destroy(deckCrewSampler_);
     clearTargets();
     if (bgfx::isValid(noise_))
         bgfx::destroy(noise_);
@@ -223,7 +266,7 @@ HyperionRenderer::~HyperionRenderer() {
             bgfx::destroy(t);
     if (bgfx::isValid(sunTarget_))
         bgfx::destroy(sunTarget_);
-    for (auto p : {lensSeedProgram_,bokehProgram_,lensProgram_,presentProgram_,geometry_,cockpitGlazing_,wormhole_,
+    for (auto p : {lensSeedProgram_,bokehProgram_,lensProgram_,presentProgram_,geometry_,cockpitGlazing_,cabinComposite_,wormhole_,stellarScope_,
                    glow_,
                    blur_,
                    post_,
@@ -246,7 +289,7 @@ HyperionRenderer::~HyperionRenderer() {
         if (bgfx::isValid(p))
             bgfx::destroy(p);
     for (auto u : {lensParams_,glazingParams_,wormholeParams_,focusSeedSampler_,planetParams_,   planetRingsParams_,
-                   ringParams_,     weatherVisualParams_,
+                   ringParams_,     ringSampler_,     shipTrailSampler_, shipBlastSampler_, shipBlastParams_, weatherVisualParams_,
                    landingParams_,  stellarParams_,
                    starTypeParams_, starMatrix_,
                    weatherParams_,  weatherMatrix_,
@@ -258,7 +301,7 @@ HyperionRenderer::~HyperionRenderer() {
                    bloomSampler_,   style_,
                    pattern_,        postParams_,
                    reflectionSampler_,reflectionParams_,spaceGlassParams_,spaceGlassMatrix_,regionLook_,
-                   cavity_,         depthSampler_,
+                   cavity_,         depthSampler_, stationWindows_, stationAnnexes_, stationDoors_,
                    atmosphere_,     atmosphereRotation_,
                    micro_,          microParams_, terrainMaterial_,
                    meso_,           domain_,
@@ -308,12 +351,24 @@ bgfx::ProgramHandle HyperionRenderer::cockpitGlazingProgram() {
     return cockpitGlazing_;
 }
 
-void HyperionRenderer::bindCockpitGlazing() {
-    const glm::vec4 glazing{1.f / width_, 1.f / height_, bgfx::getCaps()->originBottomLeft ? 1.f : -1.f, 0};
+void HyperionRenderer::bindCockpitGlazing(GlazingView view) {
+    const glm::vec4 glazing{1.f / width_, 1.f / height_, bgfx::getCaps()->originBottomLeft ? 1.f : -1.f, float(view)};
     bgfx::setUniform(glazingParams_, glm::value_ptr(glazing));
-    bgfx::setTexture(0, sceneSampler_, bgfx::getTexture(display_), sampling);
+    bgfx::setTexture(0, sceneSampler_,
+                     view==GlazingView::TunnelExterior?noise_:bgfx::getTexture(display_),sampling);
+    bgfx::setTexture(2, depthSampler_, view==GlazingView::TunnelInterior && readableDepth_
+                         ? bgfx::getTexture(scene_,depthAttachment_) : noise_,
+                     sampling | BGFX_SAMPLER_MIN_POINT | BGFX_SAMPLER_MAG_POINT);
 }
-void HyperionRenderer::drawAtlasText(std::span<const AtlasGlyphQuad> glyphs, bgfx::ViewId view) {
+void HyperionRenderer::bindStationLighting(std::span<const glm::vec4> openings,std::span<const glm::vec4> annexes,
+                                          const std::array<glm::vec4,2>& doors) {
+    bgfx::setUniform(cabinSunParams_,cabinSunData_.data(),2);
+    bgfx::setUniform(stationWindows_,openings.data(),uint16_t(openings.size()));
+    bgfx::setUniform(stationAnnexes_,annexes.data(),uint16_t(annexes.size()));
+    bgfx::setUniform(stationDoors_,doors.data(),uint16_t(doors.size()));
+}
+void HyperionRenderer::drawAtlasText(std::span<const AtlasGlyphQuad> glyphs, bgfx::ViewId view,
+                                     const glm::mat4* model,float pixelsPerUnit) {
     if (glyphs.empty())
         return;
     if (!bgfx::isValid(atlasTextProgram_)) {
@@ -339,15 +394,89 @@ void HyperionRenderer::drawAtlasText(std::span<const AtlasGlyphQuad> glyphs, bgf
     bgfx::allocTransientVertexBuffer(&buffer, count, atlasTextLayout_);
     auto* vertices = reinterpret_cast<Vertex*>(buffer.data);
     for (const auto& g : glyphs) {
-        const Vertex a{g.x0,g.y0,0,g.u0,g.v0,g.colour}, b{g.x1,g.y0,0,g.u1,g.v0,g.colour};
-        const Vertex c{g.x0,g.y1,0,g.u0,g.v1,g.colour}, d{g.x1,g.y1,0,g.u1,g.v1,g.colour};
+        // Distant panels stay in the world. Their text fades before it
+        // becomes a pattern of flickering subpixel strokes.
+        const float opacity=pixelsPerUnit>0.f?glm::smoothstep(2.5f,6.f,(g.y1-g.y0)*pixelsPerUnit):1.f;
+        const uint32_t colour=(g.colour&0xffffffu)|(uint32_t(float(g.colour>>24)*opacity+.5f)<<24);
+        const Vertex a{g.x0,g.y0,0,g.u0,g.v0,colour}, b{g.x1,g.y0,0,g.u1,g.v0,colour};
+        const Vertex c{g.x0,g.y1,0,g.u0,g.v1,colour}, d{g.x1,g.y1,0,g.u1,g.v1,colour};
         for (const auto& point : {a,b,c,b,d,c})
             *vertices++ = point;
     }
     bgfx::setVertexBuffer(0, &buffer);
     bgfx::setTexture(0, atlasTextSampler_, atlasTextTexture_, sampling);
-    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_ALPHA | BGFX_STATE_MSAA);
+    if (model)
+        bgfx::setTransform(glm::value_ptr(*model));
+    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_ALPHA | BGFX_STATE_MSAA |
+                   (model ? BGFX_STATE_DEPTH_TEST_LESS : 0));
     bgfx::submit(view, atlasTextProgram_);
+}
+void HyperionRenderer::prepareDeckCrew() {
+    if (bgfx::isValid(deckCrewProgram_))
+        return;
+    constexpr unsigned atlasWidth=crewSpriteWidth*crewSpriteFrames;
+    constexpr unsigned atlasHeight=crewSpriteHeight*crewSpriteDirections;
+    const auto pixels=crewSilhouettePixels();
+    deckCrewTexture_=bgfx::createTexture2D(atlasWidth,atlasHeight,false,1,bgfx::TextureFormat::R8,
+        sampling,bgfx::copy(pixels.data(),uint32_t(pixels.size())));
+    deckCrewSampler_=bgfx::createUniform("s_deckCrew",bgfx::UniformType::Sampler);
+    deckCrewProgram_=program("vs_xalaria_crew","fs_xalaria_crew");
+    atlasTextLayout_.begin()
+        .add(bgfx::Attrib::Position,3,bgfx::AttribType::Float)
+        .add(bgfx::Attrib::TexCoord0,2,bgfx::AttribType::Float)
+        .add(bgfx::Attrib::Color0,4,bgfx::AttribType::Uint8,true)
+        .end();
+}
+void HyperionRenderer::drawDeckCrew(std::span<const DeckCrewPose> crew,glm::dvec3 eye,bgfx::ViewId view) {
+    if (crew.empty() || !bgfx::isValid(deckCrewProgram_) || !bgfx::isValid(deckCrewTexture_))
+        return;
+    constexpr unsigned atlasWidth=crewSpriteWidth*crewSpriteFrames;
+    constexpr unsigned atlasHeight=crewSpriteHeight*crewSpriteDirections;
+    struct Vertex { float x,y,z,u,v; uint32_t colour; };
+    const auto count=uint32_t(crew.size()*6);
+    if (bgfx::getAvailTransientVertexBuffer(count,atlasTextLayout_)<count)
+        return;
+    bgfx::TransientVertexBuffer buffer;
+    bgfx::allocTransientVertexBuffer(&buffer,count,atlasTextLayout_);
+    auto* out=reinterpret_cast<Vertex*>(buffer.data);
+    const glm::dvec2 camera(eye.x,eye.z);
+    std::vector<const DeckCrewPose*> order;
+    order.reserve(crew.size());
+    for(const auto& pose:crew)order.push_back(&pose);
+    // Paint the more distant figure first if two antialiased contours overlap.
+    std::sort(order.begin(),order.end(),[&](const auto* a,const auto* b) {
+        const auto da=a->position-camera,db=b->position-camera;
+        return glm::dot(da,da)>glm::dot(db,db);
+    });
+    for (const auto* figure : order) {
+        const auto& member=*figure;
+        const glm::dvec2 delta=camera-member.position;
+        const auto facing=std::atan2(delta.x,delta.y)-member.yaw;
+        const auto dir=unsigned((int(std::round(facing*crewSpriteDirections/(2*std::numbers::pi)))%int(crewSpriteDirections)+
+                                 int(crewSpriteDirections))%int(crewSpriteDirections));
+        const unsigned frame=member.moving ? std::min(7u,unsigned(member.stride*8.)) :
+            8u+unsigned(std::floor(member.taskPhase*4/(2*std::numbers::pi)))%4;
+        const auto tangent=glm::normalize(glm::dvec2(delta.y,-delta.x)+glm::dvec2(1e-8,0));
+        const double texel=member.height/(1.78*crewSpriteTexelsPerMetre);
+        const double halfWidth=crewSpriteWidth*texel*.5;
+        const auto right=member.position+tangent*halfWidth, left=member.position-tangent*halfWidth;
+        const float u0=(frame*crewSpriteWidth+.5f)/atlasWidth,u1=((frame+1)*crewSpriteWidth-.5f)/atlasWidth;
+        const float v0=(dir*crewSpriteHeight+.5f)/atlasHeight,v1=((dir+1)*crewSpriteHeight-.5f)/atlasHeight;
+        const float bottom=float(shipDeck::deckFloor-crewSpriteGroundMargin*texel);
+        const float top=bottom+float(crewSpriteHeight*texel);
+        const auto colour=rgba(member.rim);
+        const Vertex a{float(left.x),top,float(left.y),u0,v0,colour};
+        const Vertex b{float(right.x),top,float(right.y),u1,v0,colour};
+        const Vertex c{float(left.x),bottom,float(left.y),u0,v1,colour};
+        const Vertex d{float(right.x),bottom,float(right.y),u1,v1,colour};
+        for (const auto& v : {a,b,c,b,d,c})
+            *out++=v;
+    }
+    bgfx::setVertexBuffer(0,&buffer);
+    bgfx::setTexture(0,deckCrewSampler_,deckCrewTexture_,sampling);
+    bgfx::setState(BGFX_STATE_WRITE_RGB|BGFX_STATE_WRITE_A|BGFX_STATE_WRITE_Z|BGFX_STATE_DEPTH_TEST_LESS|BGFX_STATE_MSAA|
+                   BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE,BGFX_STATE_BLEND_INV_SRC_ALPHA));
+    bgfx::submit(view,deckCrewProgram_);
 }
 bgfx::ProgramHandle HyperionRenderer::wormholeProgram() {
     init();
@@ -368,6 +497,9 @@ bool HyperionRenderer::wormholeOptics(glm::vec3 centre, glm::vec3 right, glm::ve
 }
 void HyperionRenderer::begin(RenderMode, int width, int height, bool opticalDepth, bool flight) {
     detailUploadBytes_ = 0;
+    ringLayerActive_ = false;
+    shipTrailsActive_ = false;
+    shipBlastsActive_ = false;
     flight_ = flight;
     spaceGlassData_={};spaceGlassFromEye_=glm::mat4(1);
     weatherVisualData_ = {};
@@ -411,7 +543,14 @@ void HyperionRenderer::begin(RenderMode, int width, int height, bool opticalDept
                                              bgfx::TextureFormat::RGBA16F, BGFX_TEXTURE_RT | sampling);
         optical_=bgfx::createFrameBuffer(width,height,bgfx::TextureFormat::RGBA16F,BGFX_TEXTURE_RT|sampling);
         display_=bgfx::createFrameBuffer(width,height,bgfx::TextureFormat::RGBA8,BGFX_TEXTURE_RT|sampling);
-        lensSeed_=bgfx::createFrameBuffer(std::max(1,width/3),std::max(1,height/3),bgfx::TextureFormat::RGBA16F,BGFX_TEXTURE_RT|sampling);
+        const bool filteredLensSeed=(bgfx::getCaps()->formats[bgfx::TextureFormat::RGBA16F]&
+                                    BGFX_CAPS_FORMAT_TEXTURE_MIP_AUTOGEN)!=0;
+        const auto seed=bgfx::createTexture2D(std::max(1,width/3),std::max(1,height/3),
+                                             filteredLensSeed,1,bgfx::TextureFormat::RGBA16F,
+                                             BGFX_TEXTURE_RT|sampling);
+        bgfx::Attachment seedAttachment;
+        seedAttachment.init(seed);
+        lensSeed_=bgfx::createFrameBuffer(1,&seedAttachment,true);
         bokeh_=bgfx::createFrameBuffer(std::max(1,width/3),std::max(1,height/3),bgfx::TextureFormat::RGBA16F,BGFX_TEXTURE_RT|sampling);
         if(!bgfx::isValid(optical_)||!bgfx::isValid(display_)||!bgfx::isValid(lensSeed_)||!bgfx::isValid(bokeh_))
             throw std::runtime_error("Camera lens target allocation failed");
@@ -419,6 +558,10 @@ void HyperionRenderer::begin(RenderMode, int width, int height, bool opticalDept
             throw std::runtime_error("Hyperion HDR target allocation failed");
         bytes_ = size_t(width) * height * (mirrors?20:12) + size_t(std::max(1, width / 3)) * std::max(1, height / 3) * 16;
         bytes_+=size_t(width)*height*12+size_t(std::max(1,width/3))*std::max(1,height/3)*16;
+        if(filteredLensSeed){
+            int w=std::max(1,width/3),h=std::max(1,height/3);
+            while(w>1||h>1){w=std::max(1,w/2);h=std::max(1,h/2);bytes_+=size_t(w)*h*8;}
+        }
         if (opticalDepth) {
             polarTarget_ = bgfx::createFrameBuffer(std::max(1, width / 2), std::max(1, height / 2),
                                                    bgfx::TextureFormat::RGBA16F, BGFX_TEXTURE_RT | sampling);
@@ -435,9 +578,12 @@ void HyperionRenderer::begin(RenderMode, int width, int height, bool opticalDept
             bytes_ += size_t(cloudWidth_) * cloudHeight_ * 8;
         }
     }
-    if (replaceTarget)
+    if (replaceTarget) {
         for (bgfx::ViewId id = 0; id < 67; ++id)
             bgfx::setViewFrameBuffer(id, scene_);
+        bgfx::setViewFrameBuffer(stationGlassViewId,scene_);
+        bgfx::setViewFrameBuffer(warpFieldViewId,scene_);
+    }
     // Hyperion skyFragment's linear ink (.004,.007,.016), rounded to the
     // clear API's RGBA8 input; the HDR display transform is applied later.
     bgfx::setViewClear(0, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x010204ff, 0.f, 0);
@@ -552,6 +698,22 @@ void HyperionRenderer::stellar(const StellarImage& image, float aspect, float ta
     starFromEye_[3][3] = bgfx::getCaps()->originBottomLeft ? 1.f : -1.f;
     const float flux = std::clamp(float(image.angularRadius / .0015), 0.f, 1.f);
     stellarData_[2] = {aspect, flux * flux, 1.f / height_, 0};
+}
+void HyperionRenderer::showStellarScope(const Node& star,double seconds) {
+    if(!bgfx::isValid(stellarScope_))
+        stellarScope_=program("vs_hyperion_screen","fs_xalaria_stellar_scope");
+    auto typed=stellarPresentation(star);
+    typed[1].w=float(seconds);
+    const std::array<glm::vec4,3> optics{{
+        {float(width_)/height_,1.f/height_,0,0},
+        {stellarRadiance(star),0}, {}
+    }};
+    bgfx::setUniform(starTypeParams_,typed.data(),2);
+    bgfx::setUniform(stellarParams_,optics.data(),3);
+    bgfx::setTexture(5,noiseSampler_,noise_);
+    bgfx::setViewFrameBuffer(86,BGFX_INVALID_HANDLE);
+    bgfx::setViewRect(86,0,0,width_,height_);
+    screen(86,stellarScope_);
 }
 void HyperionRenderer::prepareWeather(const Node& planet, const glm::dmat4& mapping, double seconds,
                                       double delta, bool volumes, bool frozen) {
@@ -677,8 +839,66 @@ void HyperionRenderer::bind(const ScenePresentation& p, const glm::vec3& eye, co
         bgfx::setUniform(microParams_, glm::value_ptr(microParams));
     }
 }
+bgfx::ViewId HyperionRenderer::planetRingView() {
+    if (!readableDepth_)
+        return 65;
+    if (!bgfx::isValid(ringLayer_)) {
+        ringColour_ = bgfx::createTexture2D(width_, height_, false, 1, bgfx::TextureFormat::RGBA16F,
+                                           BGFX_TEXTURE_RT | sampling);
+        const bgfx::TextureHandle attachments[]{ringColour_, bgfx::getTexture(scene_, depthAttachment_)};
+        ringLayer_ = bgfx::createFrameBuffer(2, attachments, false);
+        if (!bgfx::isValid(ringLayer_))
+            throw std::runtime_error("Planet ring target allocation failed");
+        bytes_ += size_t(width_) * height_ * 8;
+    }
+    if (!ringLayerActive_) {
+        // Keep the world depth and accumulate only ring colour and coverage.
+        bgfx::setViewFrameBuffer(ringLayerViewId, ringLayer_);
+        bgfx::setViewClear(ringLayerViewId, BGFX_CLEAR_COLOR, 0);
+        bgfx::setViewMode(ringLayerViewId, bgfx::ViewMode::Sequential);
+        ringLayerActive_ = true;
+    }
+    return ringLayerViewId;
+}
+bgfx::ViewId HyperionRenderer::shipTrailView() {
+    if (!bgfx::isValid(shipTrailLayer_)) {
+        shipTrailMask_ = bgfx::createTexture2D(width_, height_, false, 1, bgfx::TextureFormat::R8,
+                                              BGFX_TEXTURE_RT | sampling);
+        const bgfx::TextureHandle attachments[]{shipTrailMask_, bgfx::getTexture(scene_, depthAttachment_)};
+        shipTrailLayer_ = bgfx::createFrameBuffer(2, attachments, false);
+        if (!bgfx::isValid(shipTrailLayer_))
+            throw std::runtime_error("Ship trail target allocation failed");
+        bytes_ += size_t(width_) * height_;
+    }
+    // Test against the world depth. Keep intensity separate from the scene's colour grade.
+    bgfx::setViewFrameBuffer(shipTrailViewId, shipTrailLayer_);
+    bgfx::setViewRect(shipTrailViewId, 0, 0, width_, height_);
+    bgfx::setViewClear(shipTrailViewId, BGFX_CLEAR_COLOR, 0);
+    bgfx::touch(shipTrailViewId);
+    shipTrailsActive_ = true;
+    return shipTrailViewId;
+}
+bgfx::ViewId HyperionRenderer::shipBlastView() {
+    if(!bgfx::isValid(shipBlastLayer_)){
+        shipBlastColour_=bgfx::createTexture2D(width_,height_,false,1,bgfx::TextureFormat::RGBA16F,
+                                               BGFX_TEXTURE_RT|sampling);
+        const bgfx::TextureHandle targets[]{shipBlastColour_,bgfx::getTexture(scene_,depthAttachment_)};
+        shipBlastLayer_=bgfx::createFrameBuffer(2,targets,false);
+        if(!bgfx::isValid(shipBlastLayer_))throw std::runtime_error("Ship blast target allocation failed");
+        bytes_+=size_t(width_)*height_*8;
+    }
+    for(unsigned pass=0;pass<2;++pass){
+        const auto view=bgfx::ViewId(shipBlastViewId+pass);
+        bgfx::setViewFrameBuffer(view,shipBlastLayer_);
+        bgfx::setViewRect(view,0,0,width_,height_);
+        bgfx::setViewClear(view,pass?BGFX_CLEAR_NONE:BGFX_CLEAR_COLOR,0);
+        bgfx::setViewMode(view,bgfx::ViewMode::Sequential);
+    }
+    bgfx::touch(shipBlastViewId);shipBlastsActive_=true;
+    return shipBlastViewId;
+}
 bgfx::ProgramHandle HyperionRenderer::ringProgram(const PlanetTraits& t, glm::vec3 light, glm::vec3 eye,
-                                                  float opacity) {
+                                                  float opacity, float logPlanetRadius) {
     init();
     if (!bgfx::isValid(rings_))
         rings_ = program("vs_planet_rings", "fs_planet_rings");
@@ -686,9 +906,10 @@ bgfx::ProgramHandle HyperionRenderer::ringProgram(const PlanetTraits& t, glm::ve
     const auto colour = glm::mix(glm::vec3(.25, .16, .10), glm::vec3(.80, .77, .65), float(r.iceFraction));
     const std::array<glm::vec4, 4> data = {glm::vec4(float(r.innerRadius), float(r.outerRadius),
                                                      float(r.opticalDepth), float(r.seed % 10000) / 10000.f),
-                                           glm::vec4(colour, opacity), glm::vec4(light, 0),
-                                           glm::vec4(eye, 0)};
+                                           glm::vec4(colour, opacity), glm::vec4(light, logPlanetRadius),
+                                           glm::vec4(eye, ringLayerActive_ ? 1.f : 0.f)};
     bgfx::setUniform(ringParams_, data.data(), 4);
+    bgfx::setUniform(regionLook_, regionLookData_.data(), 2);
     return rings_;
 }
 void HyperionRenderer::sky(const SpectralSky& sky, double seconds, float aspect, float tanHalfFov) {
@@ -739,7 +960,7 @@ void HyperionRenderer::screen(bgfx::ViewId id, bgfx::ProgramHandle p) {
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
     bgfx::submit(id, p);
 }
-void HyperionRenderer::finish() {
+void HyperionRenderer::resolveExterior(float fixedFocus) {
     if (readableDepth_) {
         weatherData_[3].x = 1.f / cloudWidth_;
         weatherData_[3].y = 1.f / cloudHeight_;
@@ -813,13 +1034,15 @@ void HyperionRenderer::finish() {
     bgfx::setViewRect(82,0,0,width_,height_);
     std::array<glm::vec4, 2> params{};
     params[0] = {1.f / width_, 1.f / height_, 1.f, reflectiveTargets_ ? 1.f : 0.f};
-    params[1] = {1.f / std::max(1, width_ / 2), 1.f / std::max(1, height_ / 2), 0, 0};
+    params[1] = {1.f / std::max(1, width_ / 2), 1.f / std::max(1, height_ / 2),
+                 ringLayerActive_ ? 1.f : 0.f, fixedFocus};
     bgfx::setUniform(postParams_, params.data(), 2);
     bgfx::setTexture(0, sceneSampler_, bgfx::getTexture(scene_), sampling);
     bgfx::setTexture(1, bloomSampler_, bgfx::getTexture(bloom_[1]), sampling);
     const bool optical = readableDepth_;
     auto finalProgram = post_;
     if (optical) {
+        bgfx::setTexture(4, ringSampler_, ringLayerActive_ ? ringColour_ : noise_, sampling);
         stellarData_[2].w = weatherData_[0].w > 0 ? 1.f : 0.f;
         bgfx::setUniform(stellarParams_, stellarData_.data(), 3);
         bgfx::setUniform(starTypeParams_, starTypeData_.data(), 2);
@@ -861,21 +1084,29 @@ void HyperionRenderer::finish() {
     }
     screen(82, finalProgram);
     const auto depth=readableDepth_?bgfx::getTexture(scene_,depthAttachment_):noise_;
+    // Match the source footprint to the aperture gather. A coarse light seed
+    // prevents large cat's-eye highlights breaking into individual sample dots.
+    params[0].z=(bgfx::getCaps()->formats[bgfx::TextureFormat::RGBA16F]&
+                 BGFX_CAPS_FORMAT_TEXTURE_MIP_AUTOGEN)?1.f:0.f;
     bgfx::setViewFrameBuffer(83,lensSeed_);
     bgfx::setViewRect(83,0,0,std::max(1,width_/3),std::max(1,height_/3));
     bgfx::setUniform(lensParams_,lens.data(),2);
+    bgfx::setUniform(postParams_,params.data(),2);
     bgfx::setTexture(0,sceneSampler_,bgfx::getTexture(optical_),sampling);
     bgfx::setTexture(2,depthSampler_,depth,sampling|BGFX_SAMPLER_MIN_POINT|BGFX_SAMPLER_MAG_POINT);
     screen(83,lensSeedProgram_);
     bgfx::setViewFrameBuffer(84,bokeh_);
     bgfx::setViewRect(84,0,0,std::max(1,width_/3),std::max(1,height_/3));
     bgfx::setUniform(lensParams_,lens.data(),2);
+    bgfx::setUniform(postParams_,params.data(),2);
     bgfx::setTexture(0,sceneSampler_,bgfx::getTexture(lensSeed_),sampling);
     bgfx::setTexture(2,depthSampler_,depth,sampling|BGFX_SAMPLER_MIN_POINT|BGFX_SAMPLER_MAG_POINT);
     screen(84,bokehProgram_);
     bgfx::setViewFrameBuffer(85,display_);
     bgfx::setViewRect(85,0,0,width_,height_);
-    bgfx::setUniform(regionLook_, regionLookData_.data(), 2);
+    auto lensLook = regionLookData_;
+    lensLook[1].w = shipTrailsActive_ ? 1.f : 0.f;
+    bgfx::setUniform(regionLook_, lensLook.data(), 2);
     bgfx::setUniform(lensParams_,lens.data(),2);
     bgfx::setUniform(postParams_,params.data(),2);
     bgfx::setUniform(stellarParams_,stellarData_.data(),3);
@@ -885,9 +1116,116 @@ void HyperionRenderer::finish() {
     bgfx::setTexture(1,bloomSampler_,bgfx::getTexture(bokeh_),sampling);
     bgfx::setTexture(2,depthSampler_,depth,sampling|BGFX_SAMPLER_MIN_POINT|BGFX_SAMPLER_MAG_POINT);
     bgfx::setTexture(3,focusSeedSampler_,bgfx::getTexture(lensSeed_),sampling|BGFX_SAMPLER_MIN_POINT|BGFX_SAMPLER_MAG_POINT);
+    bgfx::setTexture(4,ringSampler_,ringLayerActive_ ? ringColour_ : noise_,sampling);
     bgfx::setTexture(5,noiseSampler_,noise_);
+    bgfx::setTexture(6,shipTrailSampler_,shipTrailsActive_ ? shipTrailMask_ : noise_,sampling);
+    bgfx::setTexture(10,shipBlastSampler_,shipBlastsActive_ ? shipBlastColour_ : noise_,sampling);
+    const glm::vec4 blastParams{shipBlastsActive_?1.f:0.f,0,0,0};
+    bgfx::setUniform(shipBlastParams_,glm::value_ptr(blastParams));
     bgfx::setTexture(9,cloudSampler_,readableDepth_?bgfx::getTexture(cloudTarget_):noise_,sampling);
     screen(85,lensProgram_);
+}
+
+bgfx::ProgramHandle HyperionRenderer::cockpitProgram() {
+    init();
+    if(!cabinReflective_)return geometry_;
+    if(!bgfx::isValid(cabinGeometry_))cabinGeometry_=program("vs_hyperion","fs_xalaria_cabin");
+    return cabinGeometry_;
+}
+
+void HyperionRenderer::cabinSun(const glm::mat4& hullFromEye,glm::vec3 direction,glm::vec3 colour,
+                               float power,float angularRadius) {
+    cabinFromEye_=hullFromEye;
+    cabinSunData_[0]={glm::dot(direction,direction)>1e-20f?glm::normalize(direction):glm::vec3(0,1,0),power};
+    cabinSunData_[1]={colour,angularRadius};
+}
+
+bool HyperionRenderer::beginCabin(float tanHalfFov, float farClip) {
+    cabinFrustum_={tanHalfFov*float(width_)/height_,
+                   tanHalfFov*(bgfx::getCaps()->originBottomLeft?1.f:-1.f),.025f,farClip};
+    if (!bgfx::isValid(cabin_)) {
+        cabinDepthReadable_=bgfx::isTextureValid(0,false,1,bgfx::TextureFormat::D32F,BGFX_TEXTURE_RT|sampling);
+        // MSAA covers the actual thin fitting edges before the cabin resolves.
+        // A post-process alone cannot recover their subpixel coverage in motion.
+        const uint64_t multisample=
+            bgfx::isTextureValid(0,false,1,bgfx::TextureFormat::RGBA16F,BGFX_TEXTURE_RT_MSAA_X4|sampling) &&
+            bgfx::isTextureValid(0,false,1,bgfx::TextureFormat::D32F,BGFX_TEXTURE_RT_MSAA_X4|sampling)
+                ? BGFX_TEXTURE_RT_MSAA_X4 : 0;
+        cabinReflective_=cabinDepthReadable_&&reflectionsEnabled_&&bgfx::getCaps()->limits.maxFBAttachments>=3;
+        cabinDepthAttachment_=cabinReflective_?2:1;
+        std::array<bgfx::TextureHandle,3> targets;
+        targets.fill(BGFX_INVALID_HANDLE);
+        targets[0]=bgfx::createTexture2D(width_,height_,false,1,bgfx::TextureFormat::RGBA16F,BGFX_TEXTURE_RT|multisample|sampling);
+        if(cabinReflective_)
+            targets[1]=bgfx::createTexture2D(width_,height_,false,1,bgfx::TextureFormat::RGBA16F,BGFX_TEXTURE_RT|multisample|sampling);
+        targets[cabinDepthAttachment_]=bgfx::createTexture2D(width_,height_,false,1,bgfx::TextureFormat::D32F,
+                                  (cabinDepthReadable_?BGFX_TEXTURE_RT|sampling:BGFX_TEXTURE_RT_WRITE_ONLY)|multisample);
+        bool valid=true;
+        for(unsigned i=0;i<=cabinDepthAttachment_;++i)valid&=bgfx::isValid(targets[i]);
+        if(valid)cabin_=bgfx::createFrameBuffer(cabinDepthAttachment_+1,targets.data(),true);
+        if (!bgfx::isValid(cabin_)) {
+            for (auto target : targets)
+                if (bgfx::isValid(target))
+                    bgfx::destroy(target);
+            cabinReflective_=false;
+            return false;
+        }
+        bytes_ += size_t(width_)*height_*(cabinReflective_?20:12)*(multisample?5:1);
+    }
+    bgfx::setViewFrameBuffer(cabinViewId,cabin_);
+    bgfx::setViewClear(cabinViewId,BGFX_CLEAR_COLOR|BGFX_CLEAR_DEPTH,0,1.f,0);
+    return true;
+}
+
+void HyperionRenderer::finishCabin() {
+    // Reuse the world blur buffers after the exterior lens has resolved.
+    const auto cabinColour = bgfx::getTexture(cabin_);
+    for (unsigned pass=0;pass<2;++pass) {
+        const auto view = bgfx::ViewId(cabinViewId+1+pass);
+        const int w = std::max(1,width_/3), h = std::max(1,height_/3);
+        bgfx::setViewFrameBuffer(view,bloom_[pass]);
+        bgfx::setViewRect(view,0,0,w,h);
+        const std::array<glm::vec4,2> blur{{
+            pass==0 ? glm::vec4(6.f/width_,0,1,0) : glm::vec4(0,2.f/h,0,0), {}
+        }};
+        bgfx::setUniform(postParams_,blur.data(),2);
+        bgfx::setTexture(0,sceneSampler_,pass==0 ? cabinColour : bgfx::getTexture(bloom_[0]),sampling);
+        screen(view,blur_);
+    }
+    if (!bgfx::isValid(cabinComposite_))
+        cabinComposite_ = program("vs_hyperion_screen","fs_xalaria_cabin_composite");
+    constexpr bgfx::ViewId view = cabinViewId+3;
+    bgfx::setViewFrameBuffer(view,BGFX_INVALID_HANDLE);
+    bgfx::setViewRect(view,0,0,width_,height_);
+    const std::array<glm::vec4,2> params{{
+        {1.f/width_,1.f/height_,cabinFrustum_.x,cabinFrustum_.y},
+        {cabinFrustum_.z,cabinFrustum_.w,.13f,cabinDepthReadable_?.56f:0.f}
+    }};
+    bgfx::setUniform(postParams_,params.data(),2);
+    bgfx::setTexture(0,sceneSampler_,bgfx::getTexture(display_),sampling);
+    bgfx::setUniform(cabinSunParams_,cabinSunData_.data(),2);
+    bgfx::setUniform(cabinFromEyeParams_,glm::value_ptr(cabinFromEye_));
+    bgfx::setTexture(5,noiseSampler_,noise_);
+    bgfx::setTexture(1,bloomSampler_,bgfx::getTexture(bloom_[1]),sampling);
+    // Apply the same photographic image circle to the cabin layer. The HUD
+    // is drawn afterward, so navigation and instrument overlays stay sharp.
+    const std::array<glm::vec4,2> cabinLens{{
+        {lensEnabled_?1.f:0.f,1.15f,5.f,cabinReflective_&&reflectionsEnabled_?1.f:0.f},
+        {1.f/width_,1.f/height_,cabinFrustum_.z,cabinFrustum_.w}
+    }};
+    bgfx::setUniform(lensParams_,cabinLens.data(),2);
+    // The exterior depth slot is idle after its lens pass.
+    bgfx::setTexture(2,depthSampler_,cabinColour,sampling);
+    // Reuse the existing opaque cabin depth and the idle exterior surface
+    // sampler. No extra render target or temporal shadow history is needed.
+    bgfx::setTexture(3,reflectionSampler_,cabinDepthReadable_?bgfx::getTexture(cabin_,cabinDepthAttachment_):noise_,
+                     sampling|BGFX_SAMPLER_MIN_POINT|BGFX_SAMPLER_MAG_POINT);
+    bgfx::setTexture(4,ringSampler_,cabinReflective_?bgfx::getTexture(cabin_,1):noise_,
+                     sampling|BGFX_SAMPLER_MIN_POINT|BGFX_SAMPLER_MAG_POINT);
+    screen(view,cabinComposite_);
+}
+
+void HyperionRenderer::presentExterior() {
     // The canopy and the back buffer both sample this finished camera image.
     bgfx::setViewFrameBuffer(86,BGFX_INVALID_HANDLE);
     bgfx::setViewRect(86,0,0,width_,height_);

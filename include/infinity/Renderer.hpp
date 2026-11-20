@@ -12,6 +12,11 @@ namespace infinity {
 class ShipInterior;
 struct CockpitViewport;
 struct XalariaMapView;
+struct XalariaRadioView;
+class XalariaStories;
+class XalariaCombat;
+struct StoryContext;
+struct ShieldReadout;
 class XalariaEconomy;
 struct CrewView;
 struct EconomySnapshot;
@@ -53,6 +58,7 @@ struct FrameStats {
     size_t surfaceMachines = 0, surfaceRovers = 0, surfaceWorking = 0, surfaceWeatherHolds = 0;
     size_t surfaceBytes = 0, surfaceGpuBytes = 0, surfacePending = 0, weatherCells = 0, weatherParticles = 0;
     size_t weatherPending = 0, weatherCacheBytes = 0, weatherGpuBytes = 0, weatherVolumes = 0;
+    size_t shipTrailTriangles = 0;
 };
 class Renderer {
   public:
@@ -108,6 +114,8 @@ class Renderer {
     void setCockpit(const FlightInstruments*);
     void setCockpitLook(glm::dvec2 yawPitch);
     void setShipInterior(const ShipInterior*);
+    void beginSeatTransition(bool standing);
+    bool seatTransitionActive() const;
     void setCockpitValidation(bool); // Native UI proof only; no per-frame collision scan in normal play.
     void setCrew(const CrewView*);
     void setExpeditionPlan(const ExpeditionPlan*);
@@ -119,6 +127,12 @@ class Renderer {
     void closeCockpitHelp();
     void setXalariaMap(const XalariaMapView*);
     void setXalariaEconomy(const XalariaEconomy*);
+    void setXalariaCombat(const XalariaCombat*);
+    void setXalariaRadio(const XalariaRadioView*);
+    void setXalariaStories(const XalariaStories*,const StoryContext&,std::string_view routeAction);
+    void setXalariaDistress(std::optional<ActivityId>);
+    void setXalariaShield(const ShieldReadout&);
+    void cutPlayerTrail();
 
   private:
     struct Impl;

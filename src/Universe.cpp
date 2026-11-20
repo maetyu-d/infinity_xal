@@ -342,6 +342,12 @@ glm::dvec3 galacticPosition(const GalaxyProcess& g, const Random& r, Population 
 StarSample Universe::starSample(const Node& g, uint64_t id) const {
     if(xalaria()){
         const auto& s=xalaria()->star(id);
+        if(s.surveyStar){
+            Node star;
+            star.temperatureK=s.temperature;star.stellar=s.surveyStar;
+            return {xalaria()->mapPosition(s.seed),stellarRadiance(star),s.surveyStar->massSolar,
+                    s.surveyStar->ageGyr,.02,Population::Disc};
+        }
         const auto luminosity=std::pow(s.radius/6.957e8,2)*std::pow(s.temperature/5772,4);
         return {xalaria()->mapPosition(s.seed),stellarColor(s.temperature),std::clamp(std::pow(luminosity,1/3.5),.08,80.),4,.02,Population::Disc};
     }

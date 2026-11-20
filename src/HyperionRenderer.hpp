@@ -10,25 +10,43 @@
 
 namespace infinity {
 struct AtlasGlyphQuad;
+struct DeckCrewPose;
+inline constexpr bgfx::ViewId cabinViewId = 87;
+inline constexpr bgfx::ViewId ringLayerViewId = 67;
+inline constexpr bgfx::ViewId stationGlassViewId = 68;
+inline constexpr bgfx::ViewId warpFieldViewId = 69;
+inline constexpr bgfx::ViewId shipTrailViewId = 77;
+inline constexpr bgfx::ViewId shipBlastViewId = 75;
+enum class GlazingView { Cabin, TunnelInterior, TunnelExterior };
 // Geometry shading, emission bloom, camera optics and final display transform. Owns no
 // universe, navigation, generator, seed state or geometry cache.
 class HyperionRenderer {
   public:
     ~HyperionRenderer();
     void begin(RenderMode, int width, int height, bool opticalDepth = false, bool flight = false);
-    void finish();
+    void resolveExterior(float fixedFocus);
+    void presentExterior();
+    bool beginCabin(float tanHalfFov, float farClip);
+    void finishCabin();
+    void cabinSun(const glm::mat4& hullFromEye,glm::vec3 direction,glm::vec3 colour,float power,float angularRadius);
     void setReflections(bool value){reflectionsEnabled_=value;}
     void setSpaceGlass(bool value){spaceGlassEnabled_=value;}
     void setLens(bool value){lensEnabled_=value;}
     void setRegionalLook(glm::vec3 look, double seconds, double logMetres, bool exterior);
-    bgfx::ProgramHandle cockpitProgram(){init();return geometry_;}
+    bgfx::ProgramHandle cockpitProgram();
     bgfx::ProgramHandle cockpitGlazingProgram();
-    void bindCockpitGlazing();
-    void drawAtlasText(std::span<const AtlasGlyphQuad>, bgfx::ViewId);
+    void bindCockpitGlazing(GlazingView);
+    void bindStationLighting(std::span<const glm::vec4> windows,std::span<const glm::vec4> annexes,
+                             const std::array<glm::vec4,2>& doors);
+    void drawAtlasText(std::span<const AtlasGlyphQuad>, bgfx::ViewId, const glm::mat4* model = nullptr,
+                       float pixelsPerUnit=0.f);
+    void prepareDeckCrew();
+    void drawDeckCrew(std::span<const DeckCrewPose>, glm::dvec3 eye, bgfx::ViewId);
     bgfx::ProgramHandle wormholeProgram();
     bool wormholeOptics(glm::vec3 centre, glm::vec3 right, glm::vec3 up,
                         float radius, glm::vec3 plasma, float tanHalfFov, double seconds);
     void stellar(const StellarImage&, float aspect, float tanHalfFov, double visualTime);
+    void showStellarScope(const Node&, double visualTime);
     void landingContact(const Address&, glm::vec3 pointFromEye, glm::vec3 up, float radius, float strength);
     void localWeather(const PlanetClimate&, const WeatherSample&, double seconds, bool enabled);
     void sky(const SpectralSky&, double visualTime, float aspect, float tanHalfFov);
@@ -73,7 +91,11 @@ class HyperionRenderer {
     }
     bgfx::ProgramHandle geometryProgram(bool smooth = false, bool stellar = false);
     bgfx::ProgramHandle coronaProgram();
-    bgfx::ProgramHandle ringProgram(const PlanetTraits&, glm::vec3 light, glm::vec3 eye, float opacity);
+    bgfx::ViewId planetRingView();
+    bgfx::ViewId shipTrailView();
+    bgfx::ViewId shipBlastView();
+    bgfx::ProgramHandle ringProgram(const PlanetTraits&, glm::vec3 light, glm::vec3 eye, float opacity,
+                                   float logPlanetRadius);
     bgfx::ProgramHandle glowProgram() const {
         return glow_;
     }
@@ -91,6 +113,18 @@ class HyperionRenderer {
     bgfx::UniformHandle planetParams_ = BGFX_INVALID_HANDLE, planetRingsParams_ = BGFX_INVALID_HANDLE,
                         ringParams_ = BGFX_INVALID_HANDLE;
     bgfx::ProgramHandle rings_ = BGFX_INVALID_HANDLE;
+    bgfx::FrameBufferHandle ringLayer_ = BGFX_INVALID_HANDLE;
+    bgfx::TextureHandle ringColour_ = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle ringSampler_ = BGFX_INVALID_HANDLE;
+    bool ringLayerActive_ = false;
+    bgfx::FrameBufferHandle shipTrailLayer_ = BGFX_INVALID_HANDLE;
+    bgfx::TextureHandle shipTrailMask_ = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle shipTrailSampler_ = BGFX_INVALID_HANDLE;
+    bool shipTrailsActive_ = false;
+    bgfx::FrameBufferHandle shipBlastLayer_ = BGFX_INVALID_HANDLE;
+    bgfx::TextureHandle shipBlastColour_ = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle shipBlastSampler_ = BGFX_INVALID_HANDLE, shipBlastParams_ = BGFX_INVALID_HANDLE;
+    bool shipBlastsActive_ = false;
     bgfx::UniformHandle weatherVisualParams_ = BGFX_INVALID_HANDLE;
     std::array<glm::vec4, 3> weatherVisualData_{};
     bgfx::UniformHandle landingParams_ = BGFX_INVALID_HANDLE;
@@ -101,6 +135,7 @@ class HyperionRenderer {
     glm::mat4 starFromEye_{1};
     bgfx::UniformHandle stellarParams_ = BGFX_INVALID_HANDLE;
     bgfx::ProgramHandle corona_ = BGFX_INVALID_HANDLE, solarBlur_ = BGFX_INVALID_HANDLE;
+    bgfx::ProgramHandle stellarScope_ = BGFX_INVALID_HANDLE;
     std::array<bgfx::ProgramHandle, 2> stellarGeometry_{{BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE}};
     std::array<glm::vec4, 3> stellarData_{};
     void init();
@@ -122,6 +157,16 @@ class HyperionRenderer {
     bgfx::FrameBufferHandle scene_ = BGFX_INVALID_HANDLE;
     bgfx::FrameBufferHandle optical_=BGFX_INVALID_HANDLE,lensSeed_=BGFX_INVALID_HANDLE,bokeh_=BGFX_INVALID_HANDLE;
     bgfx::FrameBufferHandle display_=BGFX_INVALID_HANDLE;
+    bgfx::FrameBufferHandle cabin_=BGFX_INVALID_HANDLE;
+    glm::vec4 cabinFrustum_{};
+    bool cabinDepthReadable_=false;
+    bool cabinReflective_=false;
+    uint8_t cabinDepthAttachment_=1;
+    bgfx::ProgramHandle cabinGeometry_=BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle cabinSunParams_=BGFX_INVALID_HANDLE,cabinFromEyeParams_=BGFX_INVALID_HANDLE;
+    std::array<glm::vec4,2> cabinSunData_{{{0,1,0,1},{1,1,1,.00465f}}};
+    glm::mat4 cabinFromEye_{1};
+    bgfx::ProgramHandle cabinComposite_=BGFX_INVALID_HANDLE;
     bgfx::ProgramHandle lensSeedProgram_=BGFX_INVALID_HANDLE,bokehProgram_=BGFX_INVALID_HANDLE,lensProgram_=BGFX_INVALID_HANDLE;
     bgfx::ProgramHandle presentProgram_=BGFX_INVALID_HANDLE;
     bgfx::ProgramHandle cockpitGlazing_=BGFX_INVALID_HANDLE,wormhole_=BGFX_INVALID_HANDLE;
@@ -132,6 +177,9 @@ class HyperionRenderer {
     bgfx::TextureHandle atlasTextTexture_ = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle atlasTextSampler_ = BGFX_INVALID_HANDLE;
     bgfx::VertexLayout atlasTextLayout_;
+    bgfx::ProgramHandle deckCrewProgram_ = BGFX_INVALID_HANDLE;
+    bgfx::TextureHandle deckCrewTexture_ = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle deckCrewSampler_ = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle lensParams_=BGFX_INVALID_HANDLE,focusSeedSampler_=BGFX_INVALID_HANDLE;
     bool lensEnabled_=true;
     std::array<bgfx::FrameBufferHandle, 2> bloom_{{BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE}};
@@ -160,6 +208,8 @@ class HyperionRenderer {
     bgfx::UniformHandle spaceGlassParams_=BGFX_INVALID_HANDLE,spaceGlassMatrix_=BGFX_INVALID_HANDLE;
     bgfx::UniformHandle reflectionSampler_=BGFX_INVALID_HANDLE,reflectionParams_=BGFX_INVALID_HANDLE;
     bgfx::UniformHandle regionLook_ = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle stationWindows_ = BGFX_INVALID_HANDLE, stationAnnexes_ = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle stationDoors_ = BGFX_INVALID_HANDLE;
     std::array<glm::vec4, 2> regionLookData_{};
     bool flight_ = false;
     bgfx::ProgramHandle flightGeometry_ = BGFX_INVALID_HANDLE, flightPost_ = BGFX_INVALID_HANDLE,

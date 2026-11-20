@@ -48,6 +48,20 @@ int main() {
               "Acceleration does not produce a gradual lean opposite the applied force");
         check(glm::length(loaded.pose().angles) > .001, "High-G turn has no visible cockpit response");
         const auto turnPose = loaded.pose();
+        CockpitMotion sustainedBoost;
+        auto highG=input;
+        highG.acceleration={0,0,80000};highG.engine=1;
+        advance(sustainedBoost,highG,3);
+        auto previousBoost=sustainedBoost.pose();
+        for(int frame=0;frame<240;++frame){
+            sustainedBoost.update(highG,1./60);
+            const auto current=sustainedBoost.pose();
+            check(glm::length(current.angles-previousBoost.angles)<.00015,
+                  "Steady boost vibration crosses the subpixel highlight stability envelope");
+            check(glm::length(current.translation-previousBoost.translation)<.00010,
+                  "Steady boost introduces a visible translational camera buzz");
+            previousBoost=current;
+        }
         advance(loaded, input, 2);
         check(glm::length(loaded.pose().angles) < 1e-8 && glm::length(loaded.pose().translation) < 1e-8,
               "Cockpit inertia failed to settle after manoeuvring");

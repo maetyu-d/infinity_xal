@@ -32,7 +32,7 @@ void main(){
  vec3 L=normalize(u_atmosphere[1].xyz);
  float scatteringAngle=dot(d,L),transmission=1.;vec3 sum=vec3(0.);
  float forward=pow(max(0.,scatteringAngle),14.);
- float phase=.15+.24*pow(max(0.,scatteringAngle),2.)+.76*forward;
+ float phase=.12+.24*pow(max(0.,scatteringAngle),2.)+1.05*forward;
  float middle=total*.5,middleT=middle<first?span.x+middle:span.z+middle-first;
  vec3 middleN=normalize(o+d*middleT);
  float palette=u_weather[1].y+dot(middleN,vec3(.53,.71,.46))*.96+dot(d,L)*.15;
@@ -77,13 +77,14 @@ void main(){
   float nearMass=cloudMass(cover,lightNear,.56,h+sun*.17,topHeight);
   float farMass=cloudMass(cover,lightFar,.54,h+sun*.42,topHeight);
   float column=(density*.16+nearMass*.45+farMass*.39)*max(.24,topHeight-h+.16);
-  float selfShadow=exp(-column*2.8/max(.16,.23+sun));
-  float gradient=clamp(.62+(billow-lightNear)*1.9,0.,1.);
+  float selfShadow=exp(-column*3.7/max(.16,.23+sun));
+  float gradient=clamp(.61+(billow-lightNear)*2.8,.14,1.15);
   float powder=1.-exp(-density*kmStep*.32),silver=pow(1.-clamp(density,0.,1.),2.)*forward;
-  vec3 ambient=mix(vec3(.008,.014,.032),vec3(.118,.175,.252),day)*(.58+.42*h)*(.65+billow*.53);
+  vec3 ambient=mix(vec3(.006,.009,.025),vec3(.105,.160,.252),day)*(.43+.57*h)*(.47+billow*.63);
   vec3 sunlight=mix(vec3(1.12,.34,.17),vec3(1.02,.96,.86),smoothstep(.02,.45,sun));
   vec3 colour=ambient+sunlight*day*(selfShadow*(.25+phase*2.0)*gradient+powder*.14);
-  colour+=sunlight*day*silver*.38*(.23+.77*selfShadow);colour*=1.-weather.g*.23;
+  float rim=pow(max(0.,1.-density),2.)*(1.-exp(-density*20.));
+  colour+=sunlight*day*(silver*.54+rim*.25)*(.19+.81*selfShadow);colour*=1.-weather.g*.32;
   float shade=clamp(h*.17+billow*.13,0.,.36);
   vec3 opal=shade<.18?mix(opalLow,opalMid,shade/.18):mix(opalMid,opalHigh,(shade-.18)/.18);
   // Hyperion cloudFragment's deterministic, storm-local discharge. There

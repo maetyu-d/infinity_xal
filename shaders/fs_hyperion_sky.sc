@@ -8,6 +8,7 @@ uniform vec4 u_spaceGlass;
 #include "hyperion_space_glass.sh"
 #include "hyperion_tidal.sh"
 #include "hyperion_acid.sh"
+#include "hyperion_deep_stars.sh"
 
 // Accumulate emission through a folded dust lane. A sample on the near side
 // attenuates the deeper samples, so the lanes have dark cores and bright rims.
@@ -17,7 +18,9 @@ vec3 nebula(vec3 d, float phase, float density) {
  float warp=strataNoiseSample(d*3.1+seed,vec3(0.));
  float curl=strataNoiseSample(d*4.7+seed.yzx,vec3(0.));
  float laneAxis=dot(d,axis)+.46*(warp-.5)+.18*sin(d.z*4.8+d.x*3.6+phase*6.283);
- float lane=exp(-laneAxis*laneAxis*6.8);
+ float lane=exp(-laneAxis*laneAxis*8.6);
+ float counter=dot(d,normalize(vec3(-.73,.37,.57)))+.27*(curl-.5);
+ float veils=exp(-counter*counter*8.);
  vec3 bend=vec3(warp-.5,curl-.5,warp-curl)*.95;
  vec3 result=vec3(0.);
  float transmission=1.;
@@ -27,14 +30,19 @@ vec3 nebula(vec3 d, float phase, float density) {
   float broad=strataNoiseSample(p,vec3(0.));
   float filaments=strataNoiseSample(p*2.72+vec3(13.6,3.7,4.6),vec3(0.));
   float knots=strataNoiseSample(p*5.9+vec3(3.,6.3,17.),vec3(0.));
-  float body=smoothstep(.36,.69,broad*.60+filaments*.29+knots*.11);
+  float body=smoothstep(.35,.70,broad*.56+filaments*.30+knots*.14);
   float rim=4.*body*(1.-body)*smoothstep(.31,.71,filaments);
   float nearSide=strataNoiseSample(p+vec3(-.27,.22,.13),vec3(0.));
-  float light=clamp(.14+.86*rim+max(0.,broad-nearSide)*1.4,0.,1.);
-  float column=body*(.12+.88*lane)*density;
-  float opacity=1.-exp(-column*(.41+.22*(1.-light)));
+  float light=clamp(.09+.79*rim+max(0.,broad-nearSide)*2.1,0.,1.);
+  float filament=pow(max(0.,1.-abs(filaments*.73+knots*.27-.49)*3.7),5.);
+  float erosion=smoothstep(.25,.69,knots);
+  float fissure=smoothstep(.28,.65,filaments*.62+knots*.38);
+  float column=body*(.06+.83*lane+.20*veils)*density*(.52+.53*fissure+.21*erosion);
+  float opacity=1.-exp(-column*(.58+.49*(1.-light)));
   vec3 soot=vec3(.014,.0029,.0022),ember=vec3(.46,.055,.009),ion=vec3(1.05,.33,.034);
   vec3 glow=mix(mix(soot,ember,light*light),ion,pow(light,5.)*.73);
+  glow+=vec3(.91,.25,.065)*filament*rim*(.15+.85*lane)*(.37+.63*erosion);
+  glow*=.72+.28*smoothstep(.24,.73,nearSide);
   result+=transmission*opacity*glow;
   transmission*=1.-opacity;
  }
@@ -55,5 +63,6 @@ void main(){
  if(u_regionLook[1].z>0.)
   c+=acidSky(d,phase)*(.28+.72*u_sky[0].x)*u_regionLook[1].z;
  if(u_spaceGlass.x>0.)c+=spaceGlassGlow(d,phase,t)*u_spaceGlass.x;
+ c+=deepStars(d,phase)*(.42+.58*u_sky[0].x);
  gl_FragColor=vec4(c,1.);
 }

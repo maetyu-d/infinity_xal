@@ -18,7 +18,9 @@ CockpitFocus cockpitFocus(const FlightInstruments& t){
         f.nextAction=t.warp==WarpPhase::Drop?"B TAKE HELM":"N DROP / B ABORT";}
     else if(t.docking.active||t.docking.docked||(t.docking.available&&!t.shrinking&&t.docking.range<3000)){
         f.mode=CockpitMode::Docking;f.title=t.docking.docked?"BERTH SECURE":"DOCKING";
-        f.nextAction=t.docking.docked?"ENTER UNDOCK / F2 SERVICES":t.docking.active?"B TAKE HELM":"J DOCK / L CAPTURE";}
+        f.nextAction=t.docking.docked?"ENTER UNDOCK / F4 SERVICES":
+                     manualDocking(t.docking.phase)?"J AUTO DOCK / B ABORT":
+                     t.docking.active?"B TAKE HELM":"J DOCK / L CAPTURE";}
     else if((t.hostileContacts&&!t.shrinking)||t.incomingFire>.02||glm::length(t.localMissile)>.5||t.playerGun<maxWeaponMounts||t.weaponHeat>5){
         f.mode=CockpitMode::Combat;f.title=t.playerGun<maxWeaponMounts?"WEAPON STATION":"COMBAT";f.nextAction="SPACE FIRE / H NEXT HOSTILE";}
     else if(t.landing.phase!=LandingPhase::None&&(t.landing.phase!=LandingPhase::Landed||t.landing.settle>0)){
@@ -36,7 +38,7 @@ CockpitFocus cockpitFocus(const FlightInstruments& t){
     return f;
 }
 std::string cockpitDestination(const FlightInstruments& t){
-    if(!t.targetVisible&&!t.navigating&&!t.warpDestination)return "NO DESTINATION";
+    if(!t.targetVisible&&!t.navigating&&!t.warpDestination&&!t.docking.active)return "NO DESTINATION";
     auto name=t.targetLabel.empty()?t.destination:t.targetLabel;
     for(const auto suffix:{" / J "," / F4 "," / J"," / F4"})if(const auto pos=name.find(suffix);pos!=std::string::npos)name.resize(pos);
     return name.empty()?"SELECTED DESTINATION":name;

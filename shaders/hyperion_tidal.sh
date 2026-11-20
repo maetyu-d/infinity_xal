@@ -48,21 +48,24 @@ vec4 tidalCurrent(vec3 ray,vec3 axis,vec3 course,vec2 shape,float phase,float se
  float surf=strataNoise(vec3(drift*vec2(3.4,7.6)-windDrift*1.45,21.+phase),vec3(0.));
  float chop=smoothstep(.31,.68,wind);
  float swellLight=clamp(.40+swell.x*1.44+dot(normal,light)*.39+(wind-.5)*.20,0.,1.);
- vec3 ocean=mix(vec3(.0016,.0065,.019),vec3(.016,.067,.132),swellLight);
- ocean*=mix(.40,1.08,smoothstep(-.20,.12,swell.x));
+ vec3 ocean=mix(vec3(.0011,.004,.014),vec3(.014,.082,.169),swellLight);
+ ocean*=mix(.25,1.12,smoothstep(-.21,.14,swell.x));
  float thinRim=exp(-abs(abs(edge)-.79)*11.);
  ocean+=vec3(.010,.071,.108)*thinRim*(.18+.82*eddies)*(.36+.64*fresnel);
  ocean+=vec3(.055,.107,.175)*fresnel*(.41+.59*pow(reflection,4.));
- ocean+=vec3(.25,.42,.57)*pow(reflection,35.)*(.18+.82*chop);
+ ocean+=vec3(.27,.49,.69)*pow(reflection,35.)*(.18+.82*chop);
  float fringe=exp(-abs(swell.x-.117+(surf-.5)*.11)*21.);
  float shimmer=pow(clamp(reflection,0.,1.),4.)*.56+.44*chop;
  ocean+=vec3(.048,.112,.20)*fringe*shimmer*smoothstep(.26,.66,surf);
  float crest=smoothstep(.115,.202,swell.x+(wind-.5)*.068);
  float lace=1.-abs(spray*2.-1.);
- float torn=1.-smoothstep(.08,.22,abs(surf-.52+(spray-.5)*.25));
+ float torn=1.-smoothstep(.055,.19,abs(surf-.52+(spray-.5)*.25));
  float foam=crest*smoothstep(.42,.72,wind*.58+lace*.42)*(1.-smoothstep(.060,.24,footprint));
  float foamSpill=crest*smoothstep(.49,.81,spray)*smoothstep(.38,.66,surf)*.40;
- ocean=mix(ocean,vec3(.58,.75,.85),min(1.,foam*(.29+.55*lace+.18*torn)+foamSpill));
+ float lightBand=pow(max(0.,1.-abs(surf*2.-1.)),9.)*smoothstep(.14,.28,swell.x)*
+                 (1.-smoothstep(.027,.14,footprint));
+ ocean+=vec3(.09,.37,.55)*lightBand;
+ ocean=mix(ocean,vec3(.54,.83,1.0),min(.91,foam*(.29+.56*lace+.30*torn)+foamSpill));
  return vec4(ocean,water);
 }
 

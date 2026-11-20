@@ -19,7 +19,7 @@ std::optional<DockingBerth> dockingBerth(const ActivityBody& b) {
         !std::isfinite(glm::length(b.velocity)) || !std::isfinite(glm::length(b.orientation)) ||
         std::abs(glm::length(b.orientation) - 1) > 1e-6 || b.systems[size_t(ShipSystem::Hull)] <= 0)
         return {};
-    return DockingBerth{b.id, b.position + b.orientation * glm::dvec3(0, .18, 1.45) * b.radius, b.velocity,
+    return DockingBerth{b.id, b.position + b.orientation * dockingBerthOffset * b.radius, b.velocity,
                         b.orientation, b.radius};
 }
 std::string_view dockingPhaseName(DockingPhase p) {
@@ -36,6 +36,10 @@ std::string_view dockingPhaseName(DockingPhase p) {
         return "DOCKED / MAGNETIC CLAMPS SECURE";
     case DockingPhase::Departure:
         return "DEPARTURE / CLEARING THE LANE";
+    case DockingPhase::ManualApproach:
+        return "MANUAL DOCK / FOLLOW THE LIGHTS";
+    case DockingPhase::ManualCapture:
+        return "CLAMPS ARMING / HOLD STEADY";
     default:
         return "BERTH / J DOCK";
     }
@@ -57,6 +61,36 @@ DockingReadout dockingReadout(const DockingBerth& b, glm::dvec3 eye, glm::dvec3 
     r.heading = std::acos(std::clamp(-r.localForward.z, -1., 1.));
     r.roll = std::atan2(r.localUp.x, r.localUp.y);
     return r;
+}
+bool manualClampReady(const DockingReadout& r) {
+    return r.available && r.offset.z >= -.30 && r.offset.z <= 1.15 &&
+           glm::length(glm::dvec2(r.offset)) < .85 && r.relativeSpeed < .55 &&
+           r.heading < glm::radians(4.) && std::abs(r.roll) < glm::radians(6.);
+}
+double manualDockingSpeed(double berthRange) {
+    return std::clamp(berthRange * .16, .32, 160.);
+}
+glm::dvec3 dockingFrameVelocity(const DockingBerth& berth,glm::dvec3 eye,glm::dvec3 turn) {
+    return berth.velocity+glm::cross(turn,limited(eye-berth.metres,2.*berth.laneLength()));
+}
+void DockingController::beginManual() {
+    cancel();
+    phase_ = DockingPhase::ManualApproach;
+}
+bool DockingController::updateManual(const DockingReadout& r, double dt) {
+    if (!manualDocking(phase_) || !std::isfinite(dt) || dt <= 0 || dt > 1)
+        return false;
+    if (!manualClampReady(r)) {
+        phase_ = DockingPhase::ManualApproach;
+        dwell_ = 0;
+        return false;
+    }
+    phase_ = DockingPhase::ManualCapture;
+    dwell_ = std::min(1.6, dwell_ + dt);
+    if (dwell_ < 1.6)
+        return false;
+    phase_ = DockingPhase::Docked;
+    return true;
 }
 void DockingController::begin() {
     cancel();
@@ -85,25 +119,34 @@ bool DockingController::resumeClamp(const DockingReadout& r) {
 }
 DockingGuidance DockingController::update(const DockingBerth& b, glm::dvec3 eye, glm::dvec3 velocity,
                                           glm::dquat attitude, double dt) {
+    return update(b,eye,velocity,attitude,dt,{});
+}
+DockingGuidance DockingController::update(const DockingBerth& b, glm::dvec3 eye, glm::dvec3 velocity,
+                                          glm::dquat attitude, double dt,glm::dvec3 turn) {
     DockingGuidance g;
     g.point = b.metres;
     g.forward = b.orientation * glm::dvec3(0, 0, -1);
     g.up = b.orientation * glm::dvec3(0, 1, 0);
-    g.velocity = b.velocity;
+    g.velocity = dockingFrameVelocity(b,eye,turn);
     if (phase_ == DockingPhase::None || !std::isfinite(dt) || dt <= 0 || dt > 1)
         return g;
-    const auto r = dockingReadout(b, eye, velocity, attitude);
+    const auto r = dockingReadout(b, eye, velocity-(g.velocity-b.velocity), attitude);
     glm::dvec3 goal(0, 0, b.laneLength());
+    // The craft's airlock is on its flank. Route outside the hull before
+    // entering the capture corridor from the stern.
+    const auto obstacle=b.vessel()?glm::dvec3(-1.2*b.radius-8.,0,6.87):
+                                     glm::dvec3(0,-.18*b.radius,-1.45*b.radius);
     if (phase_ == DockingPhase::Arrival) {
         if (!routeChecked_) {
             // A rear-side arrival goes around the retained station, never through it.
-            const glm::dvec3 centre(0, -.18 * b.radius, -1.45 * b.radius);
+            const auto centre=obstacle;
             const auto segment = goal - r.offset;
             const auto nearest = r.offset + segment * std::clamp(glm::dot(centre - r.offset, segment) /
                                                                      std::max(1., glm::dot(segment, segment)),
                                                                  0., 1.);
-            bypass_ = glm::length(nearest - centre) < b.radius * 1.9;
-            bypassPoint_ = centre + glm::dvec3(r.offset.x < 0 ? -4. : 4., 2., 2.) * b.radius;
+            bypass_ = glm::length(nearest - centre) < b.radius * (b.vessel()?1.2:1.9);
+            bypassPoint_ = centre + (b.vessel()?glm::dvec3(4.,1.6,2.7):
+                                                  glm::dvec3(r.offset.x < 0 ? -4. : 4., 2., 2.)) * b.radius;
             routeChecked_ = true;
         }
         if (bypass_) {
@@ -113,21 +156,23 @@ DockingGuidance DockingController::update(const DockingBerth& b, glm::dvec3 eye,
                 goal = {0, 0, b.laneLength()};
             }
         }
-        const glm::dvec3 centre(0, -.18 * b.radius, -1.45 * b.radius);
-        if (glm::length(r.offset - centre) < b.radius * 2.3)
+        const auto centre=obstacle;
+        if (glm::length(r.offset - centre) < b.radius * (b.vessel()?1.16:2.3))
             goal = centre + direction(r.offset - centre, {0, 0, 1}) * b.radius * 3.2;
         if (!bypass_ && glm::length(goal - r.offset) < 25 && r.relativeSpeed < 6)
             phase_ = DockingPhase::Align;
         else
             g.forward = direction(b.orientation * (goal - r.offset));
     }
-    if (phase_ == DockingPhase::Align && glm::length(goal - r.offset) < 3 && r.relativeSpeed < .7 &&
-        r.heading < .045 && std::abs(r.roll) < .06)
+    if (phase_ == DockingPhase::Align && glm::length(goal - r.offset) < (b.vessel()?6.:3.) &&
+        r.relativeSpeed < (b.vessel()?2.5:.7) &&
+        r.heading < (b.vessel()?.086:.045) && std::abs(r.roll) < (b.vessel()?.08:.06))
         phase_ = DockingPhase::Glide;
     if (phase_ == DockingPhase::Glide && r.range < 28)
         phase_ = DockingPhase::Capture;
     if (phase_ == DockingPhase::Capture) {
-        const bool settled =
+        const bool settled = b.vessel() ?
+            r.range<1.9 && r.relativeSpeed<2.4 && r.heading<.105 && std::abs(r.roll)<.11 :
             r.range < .45 && r.relativeSpeed < .18 && r.heading < .035 && std::abs(r.roll) < .045;
         dwell_ = settled ? std::min(1.6, dwell_ + dt) : 0;
         if (dwell_ >= 1.6)
@@ -155,7 +200,7 @@ DockingGuidance DockingController::update(const DockingBerth& b, glm::dvec3 eye,
             cancel();
             return g;
         }
-        goal.z += 100;
+        goal.z += b.vessel()?55.:100.;
         const double alignment = glm::dot(attitude * glm::dvec3(0, 0, -1), g.forward);
         const auto lateral = limited(glm::dvec3(-r.offset.x, -r.offset.y, 0) * .6, 3.);
         g.velocity +=
@@ -171,17 +216,24 @@ DockingGuidance DockingController::update(const DockingBerth& b, glm::dvec3 eye,
     return g;
 }
 Mesh dockingLane(const DockingBerth& b, double seconds, DockingPhase phase) {
+    return dockingLane(b,seconds,phase,phase==DockingPhase::Docked?1.:0.,1.f);
+}
+Mesh dockingLane(const DockingBerth& b, double seconds, DockingPhase phase, double capture, float visibility) {
     Mesh m;
     const bool departure = phase == DockingPhase::Departure;
     const glm::vec3 cyan(.24, 1.05, 1.25), violet(.74, .30, 1.1), gold(1.2, .65, .20);
-    const auto color = phase == DockingPhase::Docked ? glm::vec3(.30, 1.2, .72) : departure ? gold : cyan;
+    const glm::vec3 secure(.30, 1.2, .72);
+    const float lock=float(std::clamp(capture,0.,1.));
+    const auto color = departure ? gold : b.vessel()?glm::mix(cyan,secure,lock):
+        phase == DockingPhase::Docked || phase == DockingPhase::ManualCapture ? secure : cyan;
     const auto line = [&](glm::dvec3 a, glm::dvec3 c, glm::vec3 ink) {
         const auto first = uint32_t(m.vertices.size());
         for (const auto p : {a, c})
-            m.vertices.push_back({float(p.x), float(p.y), float(p.z), rgba(ink)});
+            m.vertices.push_back({float(p.x), float(p.y), float(p.z), rgba(ink*visibility)});
         m.indices.insert(m.indices.end(), {first, first + 1});
     };
     const double width = b.halfWidth(), length = b.laneLength();
+    const bool manual = manualDocking(phase);
     for (unsigned i = 0; i < 7; ++i) {
         const double z = length * i / 6., taper = .65 + .35 * i / 6.;
         const double x = width * taper, y = width * .52 * taper, corner = width * .25;
@@ -197,14 +249,45 @@ Mesh dockingLane(const DockingBerth& b, double seconds, DockingPhase phase) {
     for (int i = 0; i < 12; ++i) {
         const double z = std::fmod(i * length / 12. - travel, length);
         const double pz = z < 0 ? z + length : z;
+        const float edge = b.vessel()?float(smoothstep(0.,12.,pz)*smoothstep(0.,12.,length-pz)):1.f;
         for (int side : {-1, 1}) {
             const glm::dvec3 p(side * width, -width * .52, pz);
-            line(p, p + glm::dvec3(-side * width * .16, 0, departure ? -12 : 12), color);
+            line(p, p + glm::dvec3(-side * width * .16, 0, departure ? 12 : -12), color*edge);
         }
     }
     for (int side : {-1, 1}) {
         line({side * width, -width * .52, 0}, {side * width, -width * .52, length}, color * .24f);
         line({-width * .5, side * width * .26, 0}, {width * .5, side * width * .26, 0}, color);
+    }
+    if(b.vessel()){
+        // Keep the same markers through manual flight, capture and a secure
+        // berth. The clamp colour follows the dwell instead of switching on contact.
+        const auto threshold=glm::mix(gold,secure,lock);
+        for(double side:{-1.,1.})
+            for(double level:{-1.,1.}){
+                const glm::dvec3 mark(side*width*.44,level*width*.21,1.75);
+                line(mark,mark+glm::dvec3(-side*width*.22,0,0),threshold);
+                line(mark,mark+glm::dvec3(0,-level*width*.12,0),threshold);
+            }
+    }else if (manual || phase == DockingPhase::Docked) {
+        // Paired threshold lights mark the start of the lane. The nearer
+        // amber strips narrow to the clamp opening and turn green on capture.
+        for (double side : {-1., 1.}) {
+            for (double y : {-1., 1.}) {
+                const glm::dvec3 p(side * width, y * width * .52, length);
+                line(p + glm::dvec3(0,-8,0), p + glm::dvec3(0,8,0), color);
+                line(p + glm::dvec3(-8,0,0), p + glm::dvec3(8,0,0), color);
+                const auto threshold = phase == DockingPhase::ManualApproach ? gold : color;
+                line({side*11.,y*6.,2.2},{side*3.,y*6.,2.2},threshold);
+                line({side*11.,y*6.,2.2},{side*11.,y*2.,2.2},threshold);
+            }
+            for (double z : {18.,42.,86.,156.,260.,430.}) {
+                const double x = std::lerp(12., width, z / length);
+                const double y = std::lerp(6., width * .52, z / length);
+                line({side*x,-y,z},{side*(x-3.),-y,z-5.},color);
+                line({side*x, y,z},{side*(x-3.), y,z-5.},color);
+            }
+        }
     }
     return m;
 }

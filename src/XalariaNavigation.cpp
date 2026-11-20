@@ -1,5 +1,7 @@
 #include "infinity/XalariaNavigation.hpp"
 #include "infinity/XalariaEconomy.hpp"
+#include "infinity/XalariaTraffic.hpp"
+#include "infinity/XalariaCombat.hpp"
 #include <algorithm>
 #include <iomanip>
 #include <locale>
@@ -39,10 +41,6 @@ std::optional<XalariaWormholeMouth> manualMouth(const Universe& universe, const 
 XalariaNavigation::XalariaNavigation(const Universe& u,Navigation& n,Pilot& p)
     :universe_(u),navigation_(n),pilot_(p),catalog_(*u.xalaria()){
     view.catalog=&catalog_;view.current=containingSystem(n.anchor,catalog_.stars.begin()->first);
-    const auto oylanhai = manualMouth(u, catalog_, 14940, 0, 14538);
-    const auto ziksa = manualMouth(u, catalog_, 14538, 1, 14940);
-    if (oylanhai && ziksa)
-        wormholeMouths_ = std::array{*oylanhai, *ziksa};
     view.selected=view.destination=view.current;view.span=26;
     view.centre={double(view.current%catalog_.grid),double(view.current/catalog_.grid)};
     arrival_=p.instruments().warpArrivalSequence;refresh();
@@ -59,11 +57,20 @@ XalariaNavigation::XalariaNavigation(const Universe& u,Navigation& n,Pilot& p)
     }
 }
 const XalariaWormholeMouth* XalariaNavigation::wormholeAt(uint32_t system) const {
-    if (wormholeMouths_)
-        for (const auto& mouth : *wormholeMouths_)
-            if (mouth.reference.parent().id() == system)
-                return &mouth;
-    return nullptr;
+    const auto& star=catalog_.star(system);if(star.wormholes.empty())return nullptr;
+    auto destination=star.wormholes.front();
+    if(system==eunhiaStation.system)destination=phehmyarStation.system;
+    else if(system==phehmyarStation.system)destination=eunhiaStation.system;
+    if(std::find(star.wormholes.begin(),star.wormholes.end(),view.selected)!=star.wormholes.end())destination=view.selected;
+    const auto key=std::pair{system,destination};if(const auto found=wormholeMouths_.find(key);found!=wormholeMouths_.end())return &found->second;
+    std::optional<uint64_t> world;
+    for(const auto& [id,record]:star.worlds)if(record.stations){world=id;break;}
+    if(system==eunhiaStation.system)world=eunhiaStation.world;
+    if(system==phehmyarStation.system)world=phehmyarStation.world;
+    if(world){if(auto mouth=manualMouth(universe_,catalog_,system,*world,destination))return &wormholeMouths_.emplace(key,*mouth).first->second;}
+    const auto outward=glm::normalize(glm::dvec3(.3,.4,1.));
+    XalariaWormholeMouth mouth{catalog_.address(system),outward*(star.radius*2.4+50000.),glm::quatLookAtRH(outward,glm::dvec3(0,1,0)),1050.,destination};
+    return &wormholeMouths_.emplace(key,mouth).first->second;
 }
 bool XalariaNavigation::targetWormhole() {
     const auto* mouth = wormholeAt(view.current);
@@ -79,7 +86,7 @@ bool XalariaNavigation::targetWormhole() {
 }
 bool XalariaNavigation::manualFlight() const {
     const auto& flight = pilot_.instruments();
-    return flight.warp == WarpPhase::Off && !flight.navigating && !flight.docking.active &&
+    return flight.warp == WarpPhase::Off && (!flight.navigating||(economy_&&economy_->combat()&&economy_->combat()->convoys().following)) && !flight.docking.active &&
            !pilot_.ship().landed && !pilot_.ship().shrinking && pilot_.ship().hull > 0;
 }
 glm::dvec3 XalariaNavigation::eyeInMetres(const Address& reference) const {
@@ -99,7 +106,9 @@ bool XalariaNavigation::crossWormhole(const XalariaWormholeMouth& mouth, glm::dv
     const auto atPlane = glm::mix(before, after, -start / (end - start));
     if (glm::length(atPlane) + pilot_.collisionRadius() >= mouth.radius)
         return false;
-    const auto& exit = *wormholeAt(mouth.destination);
+    const auto* exitMouth=wormholeAt(mouth.destination);
+    if(!exitMouth)return false;
+    const auto exit=*exitMouth;
     if (economy_ && !economy_->payWormholeFuel()) {
         view.message = "WORMHOLE NEEDS 8 FUEL / RETURN TO THE STATION";
         return false;
@@ -130,19 +139,41 @@ bool XalariaNavigation::crossWormhole(const XalariaWormholeMouth& mouth, glm::dv
     delay_ = 0;
     search("");
     selectSystem(mouth.destination);
-    selectWorld(exit.reference.id());
+    if(exit.reference.kind()==Kind::Planet)selectWorld(exit.reference.id());
     view.mode = XalariaMapView::Mode::System;
     view.open = false;
     view.message = "WORMHOLE EXIT / " + catalog_.star(mouth.destination).name + " / " +
-                   catalog_.world(exit.reference).name + " STATION APPROACH";
+                   (exit.reference.kind()==Kind::Planet?catalog_.world(exit.reference).name+" STATION APPROACH":std::string("STELLAR TRANSIT"));
     return true;
 }
 bool XalariaNavigation::advanceFlight(const HelmInput& input, double dt, const std::shared_ptr<const Geometry>& visible) {
+    trafficWaveOff_.reset();
     const auto system = containingSystem(navigation_.anchor, view.current);
     const auto* mouth = manualFlight() ? wormholeAt(system) : nullptr;
     const auto before = mouth ? eyeInMetres(mouth->reference) : glm::dvec3{};
-    pilot_.update(input, dt, visible);
-    const bool crossed = mouth && manualFlight() && containingSystem(navigation_.anchor, view.current) == system &&
+    pilot_.synchronizeFrame();
+    const auto traffic = economy_&&!pilot_.ship().landed ?
+        nearbyXalariaTraffic(universe_,*economy_,navigation_.anchor,
+            navigation_.cameraPosition()*std::pow(10.,navigation_.logDistance),pilot_.ship().velocity,
+            system,wormholeAt(system),pilot_.ship().flightSeconds,std::min(dt,.1)) : std::vector<TrafficMotion>{};
+    pilot_.update(input,dt,visible,traffic);
+    if(economy_){
+        const double seconds=pilot_.ship().flightSeconds;
+        economy_->expireTrafficRecovery(seconds);
+        double strongest=0.;
+        for(const auto& strike:pilot_.trafficStrikes())
+            if(economy_->reactToTrafficStrike(strike,seconds)&&strike.closingSpeed>strongest){
+                strongest=strike.closingSpeed;
+                trafficWaveOff_=strike.target;
+            }
+    }
+    const bool impact=!pilot_.trafficContact().empty();
+    if(impact){
+        cancel(false);
+        view.message=trafficWaveOff_?"SHIP CONTACT / DOCKING CLEARANCE SUSPENDED":
+                                     "SHIP CONTACT / "+pilot_.trafficContact();
+    }
+    const bool crossed = !impact && mouth && manualFlight() && containingSystem(navigation_.anchor, view.current) == system &&
                          crossWormhole(*mouth, before, eyeInMetres(mouth->reference));
     update(dt);
     if (view.wormhole && navigation_.logDistance > 4. &&
@@ -241,9 +272,10 @@ bool XalariaNavigation::resume(){
     view.message=success?"RESUMING COURSE TO "+universe_.describe(target_).label():economy_?economy_->view.message:"GAIN CLEARANCE BEFORE RESUMING";
     refresh();return success;
 }
-void XalariaNavigation::cancel(){
+void XalariaNavigation::cancel(bool brake){
     if(economy_)economy_->endVoyage();
-    pilot_.brake();route_.clear();world_.reset();phase_=Phase::Idle;leg_=0;delay_=0;
+    if(brake)pilot_.brake();
+    route_.clear();world_.reset();phase_=Phase::Idle;leg_=0;delay_=0;
     view.message="COURSE CANCELLED / MANUAL FLIGHT";refresh();
 }
 void XalariaNavigation::refresh(){
@@ -292,6 +324,8 @@ void XalariaNavigation::update(double dt){
         if(delay_<=0&&!beginLeg()){pausedPhase_=Phase::BetweenLegs;phase_=Phase::Paused;view.message=economy_?economy_->view.message:"ROUTE PAUSED / GAIN CLEARANCE, THEN RESUME";}
     }else if(phase_==Phase::FinalApproach&&!pilot_.instruments().navigating){
         phase_=Phase::Arrived;view.message="ARRIVED / "+universe_.describe(target_).label();
+        if(catalog_.star(route_.back()).surveyStar)
+            view.message+=" / F6 STAR SCOPE";
     }
     refresh();
 }
@@ -312,6 +346,8 @@ glm::dvec3 XalariaNavigation::bankReference() const {
 
 double XalariaNavigation::levelRollInput() const {
     const auto& flight = pilot_.instruments();
+    if (manualDocking(flight.docking.phase))
+        return std::clamp(flight.docking.roll*1.15-flight.rollRate*.52,-.68,.68);
     if (flight.landed || flight.navigating || flight.docking.active || flight.docking.docked)
         return 0;
     const auto bank = xalariaBankAngle(bankReference());

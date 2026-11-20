@@ -25,7 +25,7 @@ vec3 acidMineral(vec3 etch){
 vec3 acidSky(vec3 ray,float phase){
  vec3 p=ray*vec3(4.1,5.7,4.1)+vec3(9.,18.,7.+phase*12.);
  float warp=strataNoiseSample(p*.67,vec3(0.));
- vec3 grainFrame=p+vec3(.63,-.92,.42)*(warp-.5);
+ vec3 grainFrame=p+vec3(1.24,-1.35,.88)*(warp-.5);
  vec3 etch=acidEtching(grainFrame);
  float flakes=strataNoise(grainFrame*7.8+vec3(6.,-5.,3.),vec3(0.));
  float exposure=.49+dot(ray,vec3(.49,.25,-.15))*.68;
@@ -33,11 +33,12 @@ vec3 acidSky(vec3 ray,float phase){
  float bleach=smoothstep(.49,.86,exposure+(etch.x-.35)*.70);
  bleach*=smoothstep(.24,.72,warp*.46+flakes*.29+etch.x*.25)*.82;
  float lee=clamp(.23+.77*etch.y-.33*etch.z,0.,1.);
- vec3 sky=mix(vec3(.003,.008,.016),vec3(.61,.030,.276),stain*lee);
- sky=mix(sky,vec3(1.26,1.14,.13),bleach*(.42+flakes*.58));
+ vec3 sky=mix(vec3(.006,.005,.016),vec3(.69,.026,.39),stain*lee);
+ sky=mix(sky,vec3(1.46,1.34,.16),bleach*(.44+flakes*.56));
  float edge=bleach*(1.-bleach)*4.*smoothstep(.39,.64,flakes);
- sky+=vec3(.26,.047,.12)*edge*stain;
+ sky+=vec3(.38,.036,.21)*edge*stain;
  float grains=strataNoise(grainFrame*23.4+vec3(2.,3.,9.),vec3(0.));
- return sky*(.78+grains*.31-etch.z*.22);
+ float corrosion=pow(max(0.,1.-abs(flakes-.55)*2.4),8.)*etch.y*edge;
+ return sky*(.70+grains*.37-etch.z*.27)+vec3(.66,.24,.31)*corrosion*.22;
 }
 #endif

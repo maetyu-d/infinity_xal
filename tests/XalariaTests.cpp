@@ -2,6 +2,7 @@
 #include "infinity/Cockpit.hpp"
 #include "infinity/Planetology.hpp"
 #include "infinity/Piloting.hpp"
+#include "infinity/StellarEvolution.hpp"
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -14,19 +15,30 @@ int main(int argc,char** argv){
     require(argc==2,"Catalogue path required");
     auto cat=std::make_shared<XalariaCatalog>(argv[1]);
     require(cat->fingerprint=="5923cc4f","Unexpected public snapshot");
-    require(cat->stars.size()==7710&&cat->worldCount==48081&&cat->lifeCount==11254,"Snapshot counts differ");
+    require(cat->stars.size()==7714&&cat->worldCount==48085&&cat->lifeCount==11254,"Catalogue counts differ");
     Universe u(0x58414c4152494101ULL,cat);
     auto galaxy=Address{}.child(Kind::Galaxy,0);
     require(u.children(u.describe(Address{})).size()==1,"Synthetic galaxies added");
     require(std::abs(std::pow(10.,u.describe(galaxy).frame.logRadius)/(110e15)-1)<1e-12,"Public map scale changed");
     auto all=u.children(u.describe(galaxy),10000);require(all.size()==cat->stars.size(),"Galaxy has synthetic/missing stars");
-    size_t checked=0,worlds=0,ringedWorlds=0,ringedSolidWorlds=0,ringedMoons=0;
+    size_t checked=0,worlds=0,ringedWorlds=0,ringedSolidWorlds=0,ringedMoons=0,publishedRingAxes=0;
+    std::set<StellarKind> surveyFamilies;
     for(const auto& [id,s]:cat->stars){
         auto a=cat->address(id);const auto n=u.describe(a);
         require(n.seed==seedOf(a,u.seed()),"Engine cache identity changed");
         require(n.label()==s.name,"Star name mismatch");
         require(std::abs(n.stellarRadiusMetres/s.radius-1)<1e-12,"Star radius units");
         require(n.temperatureK==s.temperature,"Star temperature mismatch");
+        if(s.surveyStar){
+            surveyFamilies.insert(n.stellar->kind);
+            require(n.stellar==s.surveyStar&&n.massSolar==s.surveyStar->massSolar,"Survey star physics lost its recipe");
+            const auto hits=cat->search(stellarKindName(n.stellar->kind));
+            require(!hits.empty()&&hits.front()==id,"Atlas search cannot find the survey star by type");
+            const auto hub=s.wormholes.front();
+            require(cat->route(hub,id)==std::vector<uint32_t>{hub,id}&&cat->route(id,hub)==std::vector<uint32_t>{id,hub},
+                    "Survey system lost its return route");
+            require(s.worlds.size()==1&&s.worlds.at(0).distance>=s.radius*8.,"Survey world is inside the stellar envelope");
+        }
         auto addresses=u.children(n,1000);require(addresses.size()==s.worlds.size(),"Lost planets or moons");
         worlds+=addresses.size();
         for(auto target:s.wormholes)require(cat->stars.contains(target),"Dangling wormhole");
@@ -51,6 +63,19 @@ int main(int argc,char** argv){
                 ++ringedWorlds;
                 ringedSolidWorlds += hasSolidSurface(w);
                 ringedMoons += isMoon(address);
+                require(glm::length(traits.axis - traits.rings.axis) < 1e-12,
+                        "Ring and cloud bands disagree on the equator");
+                if (source.ringAxis) {
+                    ++publishedRingAxes;
+                    require(glm::length(traits.rings.axis - *source.ringAxis) < 1e-12,
+                            "Ring and cloud bands disagree with the catalogue equator");
+                } else {
+                    const glm::dvec3 alongX(1.,source.tilt*std::sin(source.tiltRotation),0.);
+                    const glm::dvec3 alongZ(0.,source.tilt*std::cos(source.tiltRotation),1.);
+                    require(std::abs(glm::dot(traits.rings.axis,alongX)) < 1e-12 &&
+                                std::abs(glm::dot(traits.rings.axis,alongZ)) < 1e-12,
+                            "Fallback ring axis is not perpendicular to its orbital plane");
+                }
                 for (const auto& anchor : {a, address}) {
                     const double logScale = anchor == a ? n.frame.logRadius : w.frame.logRadius;
                     const auto globe = u.relative(address, anchor, logScale);
@@ -65,9 +90,17 @@ int main(int argc,char** argv){
             }
         }
     }
-    require(worlds==48081,"World total changed");
+    require(worlds==48085,"World total changed");
+    require(surveyFamilies==std::set{StellarKind::RedGiant,StellarKind::NeutronStar,StellarKind::BrownDwarf,StellarKind::CarbonStar},
+            "Survey stellar families are incomplete");
     require(ringedWorlds==14887 && ringedSolidWorlds==1211 && ringedMoons==39,
             "Ringed planets or moons lost from the public snapshot");
+    require(publishedRingAxes == 14860, "Published ring orientations lost from the catalogue");
+    const auto predre = planetTraits(u.describe(cat->address(14737).child(Kind::Planet,2)));
+    const auto pole = predre.rings.axis;
+    require(std::abs(glm::degrees(std::acos(pole.y)) - 4.67) < 1e-9 &&
+                std::abs(glm::degrees(std::atan2(pole.z,pole.x)) + 142.17) < 1e-9,
+            "Predre rings do not follow the published equator");
     auto from=14940u;const auto to=cat->star(from).wormholes.front();
     const auto route=cat->route(from,to);require(route==std::vector<uint32_t>({from,to}),"Direct link was not shortest");
     require(cat->route(from,from)==std::vector<uint32_t>{from},"Identity route");
@@ -104,7 +137,7 @@ int main(int argc,char** argv){
     require(final.kind()==Kind::System&&final.id()==to,"Arrival was in the wrong system");
 
     std::cout<<"ARRIVAL flight_seconds="<<pilot.ship().flightSeconds<<" travel_m="<<pilot.ship().travelMetres<<" system="<<final.id()<<"\n";
-    std::cout<<"PASS catalogue=7710 stars/48081 worlds; 14887 centred ring poses; descriptor samples; names; moon identities; directed routes; map bounds; real flight; save restore; complete interstellar arrival\n";
+    std::cout<<"PASS catalogue=7714 stars/48085 worlds; four survey families; 14887 centred ring poses; descriptor samples; names; moon identities; directed routes; map bounds; real flight; save restore; complete interstellar arrival\n";
     return 0;
  }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}
 }

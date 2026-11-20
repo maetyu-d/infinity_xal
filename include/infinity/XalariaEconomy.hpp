@@ -1,10 +1,14 @@
 #pragma once
 #include "Xalaria.hpp"
 #include "Piloting.hpp"
+#include "StationLayout.hpp"
 #include <array>
 #include <set>
 
 namespace infinity {
+struct XalariaTrafficContact;
+class XalariaStories;
+class XalariaCombat;
 enum class XGood : uint8_t { Aluminium,Iron,Tin,Nickel,Chromium,Titanium,Iridium,Marble,Granite,Nanomites,Seed,Neurocells,Count };
 inline constexpr size_t xGoodCount=size_t(XGood::Count);
 using XStock=std::array<int64_t,xGoodCount>;
@@ -17,6 +21,7 @@ struct XPlace {
     uint32_t system=0;uint64_t world=0;uint32_t station=0;bool city=false;
     auto operator<=>(const XPlace&) const=default;
 };
+inline constexpr XPlace eunhiaStation{14940,0,0,false}, phehmyarStation{14538,1,0,false};
 struct XMarket {XStock stock{},target{};int64_t cash=100000000000LL;int64_t restockedDay=0;};
 struct XQuote {int64_t units=0,total=0,fee=0;bool available=false;};
 enum class XAssetKind : uint8_t { Station,Vault,Farm };
@@ -33,19 +38,25 @@ struct XDeposit {uint32_t system=0;uint64_t world=0;unsigned index=0;XGood good=
 struct XContract {uint64_t id=0;XPlace origin,destination;int64_t deadline=0,reward=0,units=0;enum class State {Active,Delivered,Expired} state=State::Active;};
 struct XOpportunity {XPlace destination;int64_t profit=0;unsigned hops=0;};
 struct XEconomyView {
-    bool open=false;enum class Page {Market,Holdings,Mining,Services,Contracts} page=Page::Market;
+    bool open=false, cargoTerminal=false;
+    enum class Page {Market,Holdings,Mining,Services,Contracts} page=Page::Market;
     XPlace place;size_t good=0,scroll=0,asset=0,deposit=0;int64_t quantity=1;unsigned buildLevel=1;
     std::string message="F4 TRADE / DOCK AT A STATION TO BUY OR SELL";
 };
 struct CockpitOverlay;
 struct XEconomyLayout {
     double width;std::array<XalariaMapRect,5> tabs;
-    XalariaMapRect rows,details,buy,sell,travel,venue,minus,plus,action,secondary,tertiary;
-    explicit XEconomyLayout(double aspect);
+    XalariaMapRect rows,details,buy,sell,travel,manualDock,venue,minus,plus,action,secondary,tertiary;
+    explicit XEconomyLayout(double aspect,bool cargoTerminal=false);
 };
 class XalariaEconomy {
   public:
     explicit XalariaEconomy(const Universe&);
+    void setStories(const XalariaStories* stories) { stories_=stories; }
+    void setCombat(XalariaCombat* combat);
+    XalariaCombat* combat() const {return combat_;}
+    std::pair<double,double> trafficClock(const ActivityId&,double seconds) const;
+    std::string trafficAdvisory(const XPlace&,double seconds) const;
     XEconomyView view;
     int64_t credits() const {return credits_;}
     double fuel() const {return fuel_;}
@@ -64,6 +75,10 @@ class XalariaEconomy {
     const std::vector<XContract>& contracts() const {return contracts_;}
     const std::map<std::tuple<uint32_t,uint64_t,unsigned>,XDeposit>& deposits() const {return deposits_;}
     const std::optional<XPlace>& dockedPlace() const {return docked_;}
+    const std::optional<StationKey>& dockedStationKey() const {return dockedStationKey_;}
+    std::optional<ActivityId> orbitalStationId(const XPlace&) const;
+    std::optional<XPlace> orbitalPlace(const ActivityId&) const;
+    StationKey stationDesignKey(const ActivityId&) const;
     bool landed() const {return landed_;}
     bool nearOrbit() const {return nearOrbit_;}
     uint32_t currentSystem() const {return currentSystem_;}
@@ -74,8 +89,10 @@ class XalariaEconomy {
     std::vector<XPlace> venues(uint32_t,uint64_t) const;
     std::string placeName(const XPlace&) const;
     XFaction faction(const XPlace&) const;
+    XFaction baseFaction(const XPlace&) const;
     bool canTrade(const XPlace&) const;
     void show(uint32_t,uint64_t);
+    bool openCargoTerminal();
     void cycleVenue();
     XQuote quote(const XPlace&,XGood,int64_t units,bool buy) const;
     int64_t stock(const XPlace&,XGood) const;
@@ -99,8 +116,19 @@ class XalariaEconomy {
     bool survey();
     bool mine(unsigned deposit,bool fill=false);
     XContract offer(const XPlace&) const;
+    bool charterClaimed(uint64_t id) const;
     bool acceptContract();
+    bool collectLoadingBayFreight();
+    bool collectTrafficFreight(const XalariaTrafficContact&,const Pilot&);
+    bool reactToTrafficStrike(const TrafficStrike&,double flightSeconds);
+    void expireTrafficRecovery(double flightSeconds);
+    double trafficDockingHold(const ActivityId&,double flightSeconds) const;
+    void applyTrafficRecovery(ActivityBody&,double flightSeconds) const;
+    ShieldReadout trafficShield(const ActivityBody&,double flightSeconds,bool lowered=false) const;
+    std::string serializeTraffic(double flightSeconds) const;
+    bool restoreTraffic(std::string_view,double flightSeconds);
     bool deliverContracts();
+    void rewardDispatch(int64_t cents,unsigned technology,unsigned culture);
     std::vector<XOpportunity> opportunities(XGood,int64_t units) const;
     static int64_t stationNanomites(unsigned);
     static int64_t stationIncome(unsigned);
@@ -108,7 +136,7 @@ class XalariaEconomy {
     int64_t dailyIncome(const XAsset&) const;
     std::vector<ActivityBody> orbitalBodies(const Node&,double seconds) const;
     ActivityBody portBody(const XPlace&,double seconds=0) const;
-    bool travelToPort(const XPlace&,Navigation&,Pilot&);
+    bool travelToPort(const XPlace&,Navigation&,Pilot&,bool manual=false);
     void sync(const Navigation&,const Pilot&);
     void advance(double realSeconds);
     void useManualFuel(double realSeconds,double thrust,bool warp);
@@ -120,18 +148,31 @@ class XalariaEconomy {
     std::string serialize(int64_t unixTime=0) const;
     bool restore(std::string_view);
   private:
+    friend class XalariaCombat;
+    friend class XalariaConvoys;
+    friend class XalariaStrategy;
     const Universe& universe_;const XalariaCatalog& catalog_;
+    const XalariaStories* stories_=nullptr;
+    XalariaCombat* combat_=nullptr;
     int64_t credits_=2000000,tradeSpend_=0,rebatePoints_=0,technologyXP_=0,cultureXP_=0;
     XStock cargo_{};unsigned capacity_=30,shipTier_=0;double fuel_=80,fuelCapacity_=80,energy_=20;
     bool tool_=false,precision_=false,fillingTool_=false;double seconds_=0,miningTimer_=0,voyageBudget_=0,voyageUsed_=0;
     int64_t wallTime_=0;uint64_t randomCounter_=0,nextArt_=1,nextAsset_=1;
     uint32_t currentSystem_=14940;std::optional<uint64_t> currentWorld_;bool landed_=false,nearOrbit_=false;
     std::optional<XPlace> docked_;
+    std::optional<StationKey> dockedStationKey_;
     mutable std::map<XPlace,XMarket> markets_;
     std::vector<XAsset> assets_;std::vector<XArtwork> artwork_;std::vector<XContract> contracts_;
     std::map<std::tuple<uint32_t,uint64_t,unsigned>,XDeposit> deposits_;
     std::map<std::pair<uint32_t,uint64_t>,unsigned> known_;
     std::set<std::pair<uint32_t,uint64_t>> surveyed_,visited_;
+    struct TrafficRecovery {
+        double started=0., clearanceAt=0.;
+        glm::dvec3 offset{},velocity{},turn{},spin{};
+        TrafficRecovery at(double seconds) const;
+    };
+    std::map<ActivityId,TrafficRecovery> trafficRecovery_;
+    std::map<ActivityId,ShieldCharge> trafficShields_;
     XMarket& market(const XPlace&) const;
     bool validPlace(const XPlace&) const;
     int64_t midpoint(const XPlace&,XGood,int64_t stock) const;
@@ -139,6 +180,8 @@ class XalariaEconomy {
     double random();
     XAsset* asset(uint32_t);
     bool atAsset(const XAsset&,bool requireDock=false) const;
+    bool loadCharter(const XPlace&);
+    bool loadParcel(const XContract&);
     void settleDay(int64_t);
     bool failure(std::string);
 };

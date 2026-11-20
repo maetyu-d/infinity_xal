@@ -1,4 +1,5 @@
 #include "hyperion_space_glass.sh"
+#include "hyperion_surface_frame.sh"
 // Hyperion worldFragment/structureLight: hemispherical sky irradiance and
 // broad reflected sky/film. Analytic, roughness-filtered and world-oriented;
 // no screen-colour feedback or additional texture allocation.
@@ -33,9 +34,14 @@ vec3 diffuseEnvironment(vec3 N,vec3 up,vec3 albedo,float day,float air){
  return albedo*mix(bounce,sky,skyFacing);
 }
 vec3 materialBump(vec3 N,vec3 position,float height,float maxSlope){
- vec3 dx=dFdx(position),dy=dFdy(position),a=cross(dy,N),b=cross(N,dx);
+ vec3 dx=dFdx(position),dy=dFdy(position);
+ float span=max(max(abs(dx.x),max(abs(dx.y),abs(dx.z))),
+                max(abs(dy.x),max(abs(dy.y),abs(dy.z))));
+ if(span<=1e-30)return N;
+ dx/=span;dy/=span;
+ vec3 a=cross(dy,N),b=cross(N,dx);
  float det=dot(dx,a);
- vec3 gradient=sign(det)*(dFdx(height)*a+dFdy(height)*b)/max(abs(det),1e-20);
+ vec3 gradient=sign(det)*((dFdx(height)/span)*a+(dFdy(height)/span)*b)/max(abs(det),1e-10);
  gradient*=min(1.,maxSlope/max(length(gradient),.001));
- return normalize(N-gradient);
+ return surfaceUnit(N-gradient,N);
 }

@@ -91,8 +91,11 @@ void CockpitMotion::update(const CockpitMotionInput& in, double dt) {
         const double fade = 1 - smoothstep(.30, .48, hz * dt);
         return std::sin(time_ * (2 * std::numbers::pi * hz) + phase) * fade;
     };
-    const glm::dvec3 rattle(wave(6.1, .4), wave(7.7, 1.7), wave(9.3, 2.9));
-    const double vibration = load * .00055 + motor * .00030;
+    // Keep thrust feedback below a pixel's angular footprint. A fast,
+    // half-pixel rattle makes fine glass/metal highlights appear to flash.
+    // The slower pressure lean and actual recoil/contact impulses remain.
+    const glm::dvec3 rattle(wave(3.1, .4), wave(4.3, 1.7), wave(5.4, 2.9));
+    const double vibration = load * .00012 + motor * .00008;
     pose_.angles = bounded(lean_.position + shock_.position + rattle * vibration, .010);
     pose_.translation = bounded(slide_.position + jolt_.position + rattle * (vibration * .35), .009);
     pose_.orientation = glm::normalize(glm::dquat(pose_.angles));

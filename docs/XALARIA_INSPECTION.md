@@ -16,6 +16,8 @@ The map suppresses long wraparound lines in the full-grid view, matching the sou
 
 The spatial export does not expose the multiplayer server, accounts, economy, culture/robot simulation, live player construction or city layouts. The spatial export alone cannot reconstruct them. Version 0.3 independently implements the public handbook’s trading and production rules as an offline economy; docs/ECONOMY.md distinguishes source rules from local balance and remaining omissions. README.md records the other model and platform limits.
 
+The `T` rows at the end of the bundled catalogue are four Infinity survey systems. Their star properties come from Infinity's stellar evolution recipes. Each row supplies an unused grid coordinate, a name and type, a nearby Xalaria system for a two-way wormhole, and a survey world's orbit. The imported rows and save fingerprint retain their source identities.
+
 Primary references:
 - https://www.xalaria.com/universe/
 - https://www.xalaria.com/universe/data/index.json

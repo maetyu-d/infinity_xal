@@ -15,8 +15,9 @@ float cameraFocus(){
  return max(focus,u_lens[1].z*2.);
 }
 float cameraDefocus(float z,float focus){
- return smoothstep(.035,.65,abs(z-focus)/max(max(z,focus),.00001));
+ return smoothstep(.035,.65,abs(z-focus)/max(max(z,focus),u_lens[1].z));
 }
 float apertureEdge(float angle){
- return .9238795/cos(mod(angle+.3926991,.7853982)-.3926991);
+ // A wide-open pupil is round; off-axis clipping is handled by the lens field.
+ return 1.;
 }

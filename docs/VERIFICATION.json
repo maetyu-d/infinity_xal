@@ -11,14 +11,14 @@
   "runtime": "C++20, SDL3, bgfx Metal, Infinity Hyperion renderer",
   "platform": "macOS 26+, arm64",
   "linked_dependencies": "system libraries and frameworks only",
-  "packaged_app_test": "passed: signed Mac app loaded the interior and flew through the Oylanhai\u2013Ziksa gate with four units of cargo",
+  "packaged_app_test": "passed: signed 0.68.0 build 95, legacy journey migration, v5 reload and Fleet Command on Metal",
   "native_keyboard_search": "verified with native SDL text input, result selection, and Clear",
   "signature": "ad hoc codesign verification passed",
-  "version": "0.14.1",
+  "version": "0.68.0",
   "integration_tests": "passed: immutable destination, two-hop route, final-world handoff, pause/resume, route save/restore, cockpit selection, world search, frame-invariant position, map picking, anchored zoom",
-  "test_suites": 3,
+  "test_suites": 7,
   "economy_integration_tests": "passed: physical docking access, conserved transactions, stock and cargo limits, sealed charter, real berth departure and wormhole haul, fuel progress, save validation, construction, vault storage, farms and guards, finite deposits, restoration, culture, galleries, offline settlement, deadlines and UI bounds",
-  "test_result": "3 of 3 passed",
+  "test_result": "7 of 7 passed",
   "native_economy_frames": 280,
   "native_economy_transaction": {
     "purchase": "4 iron",
@@ -33,7 +33,7 @@
   "bulk_commodities": 12,
   "economy_source": "https://www.xalaria.com/handbook/",
   "economy_limits": "Offline public-rule implementation with local balance; full server economy not reproduced. See ECONOMY.md.",
-  "binary_sha256": "67e6c45ea26d15d514a447ddaef49e58c7b69cca58361dd501bca49bded4fda0",
+  "binary_sha256": "24cd1675f865372e451f80f5cf5c4e13010225cd3782c1ae280e324aa8d3e7c3",
   "graphics_style": "Charred Glass, Verdant Fog, Tidal Blue and Acid Etch regional looks with depth-aware camera optics",
   "graphics_scope": [
     "world pigments",
@@ -52,7 +52,7 @@
     "GLSL"
   ],
   "shader_embedding": "Project-local checked-in shaders, source/binary SHA-256 validated at CMake configuration",
-  "shader_manifest_sha256": "2042ca3b0cdc39da2f47bd8cb2c14bb84d4d2439e8187d8304278b5aa9fd8304",
+  "shader_manifest_sha256": "77b9094cb65b9ed9b50172f84977e12f9d0cc746d0cdcd0d50e030488ab3c781",
   "native_graphics_checks": {
     "acid_space": 145,
     "acid_orbit": 135,
@@ -189,7 +189,7 @@
   },
   "baseline_reflection_verification_version": "0.4.1",
   "baseline_space_glass_verification_version": "0.4.1",
-  "build_binary_sha256": "4868a657026ff9d86b100391b94d3f3e6ca7b833585804eae4a60f867dc0a545",
+  "build_binary_sha256": "091086c92e71cda06fe2efba3d005c7415810bf61a248ce3bc628aa2319ed919",
   "baseline_native_graphics_checks": {
     "version": "0.5.0",
     "lens_open_space_on": 160,
@@ -365,28 +365,28 @@
     ]
   },
   "graphics_upgrade_verification": {
-    "platform_tested": "macOS Metal",
-    "shader_targets_compiled": [
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "packaged_manual_crossing": {
+      "destination": "Ziksa",
+      "cargo_units": 4
+    },
+    "shader_backends_compiled": [
       "Metal",
       "SPIR-V",
       "GLSL"
     ],
-    "native_flight_controls_frames": 207,
-    "signed_manual_crossing": {
-      "frames": 112,
-      "arrivals": 1,
-      "system": 14538,
-      "cargo_units": 4
-    },
-    "signed_docking": {
-      "frames": 171,
-      "docked": true,
-      "cargo_units": 4
-    },
-    "signed_tidal_roll_frames": 104,
-    "verdant_horizon_frames": 136,
-    "updated_readme_screenshots": 16,
-    "version": "0.10.0"
+    "native_views": [
+      "All four regional skies",
+      "Planetary crescent",
+      "Frak rings",
+      "Four resolved stars",
+      "Eunhia Station",
+      "Surface settlement",
+      "Oylanhai wormhole",
+      "Atlas",
+      "Ship interiors"
+    ]
   },
   "roll_and_graphics_verification": {
     "platform_tested": "macOS Metal",
@@ -586,6 +586,3727 @@
       "Cargo bay"
     ],
     "presentation": "Opaque three-dimensional silhouettes with animated heads and arms, soft edge lighting, and ordinary cabin depth",
+    "updated_readme_screenshot": "Ship-Interior.png",
+    "version": "0.14.1"
+  },
+  "animated_deck_crew_verification": {
+    "platform_tested": "macOS Metal",
+    "shader_targets_compiled": [
+      "Metal",
+      "SPIR-V",
+      "GLSL"
+    ],
+    "test_suites": "3 of 3 passed",
+    "crew_work_areas": [
+      "Navigation",
+      "Crew quarters",
+      "Systems alcove",
+      "Cargo bay"
+    ],
+    "presentation": "2D direction-dependent sprites with eight walking frames, working poses, lit contours and cabin depth",
+    "coverage": [
+      "station transitions without teleporting",
+      "clearance around other crew",
+      "player can reach every room and return to helm"
+    ],
     "updated_readme_screenshot": "Ship-Interior.png"
+  },
+  "interior_display_verification": {
+    "platform_tested": "macOS Metal",
+    "test_suites": "3 of 3 passed",
+    "display_checks": [
+      "glyph gutters and text overlap",
+      "uniform glyph scale",
+      "live route, hull, fuel and cargo data"
+    ],
+    "native_walk": "Opened cockpit hatch, reached the crew quarters, systems alcove and cargo bay, and returned to the helm",
+    "manifest_cargo": "Four units of iron purchased at Eunhia Station",
+    "readme_screenshot": "Deck-Displays.png"
+  },
+  "crew_collision_verification": {
+    "test_suites": "3 of 3 passed",
+    "coverage": [
+      "wall and doorway clearance across all crew rounds",
+      "cargo and workstation clearance",
+      "player blockage and crew resumption",
+      "ordinary frame steps and longer frames"
+    ]
+  },
+  "deck_refit_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_capture": [
+      "Main passage",
+      "Crew quarters",
+      "Systems alcove",
+      "Cargo bay"
+    ],
+    "shader_backends_compiled": [
+      "Metal",
+      "SPIR-V",
+      "GLSL"
+    ],
+    "readme_screenshot": "Ship-Interior.png"
+  },
+  "flight_handoff_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_checks": [
+      "existing save opens at the helm",
+      "seated and standing input handoff",
+      "deck mouse capture after closing the atlas",
+      "route continues while standing"
+    ],
+    "hud_checks": [
+      "fixed destination name",
+      "direction cue waits for a settled view",
+      "HUD fade-in"
+    ]
+  },
+  "interior_graphics_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_views": [
+      "Helm",
+      "Main passage",
+      "Crew quarters",
+      "Systems alcove",
+      "Cargo bay",
+      "Cargo observation window"
+    ],
+    "shader_backends_compiled": [
+      "Metal",
+      "SPIR-V",
+      "GLSL"
+    ],
+    "renderer": "HDR cabin layer, local lamp bloom, edge smoothing, and alpha composite over the live exterior",
+    "readme_screenshot": "Ship-Interior.png"
+  },
+  "ring_and_canopy_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "shader_backends_compiled": [
+      "Metal",
+      "SPIR-V",
+      "GLSL"
+    ],
+    "native_ring_on_off_pairs": [
+      "Frak from the pole and both sides",
+      "Efbip",
+      "Stips",
+      "Eifjoa"
+    ],
+    "canopy_sweep": "Both windows and roof rails inspected in Charred Glass and Verdant Fog"
+  },
+  "published_ring_orientation_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "published_axes": 14860,
+    "orbital_plane_fallbacks": 27,
+    "centred_in_world_and_system_frames": 14887,
+    "native_checks": [
+      "Predre from the reported bank and distance",
+      "Frak from an oblique orbit"
+    ]
+  },
+  "manual_docking_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "cargo_run": {
+      "origin": "Eunhia Station 1",
+      "destination": "Phehmyar Station 1",
+      "manual_wormhole": true,
+      "manual_docking": true,
+      "nickel_units": 4,
+      "wormhole_fuel": 8,
+      "hull_percent": 100,
+      "net_trade_cents": 7199
+    },
+    "native_checkpoints": [
+      "Approach lights and cockpit instruments",
+      "Clamp dwell",
+      "Docked save restoration"
+    ]
+  },
+  "cargo_terminal_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "native_checkpoints": [
+      "Walk from cockpit to the aft terminal",
+      "Interact within reach while docked",
+      "Sell four nickel at Phehmyar Station 1",
+      "Accept the Eunhia Station 1 return charter",
+      "Exit to the same spot and reopen full economy with F4"
+    ]
+  },
+  "station_boarding_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "native_stations": [
+      "Phehmyar Station 1",
+      "Eunhia Station 1"
+    ],
+    "native_checkpoints": [
+      "Pressure doors cycle separately",
+      "Walk across docking bridge",
+      "Load the local charter once and checkpoint it",
+      "Block undocking on the station",
+      "Return to the helm and depart"
+    ]
+  },
+  "modular_station_verification": {
+    "test_suites": "3 of 3 passed",
+    "published_buildable_layouts": 37441,
+    "station_families": [
+      "Freight",
+      "Habitat",
+      "Research",
+      "Industrial",
+      "Private vault"
+    ],
+    "native_renderer": "macOS Metal",
+    "native_stations": [
+      "Phehmyar Station 1",
+      "Eunhia Station 1",
+      "Private vault at Skomyu"
+    ]
+  },
+  "docking_tunnel_glazing_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "native_station": "Phehmyar Station 1",
+    "native_checkpoints": [
+      "Walk beneath and look through the glass panes",
+      "Exterior glass view",
+      "Collect the Eunhia charter, return, and undock"
+    ]
+  },
+  "station_refit_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "native_stations": [
+      "Phehmyar Station 1",
+      "Eunhia Station 1"
+    ],
+    "native_checkpoints": [
+      "Generated exterior silhouettes",
+      "Glass docking bridge and room signage",
+      "Phehmyar laboratory and Eunhia habitat",
+      "Freight pickup, return, and undocking at Phehmyar"
+    ]
+  },
+  "station_annexes_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "native_stations": [
+      "Phehmyar Station 1",
+      "Eunhia Station 1"
+    ],
+    "native_checkpoints": [
+      "Analysis lab and system survey at Phehmyar",
+      "Walkable observation lounges at Phehmyar and Eunhia",
+      "Exterior observation windows and docking bridge at Phehmyar",
+      "Freight pickup at both stations and safe undocking at Phehmyar"
+    ]
+  },
+  "station_interiors_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "native_stations": [
+      "Phehmyar Station 1",
+      "Eunhia Station 1"
+    ],
+    "native_checkpoints": [
+      "Charred Glass and Verdant Fog station finishes",
+      "Coloured light spill and readable in-world instruments",
+      "Freight pickup at both stations and safe undocking at Phehmyar"
+    ]
+  },
+  "station_furnishings_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "native_stations": [
+      "Phehmyar Station 1",
+      "Eunhia Station 1"
+    ],
+    "native_checkpoints": [
+      "Furnished observation lounges at Eunhia and Phehmyar",
+      "Analysis lab with dedicated sample workstation at Phehmyar",
+      "Freight pickup at both stations and safe undocking at Phehmyar"
+    ]
+  },
+  "station_textures_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "native_stations": [
+      "Phehmyar Station 1",
+      "Eunhia Station 1"
+    ],
+    "native_checkpoints": [
+      "Distinct woven, perforated, and mineral finishes on Metal",
+      "Native lounge and lab screenshots at Eunhia and Phehmyar",
+      "Freight pickup at both stations and safe undocking at Phehmyar"
+    ]
+  },
+  "station_lighting_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "native_stations": [
+      "Phehmyar Station 1",
+      "Eunhia Station 1"
+    ],
+    "native_checkpoints": [
+      "Reading-lamp and window lighting in Eunhia and Phehmyar lounges",
+      "Local task lighting at the Phehmyar sample bench",
+      "Freight pickup at both stations and safe undocking at Phehmyar"
+    ]
+  },
+  "station_exterior_light_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "native_stations": [
+      "Phehmyar Station 1",
+      "Eunhia Station 1"
+    ],
+    "native_checkpoints": [
+      "Exterior light in the glazed bridge and observation lounges at Eunhia and Phehmyar",
+      "Freight pickup at both stations and safe undocking at Phehmyar"
+    ]
+  },
+  "station_bridge_view_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "native_stations": [
+      "Phehmyar Station 1",
+      "Eunhia Station 1"
+    ],
+    "native_checkpoints": [
+      "Inboard and outboard station hull views from the docking bridge",
+      "Open runway recess and inboard service deck at Eunhia and Phehmyar",
+      "Freight pickup at both stations and safe undocking at Phehmyar"
+    ]
+  },
+  "station_transition_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "native_stations": [
+      "Phehmyar Station 1",
+      "Eunhia Station 1"
+    ],
+    "native_checkpoints": [
+      "Retracting pressure doors and room transitions at Eunhia and Phehmyar",
+      "Bridge and lounge views, survey displays, and freight pickup",
+      "Return across the bridge and undocking at Phehmyar"
+    ]
+  },
+  "airlock_handoff_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "native_stations": [
+      "Phehmyar Station 1",
+      "Eunhia Station 1"
+    ],
+    "native_checkpoints": [
+      "Eased door travel and phased pressure cycles at Eunhia and Phehmyar",
+      "Exterior remains visible through the glass bridge from inside an open airlock",
+      "Bridge and lounge views, survey displays, and freight pickup",
+      "Return across the bridge and undocking at Phehmyar"
+    ]
+  },
+  "station_threshold_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "native_stations": [
+      "Phehmyar Station 1",
+      "Eunhia Station 1"
+    ],
+    "native_checkpoints": [
+      "Consecutive frames across the ship, bridge and station in both directions",
+      "Station-side approach retains the view through the bridge panes",
+      "Freight collection and undocking"
+    ]
+  },
+  "docking_bridge_arch_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "native_stations": [
+      "Phehmyar Station 1",
+      "Eunhia Station 1"
+    ],
+    "native_checkpoints": [
+      "Arched glazing and narrow ribs on the Phehmyar docking approach",
+      "Sill lighting, glass and clear sightlines from both bridges",
+      "Boarding, freight collection and undocking at both stations"
+    ]
+  },
+  "deck_crew_outline_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "native_checkpoints": [
+      "Amber, cyan and mint contours on crew at work",
+      "Animated crew silhouettes in the main passage"
+    ]
+  },
+  "wayfinding_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "native_stations": [
+      "Phehmyar Station 1",
+      "Eunhia Station 1"
+    ],
+    "native_checkpoints": [
+      "Ship junction and cargo bay directions",
+      "Station approach, side-room signs, and return to the ship"
+    ]
+  },
+  "station_window_exterior_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "native_stations": [
+      "Phehmyar Station 1",
+      "Eunhia Station 1"
+    ],
+    "native_checkpoints": [
+      "Exterior service hardware from the bridge and approach",
+      "Observation lounge sightlines and return to the ship"
+    ]
+  },
+  "station_traffic_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "native_stations": [
+      "Phehmyar Station 1",
+      "Eunhia Station 1"
+    ],
+    "native_checkpoints": [
+      "Shuttles and freighters visible through the bridge and observation lounge glazing",
+      "Auxiliary traffic cycles, separation from the primary berth, boarding, freight pickup and return"
+    ]
+  },
+  "bridge_stability_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "native_stations": [
+      "Phehmyar Station 1",
+      "Eunhia Station 1"
+    ],
+    "native_checkpoints": [
+      "Matched frame-by-frame camera pans through inboard and outboard bridge windows",
+      "Traversal with live station traffic and stable bridge optics"
+    ]
+  },
+  "station_finish_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "native_stations": [
+      "Phehmyar Station 1",
+      "Eunhia Station 1"
+    ],
+    "native_checkpoints": [
+      "Matched inboard pans and checks of texture stability on the collar and apron bevels",
+      "Airlock and bridge traversal with live station traffic"
+    ]
+  },
+  "stellar_survey_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "native_systems": [
+      "Rhyvane",
+      "Nereth",
+      "Veyru",
+      "Cindrel"
+    ],
+    "native_checkpoints": [
+      "Atlas search and guided arrival at each of the four survey worlds",
+      "F6 opens the magnified stellar view and Esc returns to flight on Metal",
+      "A saved journey from an earlier release loads in the packaged Mac app"
+    ]
+  },
+  "chiaroscuro_warp_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "lighting_comparison": [
+      "Oylanhai planetfall",
+      "Eunhia Station cockpit"
+    ],
+    "warp_checkpoints": [
+      "Manual entry, mid-entry cancellation, re-entry and drop",
+      "Guided Oylanhai\u2013Ziksa jump with one warp arrival and 180 frames after arrival",
+      "Earlier save opened in the signed Mac app"
+    ]
+  },
+  "surface_hud_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "flight": "340-frame Phehmyar flyby with repeated terrain reference changes",
+    "hud": "21 matched samples with unchanged title, ship and contact text brightness through repeated rebases",
+    "prior_session": "A saved journey from an earlier release opened in the signed Mac app"
+  },
+  "orbital_traffic_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "native_captures": [
+      "Eunhia orbital convoy",
+      "Ziksa wormhole approach",
+      "Phehmyar orbital debris field"
+    ],
+    "route_checks": [
+      "Continuous position and heading",
+      "Convoy separation",
+      "Protected docking and wormhole corridor",
+      "Stable junk motion above the traffic"
+    ],
+    "prior_session": "An earlier saved journey opened in the signed Mac app"
+  },
+  "traffic_radio_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "native_checks": [
+      "Crew cycling, contact-row click, radio button click and Esc",
+      "Freighter, station shuttle and wormhole tender replies",
+      "Moving rendezvous, B return to manual flight and gate-service refusal",
+      "Correct home-port market and trading still requires docking",
+      "Crew radio from the seated helm and ship interior while clamped"
+    ],
+    "prior_session": "An earlier saved journey opened in the signed Mac app"
+  },
+  "traffic_dispatch_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "native_checks": [
+      "A Phehmyar crew quotes the station charter and opens the pickup page",
+      "Freight is loaded while clamped and the same crew opens the exact Eunhia delivery page",
+      "Dispatch travel queues the receiving station with the parcel aboard",
+      "Moving holding point reports measured range and relative speed, confirms course match, and clears when B releases it",
+      "An earlier saved journey opens in the signed Mac app"
+    ],
+    "integration_freight": "Physical loading at Phehmyar, manual wormhole return to Oylanhai, docking at Eunhia and a single payout"
+  },
+  "vessel_boarding_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "native_checks": [
+      "Radio keys reject a small shuttle and clear an eligible vessel to the moving approach",
+      "Saving and restoring preserves the manual approach or the secure moving clamps",
+      "J starts automatic capture from a manual vessel approach",
+      "Walked through the pressurised bridge, collected the Phehmyar parcel and returned to the ship",
+      "The berth interlock blocked departure during the transfer and resealed after the return"
+    ],
+    "integration_freight": "Flight-tested manual and automatic moving clamps, departure and one Phehmyar Station courier payout. The Eunhia to Phehmyar nickel run also passed."
+  },
+  "docking_continuity_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "native_checks": [
+      "Replayed Aster-483 manual approach across the former visibility cutoff, checked the side view, secured the clamps, and boarded for the Phehmyar parcel",
+      "Signed app opened a saved manual approach"
+    ],
+    "regression": "The same approach-lane geometry persists as the clamp lights change colour. Manual and automatic capture and courier delivery remain playable."
+  },
+  "traffic_collision_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "native_checks": [
+      "Phehmyar freighter contact identified the vessel, deflected the player ship and reduced its hull",
+      "Signed app opened the existing manual approach save"
+    ],
+    "regression": "Continuous contact with a moving hull, high-speed impact, physical collar contact without accidental capture, and clearance for normal manual and automatic docking. Phehmyar parcel delivery and the Eunhia cargo run passed."
+  },
+  "traffic_recovery_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "native_checks": [
+      "Aster-483 waves off an active approach after a collar strike and refuses the radio docking request during inspection",
+      "After the hold, the crew reports clear, manual docking arms, and the player crosses the bridge for the Phehmyar parcel",
+      "The signed build reopens a saved impact with the hold intact"
+    ],
+    "regression": "Harmless glancing deflection, continuous collision pose, timed clearance, no duplicate stand-clear call, save validation, and renewed approach with the same sealed parcel."
+  },
+  "shield_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "native_checks": [
+      "Aster-483 displayed an active shield edge and an impact ripple in flight",
+      "A live strike used both shields and left the player hull at 100 percent",
+      "Both ships reported shields lowered after clearance and the docking clamps secured",
+      "The signed app restored both depleted shields and an earlier manual approach"
+    ],
+    "regression": "Role-based equipment, charge absorption and recovery, save compatibility, collision response and normal docking and parcel delivery."
+  },
+  "ship_trail_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "native_checks": [
+      "Orbital traffic traces real curved flight paths",
+      "The freighter's wake remained visible after it passed out of view",
+      "The player left a twin wake on a separate flight path away from other traffic",
+      "The signed Mac app restored a previous session"
+    ],
+    "regression": "Bounded sampling at high frame rates, continuous tips, explicit breaks, gaps and expiration."
+  },
+  "wake_colour_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_renderer": "macOS Metal",
+    "native_checks": [
+      "Cyan on Charred Glass in Oylanhai",
+      "Magenta on Verdant Fog at Phehmyar in Ziksa",
+      "Amber on Tidal Blue in Phiat",
+      "Mint on Acid Etch in Eudaya",
+      "The signed Mac app restored a previous session"
+    ]
+  },
+  "dispatch_verification": {
+    "test_suites": "3 of 3 passed",
+    "generated_leads_checked": 46284,
+    "native_checks": [
+      "F7 shows six channels for the selected remote system and plots the Phehmyar distress lead",
+      "Phehmyar rescue requires the player to cross the airlock and walk into the live freighter",
+      "Tow decision files once, awards 640 GC and clears the distress beacon",
+      "Signed app reopens both legacy checkpoints and the new dispatch journal"
+    ]
+  },
+  "dispatch_follow_up_verification": {
+    "test_suites": "3 of 3 passed",
+    "native_checks": [
+      "Migrated the completed Aster-483 rescue from the 0.49.0 save",
+      "Plotted and flew the Ziksa to Oylanhai continuation",
+      "Aboard Eunhia Station, published the recorder evidence and unlocked a distinct closing chapter",
+      "Verified a pending closing chapter after reopening the signed build"
+    ],
+    "regression": "Branching for all six channels, assignment site checks, journal pagination, payout guards and save migration"
+  },
+  "story_library_verification": {
+    "test_suites": "5 of 5 passed",
+    "distinct_incident_outlines": 960,
+    "outlines_per_channel": 160,
+    "decision_paths_checked": 1920,
+    "chapters_checked": 5760,
+    "library_sha256": "fa5fb3cda1ad87c539ef819ae8f1d4993fa2eec99c43c25a26f12c4d8757bf76",
+    "expansion_sha256": "abc9143506f1394d9e581c031207b4ba95098ab69669faa54e337541aa7c4498",
+    "content_model": "Authored premises and choices; seeded local assignments; shared branching follow-up structures",
+    "native_checks": [
+      "Fresh journeys begin with no discovered cases",
+      "Enter approaches an approximate search area",
+      "N fixes a bearing, examines the fragment and recovers its recorder",
+      "The visible recorder and interaction positions agree",
+      "A separate control probe completes the physical evidence chain",
+      "The case file presents recovered findings and a contradictory account",
+      "Independent disclosure files the finding and earns a follow-up",
+      "A system without planets or stations renders and supports its own evidence chain",
+      "Walking to the actual aft terminal and pressing B opens case files in flight",
+      "Signed app preserves five older journals and schema-6 evidence history"
+    ]
+  },
+  "packaged_executable_sections_match_build": true,
+  "living_galaxy_verification": {
+    "quiet_ordinary_hub_pools": [
+      10,
+      15,
+      20
+    ],
+    "maximum_nearby_jumps": 3,
+    "immediate_leads_per_page": 5,
+    "urgent_budget": 2,
+    "report_delay_seconds_per_jump": 120,
+    "incident_cycle_seconds": 1800,
+    "headless_checks": [
+      "Untracked NPC responses become contained or escalate, then resolve or fail",
+      "A busy neighbourhood retains at least ten incidents through a 90-minute flight",
+      "A timely physical intervention changes a failed response to a successful one",
+      "Saved intervention timestamps preserve earlier and later incident states",
+      "Reports propagate to neighbours after their flight-clock delay",
+      "Relief and conflict change supply quotes and traffic advisories",
+      "Convoy schedule derivatives match velocity and remain continuous at boundaries",
+      "Radio contacts and collision sweeps agree on responding convoy positions",
+      "Eunhia-Phehmyar manual cargo route passes with incident-driven prices enabled",
+      "Nearby and News layouts fit square, 4:3 and widescreen viewports"
+    ],
+    "limits": "Dispatch uses scheduled faction responses and convoy retiming; nearby convoy battles use live ship combat. No damaged station geometry. The flight clock advances during play, not while the game is closed."
+  },
+  "discovery_verification": {
+    "fresh_journey_known_leads": 0,
+    "discovery_sources": [
+      "local emergency broadcasts",
+      "N-key orbital scans",
+      "crew conversations",
+      "physical station visits",
+      "earned faction contacts",
+      "completed chapter connections"
+    ],
+    "local_listening_seconds": 20,
+    "station_encounter_seconds": 5,
+    "public_private_confidential_variant_ranges": [
+      [
+        1,
+        64
+      ],
+      [
+        65,
+        128
+      ],
+      [
+        129,
+        160
+      ]
+    ],
+    "private_contact_trust_points": 1,
+    "confidential_contact_trust_points": 3,
+    "trust_earned_by": "Completed case chapters and delivered sealed-freight charters",
+    "saved_schema": 6,
+    "older_story_schemas_checked": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "headless_checks": [
+      "Every initial tab is empty",
+      "Atlas browsing and News leak no hidden stories",
+      "Unknown keys cannot be tracked or resolved",
+      "Scanning a world and hailing a crew cannot be farmed",
+      "A station encounter reveals one local introduction",
+      "Earned trust unlocks different private and confidential tips",
+      "Physical freight delivery earns trust with its endpoints",
+      "Discoveries, sources and encounter guards survive reload",
+      "Old tracked cases migrate without unlocking unrelated content"
+    ]
+  },
+  "investigation_verification": {
+    "generated_plans_checked": 46284,
+    "systems_checked": 7714,
+    "regions_checked": 82,
+    "channels_per_system": 6,
+    "possible_causes": [
+      "equipment failure",
+      "deliberate interference",
+      "fabricated account"
+    ],
+    "evidence_stages": [
+      "search bearing",
+      "physical trace",
+      "recorder recovery",
+      "witness or independent control"
+    ],
+    "trace_range_metres": 180,
+    "trace_speed_limit_metres_second": 25,
+    "recorder_range_metres": 75,
+    "recorder_speed_limit_metres_second": 8,
+    "control_range_metres": 140,
+    "control_speed_limit_metres_second": 15,
+    "saved_schema": 6,
+    "consequences": [
+      "sponsor and independent reputation",
+      "different report payments",
+      "900-second convoy schedule response",
+      "local supply quotes",
+      "access advisories"
+    ],
+    "limits": "Seeded evidence frameworks with three causes per channel, not 46,284 individually authored plots. Small evidence props are scanned or recovered; crew statements require the existing physical boarding context. Earlier active cases retain their original progression; unstarted older discoveries gain the new evidence stages."
+  },
+  "combat_verification": {
+    "test_suites": "5 of 5 passed",
+    "session_schema": 4,
+    "combat_schema": 2,
+    "orbital_harbours_checked": 21981,
+    "regions_checked": 82,
+    "fits": {
+      "Civilian": {
+        "shield": 28,
+        "weapons": "light pulse"
+      },
+      "Corsair": {
+        "price_gc": 3500,
+        "shield": 48,
+        "torpedoes": 4,
+        "weapons": "twin pulse II, ion"
+      },
+      "Gunship": {
+        "price_gc": 9000,
+        "shield": 80,
+        "torpedoes": 10,
+        "weapons": "triple pulse III, ion"
+      }
+    },
+    "native_boarding_test": {
+      "frames": 1096,
+      "seized": "3 chromium",
+      "result": "passed using SDL controls, real gun traces, docking and the walkable transfer deck"
+    },
+    "native_checks": [
+      "F8 opens the fitting panel",
+      "Mouse click buys a Corsair",
+      "M and 2 arm the ion disruptor",
+      "Holding Space strips shields and disables engines without hull destruction",
+      "Cargo demand wins surrender and records a local warrant",
+      "Captured crew grants its physical collar",
+      "Automatic docking secures clamps",
+      "F5 leaves the seat",
+      "Walk to both airlock doors and use E",
+      "Walk across the bridge to the transfer bay",
+      "E takes finite cargo into the hold"
+    ],
+    "headless_checks": [
+      "Eunhia-Phehmyar manual cargo route passes with armed traffic simulation active",
+      "Weapons safe and walking inhibit fire",
+      "Shields absorb damage before hull or engines",
+      "Ion disables a boardable hull",
+      "Surrender changes radio and collar clearance",
+      "Remote seizure fails; boarding succeeds once",
+      "Stolen cargo is rejected by lawful markets and accepted by fences",
+      "Refitting retains warrants",
+      "Security control accepts fine payment near a world without a berth",
+      "Radio and collision sweeps share moving poses",
+      "Damage, warrants, loot and torpedoes survive reload",
+      "Malformed combat records are rejected transactionally",
+      "Raider neutralization earns one voucher",
+      "Lawful stations pay vouchers",
+      "Torpedoes consume ammunition and physically hit",
+      "Player fit protects hull through shield and armour",
+      "Paid repair and rearm",
+      "Disabled gate-service vessels retain their wormhole frame when boarded and rejoining routes",
+      "Emergency recovery preserves warrants",
+      "Fitting and combat HUD text fit square, 4:3, widescreen and ultrawide"
+    ],
+    "older_session_schemas_checked": [
+      1,
+      2
+    ],
+    "older_story_schemas_checked": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "limits": "Player piracy, local security interceptions, convoy escorts and faction skirmishes. No capital-ship command or ship ownership capture. The flight clock pauses when the game closes. Vault storage requires stolen cargo to be fenced first.",
+    "initial_native_boarding_version": "0.55.0",
+    "current_native_validation": "See convoy_verification for the 0.56.0 escort and pirate runs"
+  },
+  "convoy_verification": {
+    "services_checked": 7714,
+    "systems_checked": 7714,
+    "regions_checked": 82,
+    "faction_interdictions_in_first_cycle": 2529,
+    "worldless_route_legs_checked": 81,
+    "departure_period_seconds": 1800,
+    "session_schema": 4,
+    "convoy_schema": 1,
+    "combat_schema": 2,
+    "actors_per_convoy": 6,
+    "retail_and_wholesale": "Each departure receives a finite producer lot; retail stocks remain available to traders. Surviving deliveries replenish destination markets once.",
+    "escort_test": {
+      "origin": "Eunhia Station",
+      "destination": "Phehmyar Station",
+      "cargo": "12 nickel",
+      "minimum_accompaniment_seconds": 45,
+      "minimum_manifest_fraction": 0.6,
+      "reward_gc": 2600,
+      "result": "passed with real helm, weapon traces, one swept wormhole crossing and a physical destination berth"
+    },
+    "pirate_test": {
+      "cargo": "12 stolen nickel",
+      "result": "passed: fought escorts, ion-disabled carrier, secured its collar, boarded its transfer bay and seized its finite manifest",
+      "consequences": [
+        "shipment interrupted",
+        "local warrant",
+        "sponsor standing reduced",
+        "no escort payment",
+        "stolen stock requires fence"
+      ]
+    },
+    "headless_checks": [
+      "Every route follows published directed edges",
+      "All systems and 82 regions covered",
+      "Worldless transit uses system frames",
+      "Fresh Operations log and atlas browsing reveal no hidden services",
+      "NPC factions exchange physical weapon hits without player fire",
+      "Patrols select sides by faction in interdictions and defend merchants against unlicensed pirates",
+      "NPC crews withhold fire through friendly ships",
+      "NPC skirmish targets cannot turn into accidental player attacks",
+      "Unobserved arrivals resolve their seeded background outcome",
+      "Wholesale allocation does not empty retail shops",
+      "Delivery, payment and prize transfer cannot repeat",
+      "Escort standing earns faction contacts",
+      "Piracy, casualties and finite manifests survive reload",
+      "Malformed convoy saves are rejected without changing good state",
+      "Operations and duty HUD fit square, 4:3, widescreen and ultrawide canvases"
+    ],
+    "limits": "Live ship movement and ray-traced NPC combat in the loaded system; distant outcomes use a seeded aggregate model with recorded casualties. No fleet-command interface, capital-ship ownership capture, destructible station geometry or continuous simulation while the app is closed. Operations retains up to 4096 reports.",
+    "native_escort": {
+      "frames": "3401",
+      "stars": "7714",
+      "worlds": "48085",
+      "system": "14538",
+      "travel_m": "18807.2",
+      "credits_cents": "1360000",
+      "cargo_units": "0",
+      "docked": "1",
+      "arrivals": "0",
+      "manual_arrivals": "1"
+    },
+    "native_pirate": {
+      "frames": "562",
+      "stars": "7714",
+      "worlds": "48085",
+      "system": "14940",
+      "travel_m": "2620",
+      "credits_cents": "1100000",
+      "cargo_units": "12",
+      "docked": "0",
+      "arrivals": "0",
+      "manual_arrivals": "0"
+    }
+  },
+  "explosion_verification": {
+    "version": "0.56.1",
+    "test_suites": "5 of 5 passed",
+    "fatal_hull_event": "Exactly one event at hull zero, shared by player and NPC damage",
+    "ion_control": "Engine disable leaves the prize intact and boardable, without a destruction blast",
+    "presentation": [
+      "White-hot core and expanding fire cloud",
+      "Ship-size scaling",
+      "Spherical shock front",
+      "Secondary flashes",
+      "Tumbling fragments and 3D ballistic embers",
+      "Nearby cockpit impulse without ship forces"
+    ],
+    "lifetime_seconds": 10,
+    "maximum_simultaneous_explosions": 16,
+    "maximum_particles_per_explosion": 136,
+    "reload": "Wrecks persist; their old explosions do not replay",
+    "native_clip": "Infinity-Huge-Explosions-1080p.mp4",
+    "native_clip_resolution": [
+      1920,
+      1080
+    ],
+    "native_clip_frames": 358,
+    "native_result": "One fatal gunfire event; blast visible; particles expire after ten seconds; player survives",
+    "limits": "Visual blast and fragments; no new area damage or fragment collisions.",
+    "signed_app_frames": 100
+  },
+  "explosion_colour_verification": {
+    "version": "0.56.2",
+    "test_suites": "5 of 5 passed",
+    "design_assignment": "Stable role-weighted ship-seed profile, independent of position, palette, damage and frame",
+    "families": {
+      "NTO / hydrazine": "Orange fire and rust-brown absorbing release cloud",
+      "RP-1 / LOX": "Yellow-orange fire and charcoal soot",
+      "LH2 / LOX": "Blue-violet flame with sparse faint residue",
+      "Methane / LOX": "Deeper blue-violet flame with light residue"
+    },
+    "cloud_rendering": "Depth-tested, back-to-front alpha absorption; no artificial up or gravity",
+    "metal_fragments": "Can retain amber incandescence within blue fuel fire",
+    "particle_budget": 136,
+    "native_capture_frames": 1005,
+    "native_resolution": [
+      1920,
+      1080
+    ],
+    "native_scenario": "Six actual ship kills followed by disabling the last freighter; 90-second edit retains the fade and physical boarding",
+    "chemistry": "Stylized visual profiles, not a combustion or pressure simulation; hydrogen luminosity is exaggerated for readability",
+    "references": [
+      "https://cameochemicals.noaa.gov/report?key=CH4075",
+      "https://spinoff.nasa.gov/node/10136"
+    ],
+    "colour_grade_protection": "Separate depth-tested HDR emission and absorbing-gas layer, composited with hue-preserving tone mapping after regional grading, before the cockpit",
+    "shader_backends": [
+      "metal",
+      "spirv",
+      "glsl"
+    ],
+    "native_pixel_check": {
+      "native_blue_violet_pixels": 7681,
+      "region": [
+        700,
+        350,
+        550,
+        500
+      ],
+      "threshold": 1000,
+      "passed": true,
+      "frame_seconds": 23.0,
+      "criteria": "blue > 45, blue > 1.15 * red, blue > 1.05 * green",
+      "version": "0.56.2"
+    },
+    "signed_app_frames": 100
+  },
+  "build": "95",
+  "graphics_057_verification": {
+    "version": "0.57.0",
+    "build": "83",
+    "gameplay_tests": "5 of 5 passed",
+    "shader_backends": [
+      "metal",
+      "spirv",
+      "glsl"
+    ],
+    "native_environments": {
+      "charred": "100 frames",
+      "verdant": "100 frames on the sunlit hemisphere and 100 frames on the dark hemisphere",
+      "tidal": "100 frames",
+      "acid": "100 frames"
+    },
+    "station_bridge": "669 native frames: walk from ship through the airlock onto the glass bridge, pan along the apron and return to the same view with traffic active",
+    "signed_app_frames": 100,
+    "materials": [
+      "Machined windscreen flanges and recessed captive fasteners",
+      "Physical instrument bezel screws",
+      "Warm roof key and cool instrument fill",
+      "Roughness-filtered directional brushed reflection",
+      "Clear finish on ceramic and polymer",
+      "Independent painted hull and exposed-metal response"
+    ],
+    "worlds": [
+      "Sunlit optical cloud relief and offset shadows on temperate pressure-bearing worlds",
+      "Cloud optical deck fades below 1.5\u20137.5 percent altitude before close weather takes over",
+      "Shared cloud treatment for globe and terrain LOD",
+      "Cloud density and shadow sample in the planet coordinate system",
+      "Irregular lava fracture networks and cooled crust replace repeated elevation contours",
+      "Darker glass laminations and finer gold edges",
+      "More absorbing nebula dust lanes"
+    ],
+    "new_render_targets": 0,
+    "new_asset_dependencies": 0,
+    "save_format_changed": false,
+    "previews": {
+      "Graphics-057.png": "ee56d4d1f99de07f7ba5000ae50b1e80056181ffad580a66e34bb43e4af54d54",
+      "Graphics-057-Verdant.png": "5bf86aa58cdcb0dff5e2072de44ae985e803563e373078231a5de1d54327c9e4"
+    }
+  },
+  "graphics_058_verification": {
+    "version": "0.58.0",
+    "build": "84",
+    "gameplay_tests": "5 of 5 passed",
+    "shader_backends": [
+      "metal",
+      "spirv",
+      "glsl"
+    ],
+    "mesh_checks": {
+      "generated_meshes": 132,
+      "finite_vertices": 4518967,
+      "largest_mesh_bytes": 1690920,
+      "compact_indices": "valid",
+      "vessel_bounds": "within the existing 2.4 radius rendering and collision envelope"
+    },
+    "native_checks": [
+      {
+        "log": "work/graphics-058/charred.log",
+        "elapsed_seconds": 7.75,
+        "exit_code": 0
+      },
+      {
+        "log": "work/graphics-058/tidal.log",
+        "elapsed_seconds": 3.64,
+        "exit_code": 0
+      },
+      {
+        "log": "work/graphics-058/acid.log",
+        "elapsed_seconds": 3.59,
+        "exit_code": 0
+      },
+      {
+        "log": "work/graphics-058/station.log",
+        "elapsed_seconds": 23.2,
+        "exit_code": 0
+      }
+    ],
+    "additional_native_checks": [
+      {
+        "scene": "vessel",
+        "exit_code": 0,
+        "elapsed_seconds": 4.57,
+        "native_frames": 100
+      },
+      {
+        "scene": "red-giant",
+        "exit_code": 0,
+        "elapsed_seconds": 4.59,
+        "native_frames": 100
+      },
+      {
+        "scene": "carbon-giant",
+        "exit_code": 0,
+        "elapsed_seconds": 3.16,
+        "native_frames": 100
+      },
+      {
+        "scene": "rings",
+        "exit_code": 0,
+        "elapsed_seconds": 6.89,
+        "native_frames": 100
+      },
+      {
+        "scene": "packaged",
+        "exit_code": 0,
+        "elapsed_seconds": 8.11,
+        "native_frames": 100
+      }
+    ],
+    "station_bridge_frames": 673,
+    "signed_app_frames": 100,
+    "contact_shading": "8 deterministic depth samples, bounded metre-scale radius, geometric normals reconstructed from depth, lamp protection, no temporal history or new framebuffer",
+    "ship_materials": "Explicit vessel classification separates hull paint, exposed alloy and glass from station deck materials",
+    "meshes": [
+      "Open double-wall engine bells and recessed throat lights",
+      "Freighter radiator banks, cargo latches and spine fittings",
+      "Ferry engine pods and bevelled canopy",
+      "Patrol radiator fins and structural spars",
+      "Higher resolution survey hull and fittings",
+      "Persistent apron rails, grilles, inset louvred lamps"
+    ],
+    "celestial": [
+      "Filtered stellar convection lanes and bright fibrils",
+      "Carbon giant molecular veils",
+      "Filtered ring particle clumps using unchanged catalogue positions and bounds"
+    ],
+    "native_freighter_inspection": "Actual NPC at Phehmyar with a test-only inspection camera; production hull, materials, shield and trails",
+    "station_comparison": {
+      "scene": "Same Phehmyar bridge camera and traffic schedule",
+      "region": [
+        100,
+        355,
+        1250,
+        690
+      ],
+      "mean_channel_change_8bit": [
+        9.070050616482803,
+        9.715774172615184,
+        9.428054510058404
+      ],
+      "image_dimensions": [
+        1420,
+        777
+      ]
+    },
+    "save_format_changed": false,
+    "new_render_targets": 0,
+    "new_asset_dependencies": 0,
+    "previews": {
+      "Graphics-058.png": "e43af5a951a7673ef7b7ca6d1b965d043f284bfae6270914fcb746f0310787c3",
+      "Graphics-058-Station.png": "ab6258172e259a2aabc437e7c92fad7af9ae4fec34e0c06b4418ece382a981cb"
+    }
+  },
+  "graphics_059_verification": {
+    "version": "0.59.0",
+    "build": "85",
+    "gameplay_and_feedback_tests": "6 of 6 passed",
+    "shader_backends": [
+      "metal",
+      "spirv",
+      "glsl"
+    ],
+    "materials": [
+      "Filtered, clear-coated carbon-composite console surrounds",
+      "Cleaner brushed and painted finishes",
+      "Broader hull panels with antialiased coating stencils"
+    ],
+    "surface_stability": [
+      "Normalize derivative frames before cross products to prevent tiny ship triangles losing their normal",
+      "Hull-local projection with a fixed tolerance on tied bevel axes",
+      "Dimensionless bump gradients across render-unit changes",
+      "Early filtering of unresolved gloss grain and restrained fine normal relief",
+      "Subpixel sustained-thrust vibration with existing pressure lean, collision and recoil impulses",
+      "Render-scale-aware depth thresholds in the camera blur"
+    ],
+    "acceleration_test": {
+      "frames": 960,
+      "fps": 60,
+      "duration_seconds": 16,
+      "resolution": [
+        1280,
+        720
+      ],
+      "sequence": [
+        "idle",
+        "full boost",
+        "boost plus lateral and vertical thrust and roll",
+        "braking",
+        "reverse boost",
+        "boost plus pitch, yaw and roll",
+        "braking"
+      ],
+      "maximum_actual_acceleration_m_s2": 76731.2,
+      "tracked_surface_patches": {
+        "brow": {
+          "boost_mean_gray": 150.534,
+          "boost_max_frame_change": 1.2,
+          "boost_p95_frame_change": 0.0,
+          "boost_max_alternating_change": 1.2,
+          "full_manoeuvre_max_frame_change": 14.56,
+          "boost_large_flashes_over_32_gray": 0
+        },
+        "port_frame": {
+          "boost_mean_gray": 132.088,
+          "boost_max_frame_change": 4.12,
+          "boost_p95_frame_change": 2.64,
+          "boost_max_alternating_change": 6.88,
+          "full_manoeuvre_max_frame_change": 24.16,
+          "boost_large_flashes_over_32_gray": 0
+        },
+        "starboard_frame": {
+          "boost_mean_gray": 96.904,
+          "boost_max_frame_change": 5.52,
+          "boost_p95_frame_change": 3.76,
+          "boost_max_alternating_change": 5.52,
+          "full_manoeuvre_max_frame_change": 24.12,
+          "boost_large_flashes_over_32_gray": 0
+        },
+        "console": {
+          "boost_mean_gray": 29.13,
+          "boost_max_frame_change": 0.52,
+          "boost_p95_frame_change": 0.48,
+          "boost_max_alternating_change": 0.64,
+          "full_manoeuvre_max_frame_change": 1.2,
+          "boost_large_flashes_over_32_gray": 0
+        }
+      },
+      "baseline_tracked_surface_patches": {
+        "brow": {
+          "boost_mean_gray": 151.141,
+          "boost_max_frame_change": 14.72,
+          "boost_p95_frame_change": 8.04,
+          "boost_max_alternating_change": 27.84,
+          "full_manoeuvre_max_frame_change": 14.72,
+          "boost_large_flashes_over_32_gray": 0
+        },
+        "port_frame": {
+          "boost_mean_gray": 129.186,
+          "boost_max_frame_change": 6.12,
+          "boost_p95_frame_change": 4.16,
+          "boost_max_alternating_change": 7.92,
+          "full_manoeuvre_max_frame_change": 23.48,
+          "boost_large_flashes_over_32_gray": 0
+        },
+        "starboard_frame": {
+          "boost_mean_gray": 94.305,
+          "boost_max_frame_change": 11.4,
+          "boost_p95_frame_change": 8.36,
+          "boost_max_alternating_change": 17.0,
+          "full_manoeuvre_max_frame_change": 25.52,
+          "boost_large_flashes_over_32_gray": 0
+        },
+        "console": {
+          "boost_mean_gray": 55.187,
+          "boost_max_frame_change": 1.52,
+          "boost_p95_frame_change": 1.24,
+          "boost_max_alternating_change": 1.8,
+          "full_manoeuvre_max_frame_change": 1.64,
+          "boost_large_flashes_over_32_gray": 0
+        }
+      },
+      "brow_peak_change_reduction_percent": 91.85,
+      "passing_limits": "Every tracked patch below 8/255 frame change and 10/255 alternating change during steady full boost; below 32/255 frame change throughout the manoeuvre",
+      "capture_sha256": "81ab9d52cc030a4f1ea8b31ed7cc91324db0854507bf9aaef0b13c2198f2506c"
+    },
+    "ship_scale_stability": {
+      "physical_ship_and_camera": "Same seeded NPC and physical relative pose at the same flight-clock frame",
+      "hull_comparison_region": [
+        426,
+        264,
+        965,
+        574
+      ],
+      "captures": [
+        {
+          "render_log_metres": 3.0,
+          "native_frames": 100,
+          "image_dimensions": [
+            1420,
+            777
+          ]
+        },
+        {
+          "render_log_metres": 4.0,
+          "native_frames": 100,
+          "image_dimensions": [
+            1420,
+            777
+          ],
+          "hull_mean_channel_difference_8bit": [
+            0.054551439344066074,
+            0.08771320845053564,
+            0.058447543240169965
+          ]
+        },
+        {
+          "render_log_metres": 5.0,
+          "native_frames": 100,
+          "image_dimensions": [
+            1420,
+            777
+          ],
+          "hull_mean_channel_difference_8bit": [
+            0.04894966784367706,
+            0.07102758992159913,
+            0.05483272487880783
+          ]
+        }
+      ]
+    },
+    "native_environments": [
+      {
+        "log": "work/graphics-059/charred.log",
+        "elapsed_seconds": 6.05,
+        "exit_code": 0
+      },
+      {
+        "log": "work/graphics-059/tidal.log",
+        "elapsed_seconds": 4.66,
+        "exit_code": 0
+      },
+      {
+        "log": "work/graphics-059/acid.log",
+        "elapsed_seconds": 3.85,
+        "exit_code": 0
+      },
+      {
+        "log": "work/graphics-059/station.log",
+        "elapsed_seconds": 22.31,
+        "exit_code": 0
+      }
+    ],
+    "additional_native_checks": [
+      {
+        "scene": "vessel",
+        "exit_code": 0,
+        "elapsed_seconds": 4.52,
+        "native_frames": 100
+      },
+      {
+        "scene": "rings",
+        "exit_code": 0,
+        "elapsed_seconds": 6.28,
+        "native_frames": 100
+      },
+      {
+        "scene": "packaged",
+        "exit_code": 0,
+        "elapsed_seconds": 9.83,
+        "native_frames": 100
+      }
+    ],
+    "station_bridge_frames": 666,
+    "signed_app_frames": 100,
+    "save_format_changed": false,
+    "new_asset_dependencies": 0,
+    "new_render_targets": 0,
+    "previews": {
+      "Graphics-059.png": "29c07ebdff08f32e8288f157707556adfa8ed459db6d86d159d44a25fe36f704",
+      "Graphics-059-Verdant.png": "8f099e5c4d65940326282146c374c9dff57f02ffc02a3ba0a86b2c22b7fe2b06"
+    }
+  },
+  "graphics_060_verification": {
+    "version": "0.60.0",
+    "build": "86",
+    "gameplay_and_feedback_tests": "6 of 6 passed",
+    "shader_backends": [
+      "metal",
+      "spirv",
+      "glsl"
+    ],
+    "materials": [
+      "Globe-anchored, filtered fine rock relief and orbital grain, fading before the close terrain transition",
+      "Darker lava crust with branching incandescent fissures and hot fissure cores",
+      "Gas-giant feeder bands, filtered spiral storms, stronger eyewalls and cloud-height normal relief",
+      "Eroded temperate cloud banks, fine cirrus, sunward relief and offset shadows",
+      "Finer dust-lane and verdant fog filaments, with denser internal absorption"
+    ],
+    "planet_lighting": "Actual local stellar direction supplied for all planets and streamed terrain, including non-ringed worlds",
+    "stability_preservation": {
+      "unchanged_files": {
+        "src/Cockpit.cpp": "beff72d463d3ff41def3bd787f4fd2c670f20e186aff52c8caad80a49ae6c38a",
+        "src/CockpitMotion.cpp": "4f8579375e423a1c3af4b28a48e6637bee9b650287bba7663ff8132b8e712990",
+        "shaders/hyperion_surface_frame.sh": "57fdc7c633b35bd6ed6e3cd1f40eccfbd082d430eb082275bc67e27e81942519",
+        "shaders/hyperion_architecture.sh": "cec375dbd64b6988030f4a771458c2f929fd807cfaa822416819e2d0134397fc",
+        "shaders/hyperion_cabin.sh": "7e087a2df899910dbb6052212ede5d2d4ac61581ab8af6dfa68785f5e8853c88",
+        "shaders/fs_cockpit_glazing.sc": "ef449b37f0643a9d8474b82b0d43efd44f2580ed75de213641e1202a2b5279ed",
+        "shaders/hyperion_camera_lens.sh": "a7c59291b1bed0140cb8b9e1db427c37ab1b3d4663464afdabe1f048df0b3862",
+        "shaders/fs_hyperion_lens.sc": "22259df35c70e60e4e0e69212c6e585801649ebc53cb6279d042cc4344714e78"
+      },
+      "cabin_shading_function": "identical to the acceleration-tested 0.59 build"
+    },
+    "acceleration_test": {
+      "frames": 960,
+      "fps": 60,
+      "maximum_actual_acceleration_m_s2": 76731.2,
+      "tracked_surface_patches": {
+        "brow": {
+          "boost_mean_gray": 150.471,
+          "boost_max_frame_change": 1.24,
+          "boost_p95_frame_change": 0.0,
+          "boost_max_alternating_change": 1.24,
+          "full_manoeuvre_max_frame_change": 14.28,
+          "boost_large_flashes_over_32_gray": 0
+        },
+        "port_frame": {
+          "boost_mean_gray": 132.11,
+          "boost_max_frame_change": 5.52,
+          "boost_p95_frame_change": 2.8,
+          "boost_max_alternating_change": 8.52,
+          "full_manoeuvre_max_frame_change": 24.08,
+          "boost_large_flashes_over_32_gray": 0
+        },
+        "starboard_frame": {
+          "boost_mean_gray": 97.134,
+          "boost_max_frame_change": 5.88,
+          "boost_p95_frame_change": 4.04,
+          "boost_max_alternating_change": 5.88,
+          "full_manoeuvre_max_frame_change": 25.08,
+          "boost_large_flashes_over_32_gray": 0
+        },
+        "console": {
+          "boost_mean_gray": 29.024,
+          "boost_max_frame_change": 0.48,
+          "boost_p95_frame_change": 0.4,
+          "boost_max_alternating_change": 0.64,
+          "full_manoeuvre_max_frame_change": 0.96,
+          "boost_large_flashes_over_32_gray": 0
+        }
+      },
+      "duration_seconds": 16,
+      "resolution": [
+        1280,
+        720
+      ],
+      "sequence": [
+        "idle",
+        "full boost",
+        "boost with lateral and vertical thrust and roll",
+        "braking",
+        "reverse boost",
+        "boost with pitch, yaw and roll",
+        "braking"
+      ],
+      "passing_limits": "Each tracked patch below 8/255 frame change and 10/255 alternating change during steady boost; below 32/255 throughout the manoeuvre",
+      "capture_sha256": "8f8eb927d8a92f0e1c03ab81ed764d06259bd26d2f26411ac0da2ec0d695941f"
+    },
+    "native_checks": [
+      {
+        "scene": "charred",
+        "native_frames": 100,
+        "exit_code": 0
+      },
+      {
+        "scene": "verdant",
+        "native_frames": 100,
+        "exit_code": 0
+      },
+      {
+        "scene": "tidal",
+        "native_frames": 100,
+        "exit_code": 0
+      },
+      {
+        "scene": "acid",
+        "native_frames": 100,
+        "exit_code": 0
+      },
+      {
+        "scene": "cloud",
+        "native_frames": 100,
+        "exit_code": 0
+      },
+      {
+        "scene": "station",
+        "native_frames": 665,
+        "exit_code": 0
+      },
+      {
+        "scene": "vessel",
+        "native_frames": 100,
+        "exit_code": 0
+      },
+      {
+        "scene": "rings",
+        "native_frames": 100,
+        "exit_code": 0
+      },
+      {
+        "scene": "packaged",
+        "native_frames": 100,
+        "exit_code": 0
+      }
+    ],
+    "cloud_fixture": {
+      "system": 86,
+      "system_name": "Plyecex",
+      "world": "Yothoa",
+      "pressure_bar": 1,
+      "temperature_K": 273.056
+    },
+    "station_bridge_check": "Walked through the ship airlock and enclosed bridge and returned to the same apron view with traffic active; 665 native frames",
+    "signed_app_frames": 100,
+    "packaged_executable_sections_match_build": true,
+    "new_render_targets": 0,
+    "new_asset_dependencies": 0,
+    "save_format_changed": false,
+    "planet_geometry_and_flight_physics_changed": false,
+    "previews": {
+      "Graphics-060.png": "974a1316850d8291d09a8d97a8abb6013e87fef8d53d800b0e6a9ce22940d319",
+      "Graphics-060-Verdant.png": "6a543006449a104233db45e7591639c1e08938da8b17688f6cce16cdf6c5fdcb",
+      "Graphics-060-Giant.png": "679e51954ef7f7b31592a3ba9ecf81df8f3e08ccc61d8733d1674b42ed755717"
+    }
+  },
+  "graphics_061_verification": {
+    "version": "0.61.0",
+    "build": "87",
+    "gameplay_and_feedback_tests": "6 of 6 passed",
+    "shader_backends": [
+      "metal",
+      "spirv",
+      "glsl"
+    ],
+    "cockpit": [
+      "Five segmented carbon-and-alloy pressure-collar inserts with real bevels and recessed amber light channels",
+      "Copper pressure tubes and fitted corner cuffs",
+      "Six overhead service cassettes with recessed ribs",
+      "Turned rotary fittings with illuminated arcs and sixteen-blade turbine vents",
+      "Separate carbon, copper, rubber and alloy geometry and surface response",
+      "Warm collar light and cool roof light with matching fixed-fixture reflections"
+    ],
+    "ship_exteriors": [
+      "Longitudinal freighter pressure tanks with rounded ends, retaining hoops, unions and saddles",
+      "Engine coolant harnesses, clamps and pump canisters on freighters, patrol and survey craft",
+      "Split raised thermal armour and freight-container roof ribs",
+      "Bare alloy and opaque paint retain distinct highlights under the environment light",
+      "Vessel authored-light removal uses the same direction as the actual activity mesh authoring"
+    ],
+    "interior_contact_shading": {
+      "scope": "Ship cabins, walkable decks, station interiors and glass bridge structure",
+      "method": "Twenty fixed depth-buffer samples with same-surface normal reconstruction, matched depth/ray pixel centres and bounded 0.13 m contact radius",
+      "uses_existing_cabin_depth_attachment": true,
+      "temporal_history": false,
+      "animated_noise": false,
+      "protects_lamp_cores": true,
+      "additional_render_targets": 0
+    },
+    "edge_coverage": {
+      "method": "Four-sample colour and depth render attachments, resolved before cabin compositing; retain the existing final spatial edge filter",
+      "fallback": "Single-sample attachment on devices without the required format support",
+      "storage_accounting": "Includes multisample colour/depth storage in the GPU byte counter"
+    },
+    "mesh_validation": "PASS meshes=133 finite_vertices=4607053 max_mesh_bytes=1690920 compact_indices=valid vessel_envelope=unchanged",
+    "stability_preservation": {
+      "unchanged_sources": {
+        "src/CockpitMotion.cpp": "4f8579375e423a1c3af4b28a48e6637bee9b650287bba7663ff8132b8e712990",
+        "shaders/hyperion_surface_frame.sh": "57fdc7c633b35bd6ed6e3cd1f40eccfbd082d430eb082275bc67e27e81942519",
+        "shaders/hyperion_camera_lens.sh": "a7c59291b1bed0140cb8b9e1db427c37ab1b3d4663464afdabe1f048df0b3862",
+        "shaders/fs_hyperion_lens.sc": "22259df35c70e60e4e0e69212c6e585801649ebc53cb6279d042cc4344714e78",
+        "shaders/vs_planet_rings.sc": "77074ed33e5d40b61285cc3551328445d54cfdde70d6ebbdd77ecfa1262c4a53",
+        "shaders/fs_planet_rings.sc": "24d91a3828c42ad314ccf9400af973c2eef5231b6e9d8a796854cb571f32e5d5"
+      },
+      "hull_projection": "Existing hull-local derivative frame and bevel-axis tie tolerance retained",
+      "cabin_bump_slope_limit": 0.025,
+      "new_temporal_history": false,
+      "additional_render_targets": 0
+    },
+    "acceleration_test": {
+      "frames": 960,
+      "fps": 60,
+      "tracking_method": "Continuous surface-projected 5x5 patches with bilinear sampling; no integer pixel-window jumps",
+      "maximum_actual_acceleration_m_s2": 76731.2,
+      "tracked_surface_patches": {
+        "brow": {
+          "boost_mean_gray": 140.737,
+          "boost_max_frame_change": 0.52,
+          "boost_p95_frame_change": 0.24,
+          "boost_max_alternating_change": 0.56,
+          "full_manoeuvre_max_frame_change": 3.56,
+          "boost_large_flashes_over_32_gray": 0
+        },
+        "port_frame": {
+          "boost_mean_gray": 80.796,
+          "boost_max_frame_change": 3.04,
+          "boost_p95_frame_change": 1.72,
+          "boost_max_alternating_change": 3.48,
+          "full_manoeuvre_max_frame_change": 22.48,
+          "boost_large_flashes_over_32_gray": 0
+        },
+        "starboard_frame": {
+          "boost_mean_gray": 77.797,
+          "boost_max_frame_change": 3.0,
+          "boost_p95_frame_change": 2.48,
+          "boost_max_alternating_change": 5.0,
+          "full_manoeuvre_max_frame_change": 9.32,
+          "boost_large_flashes_over_32_gray": 0
+        },
+        "console": {
+          "boost_mean_gray": 113.728,
+          "boost_max_frame_change": 1.24,
+          "boost_p95_frame_change": 0.56,
+          "boost_max_alternating_change": 1.68,
+          "full_manoeuvre_max_frame_change": 2.72,
+          "boost_large_flashes_over_32_gray": 0
+        }
+      },
+      "duration_seconds": 16,
+      "resolution": [
+        1280,
+        720
+      ],
+      "sequence": [
+        "idle",
+        "full boost",
+        "boost with lateral and vertical thrust and roll",
+        "braking",
+        "reverse boost",
+        "boost with pitch, yaw and roll",
+        "braking"
+      ],
+      "passing_limits": "The same four hull-local probe locations as 0.59/0.60: each below 8/255 frame change and 10/255 alternating change during steady boost, and below 32/255 throughout the manoeuvre",
+      "capture_sha256": "6ceb0a5e5f993c6bf61aaa7778fee5c31f0fb9c7ba6a3516c62cc7b4de08e964"
+    },
+    "edge_coverage_comparison": {
+      "before": {
+        "brow": {
+          "boost_mean_gray": 127.406,
+          "boost_max_frame_change": 3.32,
+          "boost_p95_frame_change": 2.52,
+          "boost_max_alternating_change": 3.24,
+          "full_manoeuvre_max_frame_change": 8.48,
+          "boost_large_flashes_over_32_gray": 0
+        },
+        "port_frame": {
+          "boost_mean_gray": 83.14,
+          "boost_max_frame_change": 2.32,
+          "boost_p95_frame_change": 1.72,
+          "boost_max_alternating_change": 2.64,
+          "full_manoeuvre_max_frame_change": 24.6,
+          "boost_large_flashes_over_32_gray": 0
+        },
+        "starboard_frame": {
+          "boost_mean_gray": 81.392,
+          "boost_max_frame_change": 2.24,
+          "boost_p95_frame_change": 1.52,
+          "boost_max_alternating_change": 2.6,
+          "full_manoeuvre_max_frame_change": 17.68,
+          "boost_large_flashes_over_32_gray": 0
+        },
+        "console": {
+          "boost_mean_gray": 112.024,
+          "boost_max_frame_change": 1.44,
+          "boost_p95_frame_change": 0.76,
+          "boost_max_alternating_change": 1.0,
+          "full_manoeuvre_max_frame_change": 4.4,
+          "boost_large_flashes_over_32_gray": 0
+        }
+      },
+      "after": {
+        "brow": {
+          "boost_mean_gray": 140.737,
+          "boost_max_frame_change": 0.52,
+          "boost_p95_frame_change": 0.24,
+          "boost_max_alternating_change": 0.56,
+          "full_manoeuvre_max_frame_change": 3.56,
+          "boost_large_flashes_over_32_gray": 0
+        },
+        "port_frame": {
+          "boost_mean_gray": 80.796,
+          "boost_max_frame_change": 3.04,
+          "boost_p95_frame_change": 1.72,
+          "boost_max_alternating_change": 3.48,
+          "full_manoeuvre_max_frame_change": 22.48,
+          "boost_large_flashes_over_32_gray": 0
+        },
+        "starboard_frame": {
+          "boost_mean_gray": 77.797,
+          "boost_max_frame_change": 3.0,
+          "boost_p95_frame_change": 2.48,
+          "boost_max_alternating_change": 5.0,
+          "full_manoeuvre_max_frame_change": 9.32,
+          "boost_large_flashes_over_32_gray": 0
+        },
+        "console": {
+          "boost_mean_gray": 113.728,
+          "boost_max_frame_change": 1.24,
+          "boost_p95_frame_change": 0.56,
+          "boost_max_alternating_change": 1.68,
+          "full_manoeuvre_max_frame_change": 2.72,
+          "boost_large_flashes_over_32_gray": 0
+        }
+      },
+      "same_four_probe_locations": true,
+      "tracking_correction": "Bilinear sampling follows the same physical probes continuously. Earlier integer-window diagnostics are retained separately; their one-pixel jumps crossed the new high-contrast fitting edges."
+    },
+    "ship_scale_stability": {
+      "physical_ship_and_camera": "Same seeded NPC and physical relative pose at the same flight-clock frame",
+      "hull_comparison_region": [
+        426,
+        264,
+        965,
+        574
+      ],
+      "captures": [
+        {
+          "render_log_metres": 3.0,
+          "native_frames": 100,
+          "image_dimensions": [
+            1420,
+            777
+          ]
+        },
+        {
+          "render_log_metres": 4.0,
+          "native_frames": 100,
+          "image_dimensions": [
+            1420,
+            777
+          ],
+          "hull_mean_channel_difference_8bit": [
+            0.042677598898797055,
+            0.06340894128912562,
+            0.0452630318989766
+          ]
+        },
+        {
+          "render_log_metres": 5.0,
+          "native_frames": 100,
+          "image_dimensions": [
+            1420,
+            777
+          ],
+          "hull_mean_channel_difference_8bit": [
+            0.07947214076246334,
+            0.12514812376563528,
+            0.07684481417200312
+          ]
+        }
+      ]
+    },
+    "native_checks": [
+      {
+        "scene": "charred",
+        "native_frames": 100,
+        "exit_code": 0
+      },
+      {
+        "scene": "verdant",
+        "native_frames": 100,
+        "exit_code": 0
+      },
+      {
+        "scene": "tidal",
+        "native_frames": 100,
+        "exit_code": 0
+      },
+      {
+        "scene": "acid",
+        "native_frames": 100,
+        "exit_code": 0
+      },
+      {
+        "scene": "station",
+        "native_frames": 665,
+        "exit_code": 0
+      },
+      {
+        "scene": "vessel",
+        "native_frames": 100,
+        "exit_code": 0
+      },
+      {
+        "scene": "rings",
+        "native_frames": 100,
+        "exit_code": 0
+      },
+      {
+        "scene": "packaged",
+        "native_frames": 100,
+        "exit_code": 0
+      }
+    ],
+    "station_bridge_frames": 665,
+    "station_bridge_check": "Walked through the ship airlock and enclosed bridge and returned to the same apron view with traffic active",
+    "signed_app_frames": 100,
+    "packaged_executable_sections_match_build": true,
+    "save_format_changed": false,
+    "flight_physics_changed": false,
+    "ship_collision_envelope_changed": false,
+    "new_asset_dependencies": 0,
+    "previews": {
+      "Graphics-061.png": {
+        "sha256": "b9da2230efd46901240fe137ad70e45e4ef34cc9aeef4415c53f31893d47f8b0",
+        "dimensions": [
+          1420,
+          777
+        ]
+      },
+      "Graphics-061-Verdant.png": {
+        "sha256": "6011844e5db23140d9e54d1b68c30de3bc18e91ac5fd5e7b0c72dcc615e24265",
+        "dimensions": [
+          1420,
+          777
+        ]
+      },
+      "Graphics-061-Ship.png": {
+        "sha256": "5059842f24d6784cb3a5fddb88ef93a61d1ec0bd20b120a882f3ccaa112977dd",
+        "dimensions": [
+          1420,
+          777
+        ]
+      }
+    }
+  },
+  "graphics_062_verification": {
+    "version": "0.62.0",
+    "build": "88",
+    "style": "Summar/Elmar-inspired wide-open vintage photographic camera",
+    "camera_character": [
+      "Protected sharp optical axis, with progressively softer outer image field",
+      "Tangential off-axis cat's-eye highlights, radially clipped pupils and restrained asymmetric coma",
+      "Source-coloured warm halation and broad low-energy veiling glare",
+      "Lifted shadow toe, gentler highlight shoulder, slightly reduced saturation and mild optical falloff",
+      "The same image-circle treatment on cabin, ship deck and station layers, with the HUD drawn afterward"
+    ],
+    "implementation": {
+      "shader_backends": [
+        "metal",
+        "spirv",
+        "glsl"
+      ],
+      "animated_noise": false,
+      "temporal_image_history": false,
+      "new_render_targets": 0,
+      "filtered_highlight_seed": "Existing third-resolution RGBA16F seed gains an automatically generated mip chain when supported; aperture gathers choose a source footprint matching their radius, avoiding sparse point highlights",
+      "sampling_fallback": "Base mip on devices without RGBA16F automatic mip generation",
+      "central_bloom": "Suppressed HDR bloom near the optical axis, retaining a gentle display-space glow",
+      "clear_control": "Existing --no-lens-effects disables both exterior and cabin optics"
+    },
+    "point_light_validation": {
+      "native_gpu_synthetic_point_target": true,
+      "production_lens_shader": true,
+      "image_dimensions": [
+        1420,
+        777
+      ],
+      "sharp_centre": "passed: central core width within two pixels of clear control",
+      "swirled_corners": "passed: all four corner halos elongated along the image circle",
+      "points": [
+        {
+          "row": 0,
+          "column": 0,
+          "vintage": {
+            "core_fwhm_pixels": [
+              6,
+              13
+            ],
+            "core_peak_gray": 195.682,
+            "halo_mass": 28058.466,
+            "halo_axis_ratio": 2.321,
+            "halo_major_axis_degrees": 113.72,
+            "tangential_axis_error_degrees": 1.0
+          },
+          "clear": {
+            "core_fwhm_pixels": [
+              4,
+              6
+            ],
+            "core_peak_gray": 248.247,
+            "halo_mass": 35.056,
+            "halo_axis_ratio": 1.031,
+            "halo_major_axis_degrees": 106.59,
+            "tangential_axis_error_degrees": 7.97
+          }
+        },
+        {
+          "row": 0,
+          "column": 1,
+          "vintage": {
+            "core_fwhm_pixels": [
+              10,
+              11
+            ],
+            "core_peak_gray": 229.804,
+            "halo_mass": 7132.033,
+            "halo_axis_ratio": 1.035,
+            "halo_major_axis_degrees": 11.83,
+            "tangential_axis_error_degrees": 59.32
+          },
+          "clear": {
+            "core_fwhm_pixels": [
+              4,
+              6
+            ],
+            "core_peak_gray": 248.261,
+            "halo_mass": 35.391,
+            "halo_axis_ratio": 1.066,
+            "halo_major_axis_degrees": 24.99,
+            "tangential_axis_error_degrees": 72.67
+          }
+        },
+        {
+          "row": 0,
+          "column": 2,
+          "vintage": {
+            "core_fwhm_pixels": [
+              4,
+              7
+            ],
+            "core_peak_gray": 231.479,
+            "halo_mass": 932.711,
+            "halo_axis_ratio": 1.117,
+            "halo_major_axis_degrees": 46.33,
+            "tangential_axis_error_degrees": 46.33
+          },
+          "clear": {
+            "core_fwhm_pixels": [
+              4,
+              6
+            ],
+            "core_peak_gray": 248.259,
+            "halo_mass": 37.569,
+            "halo_axis_ratio": 1.101,
+            "halo_major_axis_degrees": 123.93,
+            "tangential_axis_error_degrees": 55.85
+          }
+        },
+        {
+          "row": 0,
+          "column": 3,
+          "vintage": {
+            "core_fwhm_pixels": [
+              10,
+              11
+            ],
+            "core_peak_gray": 229.687,
+            "halo_mass": 5701.62,
+            "halo_axis_ratio": 1.104,
+            "halo_major_axis_degrees": 81.72,
+            "tangential_axis_error_degrees": 34.23
+          },
+          "clear": {
+            "core_fwhm_pixels": [
+              4,
+              6
+            ],
+            "core_peak_gray": 248.244,
+            "halo_mass": 34.041,
+            "halo_axis_ratio": 1.04,
+            "halo_major_axis_degrees": 32.21,
+            "tangential_axis_error_degrees": 15.27
+          }
+        },
+        {
+          "row": 0,
+          "column": 4,
+          "vintage": {
+            "core_fwhm_pixels": [
+              5,
+              10
+            ],
+            "core_peak_gray": 195.709,
+            "halo_mass": 30083.61,
+            "halo_axis_ratio": 2.25,
+            "halo_major_axis_degrees": 66.59,
+            "tangential_axis_error_degrees": 1.54
+          },
+          "clear": {
+            "core_fwhm_pixels": [
+              4,
+              6
+            ],
+            "core_peak_gray": 248.254,
+            "halo_mass": 36.059,
+            "halo_axis_ratio": 1.033,
+            "halo_major_axis_degrees": 43.5,
+            "tangential_axis_error_degrees": 21.95
+          }
+        },
+        {
+          "row": 1,
+          "column": 0,
+          "vintage": {
+            "core_fwhm_pixels": [
+              5,
+              10
+            ],
+            "core_peak_gray": 197.389,
+            "halo_mass": 5655.562,
+            "halo_axis_ratio": 2.273,
+            "halo_major_axis_degrees": 91.63,
+            "tangential_axis_error_degrees": 1.17
+          },
+          "clear": {
+            "core_fwhm_pixels": [
+              6,
+              3
+            ],
+            "core_peak_gray": 248.274,
+            "halo_mass": 39.228,
+            "halo_axis_ratio": 1.057,
+            "halo_major_axis_degrees": 147.73,
+            "tangential_axis_error_degrees": 57.58
+          }
+        },
+        {
+          "row": 1,
+          "column": 1,
+          "vintage": {
+            "core_fwhm_pixels": [
+              7,
+              5
+            ],
+            "core_peak_gray": 231.781,
+            "halo_mass": 2218.518,
+            "halo_axis_ratio": 1.073,
+            "halo_major_axis_degrees": 147.66,
+            "tangential_axis_error_degrees": 57.76
+          },
+          "clear": {
+            "core_fwhm_pixels": [
+              4,
+              5
+            ],
+            "core_peak_gray": 248.274,
+            "halo_mass": 38.056,
+            "halo_axis_ratio": 1.026,
+            "halo_major_axis_degrees": 81.12,
+            "tangential_axis_error_degrees": 9.38
+          }
+        },
+        {
+          "row": 1,
+          "column": 2,
+          "vintage": {
+            "core_fwhm_pixels": [
+              6,
+              5
+            ],
+            "core_peak_gray": 230.792,
+            "halo_mass": 1010.178,
+            "halo_axis_ratio": 1.123,
+            "halo_major_axis_degrees": 175.58,
+            "tangential_axis_error_degrees": 76.12
+          },
+          "clear": {
+            "core_fwhm_pixels": [
+              4,
+              5
+            ],
+            "core_peak_gray": 248.256,
+            "halo_mass": 38.301,
+            "halo_axis_ratio": 1.067,
+            "halo_major_axis_degrees": 50.29,
+            "tangential_axis_error_degrees": 88.95
+          }
+        },
+        {
+          "row": 1,
+          "column": 3,
+          "vintage": {
+            "core_fwhm_pixels": [
+              7,
+              5
+            ],
+            "core_peak_gray": 231.778,
+            "halo_mass": 2213.731,
+            "halo_axis_ratio": 1.079,
+            "halo_major_axis_degrees": 147.23,
+            "tangential_axis_error_degrees": 57.53
+          },
+          "clear": {
+            "core_fwhm_pixels": [
+              4,
+              5
+            ],
+            "core_peak_gray": 248.237,
+            "halo_mass": 33.79,
+            "halo_axis_ratio": 1.126,
+            "halo_major_axis_degrees": 146.05,
+            "tangential_axis_error_degrees": 56.55
+          }
+        },
+        {
+          "row": 1,
+          "column": 4,
+          "vintage": {
+            "core_fwhm_pixels": [
+              5,
+              10
+            ],
+            "core_peak_gray": 197.371,
+            "halo_mass": 4935.252,
+            "halo_axis_ratio": 2.284,
+            "halo_major_axis_degrees": 87.89,
+            "tangential_axis_error_degrees": 1.65
+          },
+          "clear": {
+            "core_fwhm_pixels": [
+              4,
+              5
+            ],
+            "core_peak_gray": 248.265,
+            "halo_mass": 38.38,
+            "halo_axis_ratio": 1.021,
+            "halo_major_axis_degrees": 31.08,
+            "tangential_axis_error_degrees": 58.67
+          }
+        },
+        {
+          "row": 2,
+          "column": 0,
+          "vintage": {
+            "core_fwhm_pixels": [
+              5,
+              9
+            ],
+            "core_peak_gray": 195.682,
+            "halo_mass": 29967.45,
+            "halo_axis_ratio": 2.266,
+            "halo_major_axis_degrees": 64.48,
+            "tangential_axis_error_degrees": 1.81
+          },
+          "clear": {
+            "core_fwhm_pixels": [
+              4,
+              6
+            ],
+            "core_peak_gray": 248.25,
+            "halo_mass": 34.617,
+            "halo_axis_ratio": 1.019,
+            "halo_major_axis_degrees": 23.61,
+            "tangential_axis_error_degrees": 42.34
+          }
+        },
+        {
+          "row": 2,
+          "column": 1,
+          "vintage": {
+            "core_fwhm_pixels": [
+              10,
+              11
+            ],
+            "core_peak_gray": 229.915,
+            "halo_mass": 6887.68,
+            "halo_axis_ratio": 1.111,
+            "halo_major_axis_degrees": 85.78,
+            "tangential_axis_error_degrees": 38.18
+          },
+          "clear": {
+            "core_fwhm_pixels": [
+              4,
+              6
+            ],
+            "core_peak_gray": 248.261,
+            "halo_mass": 36.656,
+            "halo_axis_ratio": 1.035,
+            "halo_major_axis_degrees": 123.84,
+            "tangential_axis_error_degrees": 75.59
+          }
+        },
+        {
+          "row": 2,
+          "column": 2,
+          "vintage": {
+            "core_fwhm_pixels": [
+              6,
+              7
+            ],
+            "core_peak_gray": 231.553,
+            "halo_mass": 562.383,
+            "halo_axis_ratio": 1.103,
+            "halo_major_axis_degrees": 56.09,
+            "tangential_axis_error_degrees": 55.86
+          },
+          "clear": {
+            "core_fwhm_pixels": [
+              4,
+              6
+            ],
+            "core_peak_gray": 248.239,
+            "halo_mass": 34.629,
+            "halo_axis_ratio": 1.009,
+            "halo_major_axis_degrees": 46.95,
+            "tangential_axis_error_degrees": 46.72
+          }
+        },
+        {
+          "row": 2,
+          "column": 3,
+          "vintage": {
+            "core_fwhm_pixels": [
+              10,
+              12
+            ],
+            "core_peak_gray": 229.798,
+            "halo_mass": 7243.114,
+            "halo_axis_ratio": 1.123,
+            "halo_major_axis_degrees": 168.29,
+            "tangential_axis_error_degrees": 36.65
+          },
+          "clear": {
+            "core_fwhm_pixels": [
+              4,
+              6
+            ],
+            "core_peak_gray": 248.261,
+            "halo_mass": 36.212,
+            "halo_axis_ratio": 1.019,
+            "halo_major_axis_degrees": 48.95,
+            "tangential_axis_error_degrees": 82.9
+          }
+        },
+        {
+          "row": 2,
+          "column": 4,
+          "vintage": {
+            "core_fwhm_pixels": [
+              4,
+              10
+            ],
+            "core_peak_gray": 195.679,
+            "halo_mass": 30205.709,
+            "halo_axis_ratio": 2.319,
+            "halo_major_axis_degrees": 115.11,
+            "tangential_axis_error_degrees": 1.45
+          },
+          "clear": {
+            "core_fwhm_pixels": [
+              4,
+              6
+            ],
+            "core_peak_gray": 248.268,
+            "halo_mass": 38.298,
+            "halo_axis_ratio": 1.088,
+            "halo_major_axis_degrees": 132.59,
+            "tangential_axis_error_degrees": 18.5
+          }
+        }
+      ]
+    },
+    "point_target_capture_note": "A synthetic point-light target rendered through the native production lens shaders; diagnostic frames are kept in work/graphics-062 and are not presented as gameplay screenshots",
+    "preserved_sources": {
+      "src/Cockpit.cpp": "c449e80dba674b481c3c868f53eb04f8f863232b00113bec2b9405cf30c13cb2",
+      "src/ActivityMeshes.cpp": "0765a449c1a9fcd172a98f07a56b0f0acae865c31cf734fe4ef47df72d1a3f60",
+      "src/Renderer.cpp": "009f85650babb10582317b6c21c97d60db96dbad40970804c50a6eb8a9ffa7b3",
+      "src/CockpitMotion.cpp": "4f8579375e423a1c3af4b28a48e6637bee9b650287bba7663ff8132b8e712990",
+      "src/HyperionRenderer.hpp": "09bbe1151702cd3249dc9234d3533cdb71e5456dc97f3b838a14043acbee7d4d",
+      "shaders/hyperion_surface_frame.sh": "57fdc7c633b35bd6ed6e3cd1f40eccfbd082d430eb082275bc67e27e81942519",
+      "shaders/hyperion_material.sh": "98ea223f4f78c71007117339f6b90bf2ad8bdeed254f0d8f8b46a4cd0c341638",
+      "shaders/hyperion_architecture.sh": "7aade18a7aad348df29fad5c212f454d43ed2a5c1ff3b450dc01e44072236ff5",
+      "shaders/fs_planet_rings.sc": "24d91a3828c42ad314ccf9400af973c2eef5231b6e9d8a796854cb571f32e5d5",
+      "shaders/vs_planet_rings.sc": "77074ed33e5d40b61285cc3551328445d54cfdde70d6ebbdd77ecfa1262c4a53"
+    },
+    "acceleration_test": {
+      "frames": 960,
+      "fps": 60,
+      "tracking_method": "Continuous surface-projected 5x5 patches with bilinear sampling; no integer pixel-window jumps",
+      "maximum_actual_acceleration_m_s2": 76731.2,
+      "tracked_surface_patches": {
+        "brow": {
+          "boost_mean_gray": 129.608,
+          "boost_max_frame_change": 0.56,
+          "boost_p95_frame_change": 0.36,
+          "boost_max_alternating_change": 1.12,
+          "full_manoeuvre_max_frame_change": 2.52,
+          "boost_large_flashes_over_32_gray": 0
+        },
+        "port_frame": {
+          "boost_mean_gray": 76.793,
+          "boost_max_frame_change": 2.6,
+          "boost_p95_frame_change": 1.72,
+          "boost_max_alternating_change": 3.2,
+          "full_manoeuvre_max_frame_change": 19.64,
+          "boost_large_flashes_over_32_gray": 0
+        },
+        "starboard_frame": {
+          "boost_mean_gray": 74.666,
+          "boost_max_frame_change": 2.72,
+          "boost_p95_frame_change": 1.96,
+          "boost_max_alternating_change": 4.76,
+          "full_manoeuvre_max_frame_change": 8.4,
+          "boost_large_flashes_over_32_gray": 0
+        },
+        "console": {
+          "boost_mean_gray": 106.33,
+          "boost_max_frame_change": 1.36,
+          "boost_p95_frame_change": 0.56,
+          "boost_max_alternating_change": 1.88,
+          "full_manoeuvre_max_frame_change": 2.6,
+          "boost_large_flashes_over_32_gray": 0
+        }
+      },
+      "duration_seconds": 16,
+      "resolution": [
+        1280,
+        720
+      ],
+      "sequence": [
+        "idle",
+        "full boost",
+        "boost with lateral and vertical thrust and roll",
+        "braking",
+        "reverse boost",
+        "boost with pitch, yaw and roll",
+        "braking"
+      ],
+      "passing_limits": "Same four hull-local probes: below 8/255 frame change and 10/255 alternating change during steady boost, and below 32/255 throughout the manoeuvre",
+      "capture_sha256": "18541805bb0e569646591b25009d5799a11d3a396a451ffaa64bc139bcdd67b4"
+    },
+    "native_checks": [
+      {
+        "scene": "charred",
+        "native_frames": 100,
+        "exit_code": 0
+      },
+      {
+        "scene": "verdant",
+        "native_frames": 100,
+        "exit_code": 0
+      },
+      {
+        "scene": "tidal",
+        "native_frames": 100,
+        "exit_code": 0
+      },
+      {
+        "scene": "acid",
+        "native_frames": 100,
+        "exit_code": 0
+      },
+      {
+        "scene": "station",
+        "native_frames": 660,
+        "exit_code": 0
+      },
+      {
+        "scene": "vessel",
+        "native_frames": 100,
+        "exit_code": 0
+      },
+      {
+        "scene": "rings",
+        "native_frames": 100,
+        "exit_code": 0
+      },
+      {
+        "scene": "packaged",
+        "native_frames": 100,
+        "exit_code": 0
+      }
+    ],
+    "signed_app_frames": 100,
+    "gameplay_and_feedback_tests": "6 of 6 passed",
+    "packaged_executable_sections_match_build": true,
+    "save_format_changed": false,
+    "flight_physics_changed": false,
+    "geometry_and_materials_changed": false,
+    "new_asset_dependencies": 0,
+    "previews": {
+      "Graphics-062.png": {
+        "sha256": "f4b0cbce53e05ab230e109a8aa59d261829d1b482fa62877aedb0534e53cdaf9",
+        "dimensions": [
+          1420,
+          777
+        ]
+      },
+      "Graphics-062-Verdant.png": {
+        "sha256": "fd6756abbc5175736c7f49ed0ed417119c4bb2c635c2e50ccc22b9c4c4608a3f",
+        "dimensions": [
+          1420,
+          777
+        ]
+      },
+      "Graphics-062-Ship.png": {
+        "sha256": "92ccdb6df4c01a292bac47b54ada48fd97260bccbe63359643c850d0841e54e2",
+        "dimensions": [
+          1420,
+          777
+        ]
+      }
+    }
+  },
+  "contrast_0621_verification": {
+    "version": "0.62.1",
+    "build": "89",
+    "change": "Remove the vintage-grade lifted black level, reduced gain, desaturation and additional highlight shoulder from exterior and cabin. Keep warm lens balance, optical falloff, halation, protected sharp centre, soft field and swirly pupil highlights.",
+    "shader_backends_compiled": [
+      "metal",
+      "spirv",
+      "glsl"
+    ],
+    "native_frames": {
+      "charred": 100,
+      "verdant": 100,
+      "tidal": 100,
+      "acid": 100,
+      "station": 673,
+      "packaged": 100
+    },
+    "native_image_comparison": {
+      "charred": {
+        "before": {
+          "dimensions": [
+            1420,
+            777
+          ],
+          "central_exterior_p05": 13,
+          "central_exterior_p95": 175,
+          "range": 162,
+          "stddev": 50.4
+        },
+        "after": {
+          "dimensions": [
+            1420,
+            776
+          ],
+          "central_exterior_p05": 7,
+          "central_exterior_p95": 201,
+          "range": 194,
+          "stddev": 60.57
+        }
+      },
+      "verdant": {
+        "before": {
+          "dimensions": [
+            1420,
+            777
+          ],
+          "central_exterior_p05": 94,
+          "central_exterior_p95": 153,
+          "range": 59,
+          "stddev": 26.12
+        },
+        "after": {
+          "dimensions": [
+            1420,
+            776
+          ],
+          "central_exterior_p05": 99,
+          "central_exterior_p95": 172,
+          "range": 73,
+          "stddev": 31.17
+        }
+      },
+      "tidal": {
+        "before": {
+          "dimensions": [
+            1420,
+            777
+          ],
+          "central_exterior_p05": 34,
+          "central_exterior_p95": 147,
+          "range": 113,
+          "stddev": 38.46
+        },
+        "after": {
+          "dimensions": [
+            1420,
+            776
+          ],
+          "central_exterior_p05": 29,
+          "central_exterior_p95": 165,
+          "range": 136,
+          "stddev": 45.67
+        }
+      },
+      "acid": {
+        "before": {
+          "dimensions": [
+            1420,
+            777
+          ],
+          "central_exterior_p05": 70,
+          "central_exterior_p95": 131,
+          "range": 61,
+          "stddev": 21.25
+        },
+        "after": {
+          "dimensions": [
+            1420,
+            776
+          ],
+          "central_exterior_p05": 72,
+          "central_exterior_p95": 150,
+          "range": 78,
+          "stddev": 26.42
+        }
+      }
+    },
+    "image_comparison_note": "Same native smoke-test camera and normalized central exterior region; macOS window height differs by one pixel, so these are regional contrast observations rather than exact per-pixel comparisons.",
+    "preserved_runtime_sources": {
+      "changed_files": [
+        "src/XalariaMain.cpp",
+        "shaders/manifest.json",
+        "shaders/hyperion_vintage_lens.sh",
+        "shaders/bin/metal/fs_hyperion_lens.bin",
+        "shaders/bin/metal/fs_xalaria_cabin_composite.bin",
+        "shaders/bin/spirv/fs_hyperion_lens.bin",
+        "shaders/bin/spirv/fs_xalaria_cabin_composite.bin",
+        "shaders/bin/glsl/fs_hyperion_lens.bin",
+        "shaders/bin/glsl/fs_xalaria_cabin_composite.bin"
+      ],
+      "unchanged_runtime_files": 427,
+      "all_pupil_blur_glow_geometry_and_movement_sources_identical": true
+    },
+    "gameplay_regression_reference": "6 of 6 suites passed for 0.62.0; gameplay implementation and all flight/motion code unchanged in this adjustment.",
+    "acceleration_reference": "0.62.0 960-frame boost/motion verification retained; movement, sampling, glow and all material code unchanged.",
+    "signed_app_verified": true,
+    "save_format_changed": false
+  },
+  "graphics_063_verification": {
+    "version": "0.63.0",
+    "build": "90",
+    "improvements": [
+      "Object-anchored anisotropic microfacet lighting with correlated visibility and bounded metal multiple-scattering compensation",
+      "Separate paint clear-coat response, filtered handling wear, copper patina and carbon-composite gloss",
+      "Eight-sample diffuse integration of the physical cockpit roof strips with continuous analytic roughness-filtered aperture reflections",
+      "Finite-size fixture highlights across ship and station interiors",
+      "Sparse recessed service covers, dark seals and latches in existing hull coatings with explicit pixel footprints",
+      "Optical cloud coverage, density-gradient billow lighting, three sunward extinction samples and soft projected cloud shadows",
+      "Lava incandescence separated from the generic mineral-contour accent so cooling basalt retains its dark structure"
+    ],
+    "shader_backends_compiled": [
+      "metal",
+      "spirv",
+      "glsl"
+    ],
+    "shader_consumers": [
+      "shaders/fs_cockpit_glazing.sc",
+      "shaders/fs_hyperion.sc",
+      "shaders/fs_hyperion_flight.sc"
+    ],
+    "preserved_sources": {
+      "src/Cockpit.cpp": "c449e80dba674b481c3c868f53eb04f8f863232b00113bec2b9405cf30c13cb2",
+      "src/ActivityMeshes.cpp": "0765a449c1a9fcd172a98f07a56b0f0acae865c31cf734fe4ef47df72d1a3f60",
+      "src/Renderer.cpp": "009f85650babb10582317b6c21c97d60db96dbad40970804c50a6eb8a9ffa7b3",
+      "src/HyperionRenderer.cpp": "4c3dec437bef57e06b02f7118fb748545eca29fe54db8197af13e7ad19afb9a0",
+      "src/HyperionRenderer.hpp": "09bbe1151702cd3249dc9234d3533cdb71e5456dc97f3b838a14043acbee7d4d",
+      "src/CockpitMotion.cpp": "4f8579375e423a1c3af4b28a48e6637bee9b650287bba7663ff8132b8e712990",
+      "shaders/hyperion_surface_frame.sh": "57fdc7c633b35bd6ed6e3cd1f40eccfbd082d430eb082275bc67e27e81942519",
+      "shaders/hyperion_vintage_lens.sh": "8ddb0695860181647bd48a622ab02393136bcf189ddd996af1f5045f7baf5acd",
+      "shaders/hyperion_tone.sh": "4434689c9a92455737880c27bd47a732a028252008c6ab89ed13e1e6e3b96420",
+      "shaders/fs_planet_rings.sc": "24d91a3828c42ad314ccf9400af973c2eef5231b6e9d8a796854cb571f32e5d5",
+      "shaders/vs_planet_rings.sc": "77074ed33e5d40b61285cc3551328445d54cfdde70d6ebbdd77ecfa1262c4a53",
+      "shaders/fs_hyperion_bokeh.sc": "87b36607ba436e6ce00da800b244bab3fdaab96d51e67ebad0e178768a9717a9",
+      "shaders/fs_hyperion_lens.sc": "c84b2e583f6289206cb00d6da6464b2d10e1b93ceae157cee323007005827f80",
+      "shaders/fs_xalaria_cabin_composite.sc": "b8ef9cf58da630d8b75b6596c1eb8efe247d4a5c7b5ebb87982b47b8e53c53d0"
+    },
+    "contrast_and_lens": "0.62.1 display contrast and vintage lens sources are byte-identical; no black lift or extra highlight compression restored",
+    "new_render_targets": 0,
+    "new_render_passes": 0,
+    "temporal_image_history": false,
+    "animated_normal_noise": false,
+    "native_frames": {
+      "charred": 100,
+      "verdant": 100,
+      "tidal": 100,
+      "acid": 100,
+      "vessel": 100,
+      "station": 661,
+      "packaged": 100
+    },
+    "ship_scale_checks": [
+      {
+        "log_metres": 3.0,
+        "native_frames": 100,
+        "exit_code": 0
+      },
+      {
+        "log_metres": 4.0,
+        "native_frames": 100,
+        "exit_code": 0
+      },
+      {
+        "log_metres": 5.0,
+        "native_frames": 100,
+        "exit_code": 0
+      }
+    ],
+    "ship_scale_image_comparison": [
+      {
+        "against_log_metres": 3,
+        "log_metres": 4,
+        "mean_absolute_luma_difference": 0.1344,
+        "p95_absolute_luma_difference": 1,
+        "region": "same projected hull crop: x=440..890, y=300..550"
+      },
+      {
+        "against_log_metres": 3,
+        "log_metres": 5,
+        "mean_absolute_luma_difference": 0.1948,
+        "p95_absolute_luma_difference": 1,
+        "region": "same projected hull crop: x=440..890, y=300..550"
+      }
+    ],
+    "acceleration_test": {
+      "frames": 960,
+      "fps": 60,
+      "tracking_method": "Continuous surface-projected 5x5 patches with bilinear sampling; no integer pixel-window jumps",
+      "maximum_actual_acceleration_m_s2": 76731.2,
+      "tracked_surface_patches": {
+        "brow": {
+          "boost_mean_gray": 78.378,
+          "boost_max_frame_change": 0.44,
+          "boost_p95_frame_change": 0.24,
+          "boost_max_alternating_change": 0.48,
+          "full_manoeuvre_max_frame_change": 1.16,
+          "boost_large_flashes_over_32_gray": 0
+        },
+        "port_frame": {
+          "boost_mean_gray": 40.485,
+          "boost_max_frame_change": 1.0,
+          "boost_p95_frame_change": 0.48,
+          "boost_max_alternating_change": 1.48,
+          "full_manoeuvre_max_frame_change": 28.6,
+          "boost_large_flashes_over_32_gray": 0
+        },
+        "starboard_frame": {
+          "boost_mean_gray": 42.916,
+          "boost_max_frame_change": 0.76,
+          "boost_p95_frame_change": 0.44,
+          "boost_max_alternating_change": 1.12,
+          "full_manoeuvre_max_frame_change": 10.76,
+          "boost_large_flashes_over_32_gray": 0
+        },
+        "console": {
+          "boost_mean_gray": 70.554,
+          "boost_max_frame_change": 0.52,
+          "boost_p95_frame_change": 0.32,
+          "boost_max_alternating_change": 0.72,
+          "full_manoeuvre_max_frame_change": 1.32,
+          "boost_large_flashes_over_32_gray": 0
+        }
+      },
+      "duration_seconds": 16,
+      "resolution": [
+        1280,
+        720
+      ],
+      "capture_sha256": "7c4e4b31071e0cb30fcb7a2743f1be75ba84226a177c4c9cc4689e1b697e5229",
+      "passing_limits": "Unchanged: below 8/255 frame change and 10/255 alternating change during steady boost, below 32/255 throughout the manoeuvre"
+    },
+    "gameplay_tests": "6 of 6 passed",
+    "signed_app_verified": true,
+    "packaged_executable_sections_match_build": true,
+    "save_format_changed": false,
+    "geometry_or_collision_changed": false,
+    "flight_physics_changed": false,
+    "previews": {
+      "Graphics-063.png": {
+        "sha256": "e1c3092d6630aacd1027904befb41d61fabfe6d35273135122787fb2cb3bda39",
+        "dimensions": [
+          1420,
+          775
+        ]
+      },
+      "Graphics-063-Verdant.png": {
+        "sha256": "25993b9a35fa4c88c1c012c5d2963024155eeb3d35dbc6a1f7a9c8a3826f570b",
+        "dimensions": [
+          1420,
+          775
+        ]
+      },
+      "Graphics-063-Ship.png": {
+        "sha256": "414cc3a5dda299e2ddf70f51fa20500063553d0ed532fb332e3ebfe54117e058",
+        "dimensions": [
+          1420,
+          775
+        ]
+      },
+      "Graphics-063-Station.png": {
+        "sha256": "6afffac4c4eadebe004e07cfa2fc7f9d543caecd82d4fffa0e38a87851e28252",
+        "dimensions": [
+          1420,
+          775
+        ]
+      }
+    }
+  },
+  "graphics_064_verification": {
+    "version": "0.64.0",
+    "build": "91",
+    "improvements": [
+      "A cabin normal/reflectance/roughness attachment captures the actual manufactured surfaces alongside the existing four-sample colour and depth",
+      "Bounded screen-space reflections trace nearby cabin and station structure, with roughness-filtered donors and visible-window environment reflection",
+      "Fixed celestial background stars use overlapping projections, magnitude variation and pixel-footprint-filtered flux, without random temporal twinkling",
+      "Globe-local seven-step relief intersections and three sunward height samples add orbital parallax, gully shading and stratified rock response",
+      "Incandescent worlds have broad dark cooling rafts, connected molten lowlands and retained hot fissures",
+      "Flight HUD lettering uses the existing high-resolution atlas after modal occlusion, colour and opacity processing, with measured glyph widths fitted inside the existing tested bounds"
+    ],
+    "shader_backends_compiled": [
+      "metal",
+      "spirv",
+      "glsl"
+    ],
+    "shader_consumers": [
+      "shaders/fs_hyperion.sc",
+      "shaders/fs_hyperion_flight.sc",
+      "shaders/fs_hyperion_sky.sc",
+      "shaders/fs_xalaria_cabin.sc",
+      "shaders/fs_xalaria_cabin_composite.sc"
+    ],
+    "reflection_implementation": {
+      "new_colour_attachments": 1,
+      "new_render_passes": 0,
+      "surface_format": "RGBA16F; same four-sample coverage as cabin colour and depth when supported",
+      "trace_steps": 30,
+      "intersection_refinements": 5,
+      "temporal_history": false,
+      "fallback": "Original two-attachment cabin target and analytic fixtures when reflections are disabled or the device has fewer than three colour/depth attachments",
+      "toggle": "--no-reflections",
+      "limitations": "Screen-space geometry hits require visible source pixels; off-screen directions fade to the existing analytic lighting. Window-sampled distant light is a directional approximation, not an additional world render."
+    },
+    "reflection_toggle_native_comparison": {
+      "console": {
+        "mean_absolute_luma_difference": 1.093,
+        "maximum_absolute_luma_difference": 102
+      },
+      "port_frame": {
+        "mean_absolute_luma_difference": 0.74,
+        "maximum_absolute_luma_difference": 66
+      },
+      "starboard_frame": {
+        "mean_absolute_luma_difference": 1.212,
+        "maximum_absolute_luma_difference": 75
+      },
+      "brow": {
+        "mean_absolute_luma_difference": 1.417,
+        "maximum_absolute_luma_difference": 47
+      }
+    },
+    "preserved_sources": {
+      "src/Cockpit.cpp": "c449e80dba674b481c3c868f53eb04f8f863232b00113bec2b9405cf30c13cb2",
+      "src/CockpitMotion.cpp": "4f8579375e423a1c3af4b28a48e6637bee9b650287bba7663ff8132b8e712990",
+      "src/ActivityMeshes.cpp": "0765a449c1a9fcd172a98f07a56b0f0acae865c31cf734fe4ef47df72d1a3f60",
+      "src/Piloting.cpp": "f5d4eaa8864605fab7261e31c1d51e4000598dd0ea75d54ed1377b7171011f81",
+      "src/ShipInterior.cpp": "0ca12e59e880c966c5694598c38da0d689c2ddaf55af915340ebcd28e84e8d30",
+      "src/Universe.cpp": "5db7b6ce79c20d06dbbdc4da4ed1fd260c638fdffaac2a75e224dee492b243e4",
+      "src/XalariaEconomy.cpp": "778998fd791f40134449c798ef89f239027172cc0347cdd7777c42456a3009d7",
+      "src/XalariaStories.cpp": "de1eddb63db3cf701f85186576e7822d87437a6b27c1b1ebc072dcb30a2f8b6f",
+      "shaders/hyperion_surface_frame.sh": "57fdc7c633b35bd6ed6e3cd1f40eccfbd082d430eb082275bc67e27e81942519",
+      "shaders/hyperion_vintage_lens.sh": "8ddb0695860181647bd48a622ab02393136bcf189ddd996af1f5045f7baf5acd",
+      "shaders/hyperion_tone.sh": "4434689c9a92455737880c27bd47a732a028252008c6ab89ed13e1e6e3b96420",
+      "shaders/fs_hyperion_bokeh.sc": "87b36607ba436e6ce00da800b244bab3fdaab96d51e67ebad0e178768a9717a9",
+      "shaders/fs_hyperion_lens.sc": "c84b2e583f6289206cb00d6da6464b2d10e1b93ceae157cee323007005827f80",
+      "shaders/fs_planet_rings.sc": "24d91a3828c42ad314ccf9400af973c2eef5231b6e9d8a796854cb571f32e5d5",
+      "shaders/vs_planet_rings.sc": "77074ed33e5d40b61285cc3551328445d54cfdde70d6ebbdd77ecfa1262c4a53"
+    },
+    "contrast_and_lens": "0.62.1 contrast and vintage optics sources remain byte-identical; no lifted blacks or extra highlight compression",
+    "catalogue_and_gameplay": "Background stars are decorative celestial presentation. Systems, routes, collision geometry, flight physics, economy and story state are unchanged.",
+    "native_frames": {
+      "charred": 100,
+      "verdant": 100,
+      "tidal": 100,
+      "acid": 100,
+      "vessel": 100,
+      "station": 659,
+      "cabin-control": 100,
+      "ship-deck": 200,
+      "packaged": 100
+    },
+    "ship_scale_checks": [
+      {
+        "log_metres": 3.0,
+        "native_frames": 100,
+        "exit_code": 0
+      },
+      {
+        "log_metres": 4.0,
+        "native_frames": 100,
+        "exit_code": 0
+      },
+      {
+        "log_metres": 5.0,
+        "native_frames": 100,
+        "exit_code": 0
+      }
+    ],
+    "ship_scale_image_comparison": [
+      {
+        "against_log_metres": 3,
+        "log_metres": 4,
+        "hull_mean_absolute_luma_difference": 0.1784
+      },
+      {
+        "against_log_metres": 3,
+        "log_metres": 5,
+        "hull_mean_absolute_luma_difference": 0.3302
+      }
+    ],
+    "acceleration_test": {
+      "frames": 960,
+      "fps": 60,
+      "tracking_method": "Continuous surface-projected 5x5 patches with bilinear sampling; no integer pixel-window jumps",
+      "maximum_actual_acceleration_m_s2": 76731.2,
+      "tracked_surface_patches": {
+        "brow": {
+          "boost_mean_gray": 75.729,
+          "boost_max_frame_change": 0.56,
+          "boost_p95_frame_change": 0.28,
+          "boost_max_alternating_change": 0.88,
+          "full_manoeuvre_max_frame_change": 1.12,
+          "boost_large_flashes_over_32_gray": 0
+        },
+        "port_frame": {
+          "boost_mean_gray": 40.59,
+          "boost_max_frame_change": 0.8,
+          "boost_p95_frame_change": 0.6,
+          "boost_max_alternating_change": 1.4,
+          "full_manoeuvre_max_frame_change": 28.6,
+          "boost_large_flashes_over_32_gray": 0
+        },
+        "starboard_frame": {
+          "boost_mean_gray": 42.915,
+          "boost_max_frame_change": 1.12,
+          "boost_p95_frame_change": 0.52,
+          "boost_max_alternating_change": 1.48,
+          "full_manoeuvre_max_frame_change": 11.08,
+          "boost_large_flashes_over_32_gray": 0
+        },
+        "console": {
+          "boost_mean_gray": 70.6,
+          "boost_max_frame_change": 0.84,
+          "boost_p95_frame_change": 0.4,
+          "boost_max_alternating_change": 1.16,
+          "full_manoeuvre_max_frame_change": 1.32,
+          "boost_large_flashes_over_32_gray": 0
+        }
+      },
+      "duration_seconds": 16,
+      "resolution": [
+        1280,
+        720
+      ],
+      "capture_sha256": "a4378d57514dc6a5ca48244ee958e89ce4bc387e006756a167da7c63a799fbce",
+      "source_sha256": "128b956686218886b99d92028effc58c1bd159e7b6e1d271d21637118e1993c3",
+      "passing_limits": "Unchanged: below 8/255 frame change and 10/255 alternating change during steady boost, below 32/255 throughout the manoeuvre"
+    },
+    "gameplay_tests": "6 of 6 passed",
+    "signed_app_verified": true,
+    "packaged_executable_sections_match_build": true,
+    "save_format_changed": false,
+    "geometry_or_collision_changed": false,
+    "flight_physics_changed": false,
+    "new_asset_dependencies": 0,
+    "previews": {
+      "Graphics-064.png": {
+        "sha256": "7dbe3b0c57a87c3a129e135eaf9be2befc803f4f2cdb94d24c87caef395a3df5",
+        "dimensions": [
+          1420,
+          776
+        ]
+      },
+      "Graphics-064-Verdant.png": {
+        "sha256": "9ffc234d95522da38bb5d0a9aa07992c585471a990c0831158ce2e9b2dba2727",
+        "dimensions": [
+          1420,
+          776
+        ]
+      },
+      "Graphics-064-Ship.png": {
+        "sha256": "7efb81c8ce7de0f510c4f0c8ad5e30457146415309beb2bad18a27f571b7722b",
+        "dimensions": [
+          1420,
+          776
+        ]
+      },
+      "Graphics-064-Deck.png": {
+        "sha256": "279a191011108fd209e9fa9fdc9631a0334850909565619468e58dec0530d0ed",
+        "dimensions": [
+          1420,
+          776
+        ]
+      },
+      "Graphics-064-Station.png": {
+        "sha256": "c8ba62d826cfb99369c8245d2172c58c611b1ab88be3743f0082e255875d3af6",
+        "dimensions": [
+          1420,
+          776
+        ]
+      }
+    }
+  },
+  "graphics_065_verification": {
+    "version": "0.65.0",
+    "build": "92",
+    "improvements": [
+      "Rounded copper canopy manifold with five machined couplers, telescopic corner stays, polymer sleeves, inset mounting plates and collar fasteners",
+      "Eleven hull-local capsule shadow proxies for the canopy fittings, with finite stellar-source penumbrae and a depth-feathered window aperture",
+      "Cockpit direct light uses the actual stellar colour, bounded angular-source strength and geometric eclipse visibility, including a star behind the view",
+      "Eight deterministic volume samples add forward-scattered sunlight inside the front cabin, clipped by actual cabin depth and the canopy aperture",
+      "Eighteen deterministic globe-local impact basins add smoothed bowls, central peaks, terraced raised rims, ejecta rays and sunward rim occlusion to dry low-pressure orbital materials"
+    ],
+    "shader_backends_compiled": [
+      "metal",
+      "spirv",
+      "glsl"
+    ],
+    "shader_consumers": [
+      "shaders/fs_cockpit_glazing.sc",
+      "shaders/fs_hyperion.sc",
+      "shaders/fs_hyperion_flight.sc",
+      "shaders/fs_xalaria_cabin.sc",
+      "shaders/fs_xalaria_cabin_composite.sc"
+    ],
+    "lighting_implementation": {
+      "new_render_targets": 0,
+      "new_render_passes": 0,
+      "volume_samples": 8,
+      "shadow_capsules": 11,
+      "temporal_history": false,
+      "animated_noise": false,
+      "source_angle_radians": "Actual stellar angular radius, bounded between .002 and .055 for proxy penumbrae",
+      "window_proxy_edge_metres": 0.12,
+      "limitations": "The rounded fittings and window envelope use analytic shadow proxies. Cabin scattering is a thin artistic medium limited to the forward hull, not a full volume simulation. Station and aft-deck scattering is excluded."
+    },
+    "orbital_material": {
+      "basins_per_body": 18,
+      "large_basins": 4,
+      "preservation": "Dry surfaces; pressure fade .04 to .35 bar; temperature fade 750 to 1200 K; orbital fade at 1.003 to 1.035 body radii",
+      "subpixel_filtering": true,
+      "simulation_effect": "Read-only material relief. No new terrain, collision features, catalogue worlds or landing obstacles.",
+      "regional_coatings": "The existing four regional material treatments remain active and can visually dominate the basin relief."
+    },
+    "reflection_toggle_native_comparison": {
+      "console": {
+        "mean_absolute_luma_difference": 0.912,
+        "maximum_absolute_luma_difference": 88
+      },
+      "port_frame": {
+        "mean_absolute_luma_difference": 1.24,
+        "maximum_absolute_luma_difference": 71
+      },
+      "starboard_frame": {
+        "mean_absolute_luma_difference": 0.794,
+        "maximum_absolute_luma_difference": 67
+      },
+      "brow": {
+        "mean_absolute_luma_difference": 1.297,
+        "maximum_absolute_luma_difference": 45
+      }
+    },
+    "preserved_sources": {
+      "src/ActivityMeshes.cpp": "0765a449c1a9fcd172a98f07a56b0f0acae865c31cf734fe4ef47df72d1a3f60",
+      "src/CockpitMotion.cpp": "4f8579375e423a1c3af4b28a48e6637bee9b650287bba7663ff8132b8e712990",
+      "src/Piloting.cpp": "f5d4eaa8864605fab7261e31c1d51e4000598dd0ea75d54ed1377b7171011f81",
+      "src/ShipInterior.cpp": "0ca12e59e880c966c5694598c38da0d689c2ddaf55af915340ebcd28e84e8d30",
+      "src/Universe.cpp": "5db7b6ce79c20d06dbbdc4da4ed1fd260c638fdffaac2a75e224dee492b243e4",
+      "src/XalariaEconomy.cpp": "778998fd791f40134449c798ef89f239027172cc0347cdd7777c42456a3009d7",
+      "src/XalariaStories.cpp": "de1eddb63db3cf701f85186576e7822d87437a6b27c1b1ebc072dcb30a2f8b6f",
+      "shaders/hyperion_vintage_lens.sh": "8ddb0695860181647bd48a622ab02393136bcf189ddd996af1f5045f7baf5acd",
+      "shaders/hyperion_tone.sh": "4434689c9a92455737880c27bd47a732a028252008c6ab89ed13e1e6e3b96420",
+      "shaders/hyperion_deep_stars.sh": "14e00e5452a498fb8b3511941982e3eb850ee1f37d8eaf3cdd7fc7dd8d82a50a",
+      "shaders/fs_hyperion_bokeh.sc": "87b36607ba436e6ce00da800b244bab3fdaab96d51e67ebad0e178768a9717a9",
+      "shaders/fs_hyperion_lens.sc": "c84b2e583f6289206cb00d6da6464b2d10e1b93ceae157cee323007005827f80",
+      "shaders/fs_planet_rings.sc": "24d91a3828c42ad314ccf9400af973c2eef5231b6e9d8a796854cb571f32e5d5",
+      "shaders/vs_planet_rings.sc": "77074ed33e5d40b61285cc3551328445d54cfdde70d6ebbdd77ecfa1262c4a53"
+    },
+    "contrast_and_lens": "0.62.1 contrast and vintage optics remain byte-identical to 0.64; no lifted blacks or extra highlight compression",
+    "native_frames": {
+      "charred": 100,
+      "verdant": 100,
+      "tidal": 100,
+      "acid": 100,
+      "vessel": 100,
+      "station": 658,
+      "cabin-control": 100,
+      "ship-deck": 200,
+      "packaged": 100
+    },
+    "ship_scale_checks": [
+      {
+        "log_metres": 3.0,
+        "native_frames": 100,
+        "exit_code": 0
+      },
+      {
+        "log_metres": 4.0,
+        "native_frames": 100,
+        "exit_code": 0
+      },
+      {
+        "log_metres": 5.0,
+        "native_frames": 100,
+        "exit_code": 0
+      }
+    ],
+    "ship_scale_image_comparison": [
+      {
+        "against_log_metres": 3,
+        "log_metres": 4,
+        "hull_mean_absolute_luma_difference": 0.0462
+      },
+      {
+        "against_log_metres": 3,
+        "log_metres": 5,
+        "hull_mean_absolute_luma_difference": 0.2503
+      }
+    ],
+    "surface_fixtures": {
+      "world": "Sereva",
+      "system": "Rhyvane",
+      "system_seed": 14941,
+      "world_id": 0,
+      "pressure_bar": 0,
+      "temperature_K": 545.818,
+      "native_checks": [
+        {
+          "scene": "basins-actual",
+          "native_frames": 100,
+          "exit_code": 0
+        },
+        {
+          "scene": "sunlit-clear-before",
+          "native_frames": 100,
+          "exit_code": 0
+        },
+        {
+          "scene": "sunlit-clear",
+          "native_frames": 100,
+          "exit_code": 0
+        }
+      ],
+      "isolated_source_profile": true,
+      "production_save_format": true
+    },
+    "airless_fixtures": [
+      {
+        "scene": "icy-basins",
+        "system": 14539,
+        "world_id": 0,
+        "frames": 100,
+        "exit_code": 0
+      },
+      {
+        "scene": "carbon-basins",
+        "system": 14738,
+        "world_id": 0,
+        "frames": 100,
+        "exit_code": 0
+      }
+    ],
+    "acceleration_test": {
+      "frames": 960,
+      "fps": 60,
+      "tracking_method": "Continuous surface-projected 5x5 patches with bilinear sampling; no integer pixel-window jumps",
+      "maximum_actual_acceleration_m_s2": 76731.2,
+      "tracked_surface_patches": {
+        "brow": {
+          "boost_mean_gray": 75.98,
+          "boost_max_frame_change": 0.4,
+          "boost_p95_frame_change": 0.28,
+          "boost_max_alternating_change": 0.48,
+          "full_manoeuvre_max_frame_change": 1.76,
+          "boost_large_flashes_over_32_gray": 0,
+          "largest_transitions": [
+            {
+              "frame": 407,
+              "delta": 1.76,
+              "before": 75.64,
+              "after": 73.88
+            },
+            {
+              "frame": 842,
+              "delta": 1.36,
+              "before": 74.88,
+              "after": 76.24
+            },
+            {
+              "frame": 941,
+              "delta": 1.24,
+              "before": 74.52,
+              "after": 75.76
+            },
+            {
+              "frame": 742,
+              "delta": 1.2,
+              "before": 75.76,
+              "after": 74.56
+            }
+          ]
+        },
+        "port_frame": {
+          "boost_mean_gray": 38.013,
+          "boost_max_frame_change": 0.72,
+          "boost_p95_frame_change": 0.48,
+          "boost_max_alternating_change": 1.2,
+          "full_manoeuvre_max_frame_change": 20.28,
+          "boost_large_flashes_over_32_gray": 0,
+          "largest_transitions": [
+            {
+              "frame": 788,
+              "delta": 20.28,
+              "before": 70.48,
+              "after": 90.76
+            },
+            {
+              "frame": 787,
+              "delta": 19.48,
+              "before": 51.0,
+              "after": 70.48
+            },
+            {
+              "frame": 789,
+              "delta": 18.96,
+              "before": 90.76,
+              "after": 109.72
+            },
+            {
+              "frame": 790,
+              "delta": 15.04,
+              "before": 109.72,
+              "after": 124.76
+            }
+          ]
+        },
+        "starboard_frame": {
+          "boost_mean_gray": 41.188,
+          "boost_max_frame_change": 1.0,
+          "boost_p95_frame_change": 0.56,
+          "boost_max_alternating_change": 1.24,
+          "full_manoeuvre_max_frame_change": 7.76,
+          "boost_large_flashes_over_32_gray": 0,
+          "largest_transitions": [
+            {
+              "frame": 724,
+              "delta": 7.76,
+              "before": 69.24,
+              "after": 61.48
+            },
+            {
+              "frame": 725,
+              "delta": 7.56,
+              "before": 61.48,
+              "after": 53.92
+            },
+            {
+              "frame": 726,
+              "delta": 7.44,
+              "before": 53.92,
+              "after": 46.48
+            },
+            {
+              "frame": 723,
+              "delta": 7.4,
+              "before": 76.64,
+              "after": 69.24
+            }
+          ]
+        },
+        "console": {
+          "boost_mean_gray": 70.731,
+          "boost_max_frame_change": 0.64,
+          "boost_p95_frame_change": 0.4,
+          "boost_max_alternating_change": 1.16,
+          "full_manoeuvre_max_frame_change": 1.4,
+          "boost_large_flashes_over_32_gray": 0,
+          "largest_transitions": [
+            {
+              "frame": 738,
+              "delta": 1.4,
+              "before": 71.44,
+              "after": 70.04
+            },
+            {
+              "frame": 481,
+              "delta": 1.32,
+              "before": 70.72,
+              "after": 72.04
+            },
+            {
+              "frame": 742,
+              "delta": 1.24,
+              "before": 71.24,
+              "after": 70.0
+            },
+            {
+              "frame": 413,
+              "delta": 1.24,
+              "before": 70.04,
+              "after": 71.28
+            }
+          ]
+        }
+      },
+      "sequence_duration_seconds": 16,
+      "resolution": [
+        1280,
+        720
+      ],
+      "capture_wall_seconds": 55.4,
+      "capture_sha256": "ba3517eb2c2785378a09046bc0ec8ee525d6c1acab057fbac106f25a25665a48",
+      "source_sha256": "7fc87a2188cb81cded6e161ab860437bd3715a9e2ee662194011358c16e2553e",
+      "passing_limits": "Unchanged: below 8/255 frame change and 10/255 alternating change during steady boost, below 32/255 throughout the manoeuvre. Capture is a fixed-step sequence, not a real-time frame-rate benchmark."
+    },
+    "gameplay_tests": "6 of 6 passed",
+    "signed_app_verified": true,
+    "packaged_executable_sections_match_build": true,
+    "save_format_changed": false,
+    "cockpit_geometry_changed": true,
+    "collision_geometry_changed": false,
+    "flight_physics_changed": false,
+    "new_asset_dependencies": 0,
+    "previews": {
+      "Graphics-065.png": {
+        "sha256": "702bac117ee1e789408d91e0cee68ad26beb989ccda9a3ec0ad2e0a61aee36b1",
+        "dimensions": [
+          1420,
+          776
+        ],
+        "source": "native Metal gameplay capture"
+      },
+      "Graphics-065-Verdant.png": {
+        "sha256": "003c9c5ccf42074b62df7e38f5913b91305a23af9c0139c7842aa5ec67ffa82c",
+        "dimensions": [
+          1420,
+          776
+        ],
+        "source": "native Metal gameplay capture"
+      },
+      "Graphics-065-Deck.png": {
+        "sha256": "f0edb25a0d55d2c9b1d1afd330f0ae802f2bc88615571242e5b92fb69f0a0a49",
+        "dimensions": [
+          1420,
+          776
+        ],
+        "source": "native Metal gameplay capture"
+      },
+      "Graphics-065-Sunlit.png": {
+        "sha256": "5773646c90d4436606a27233e006c342b873d501e0cebcb383c3e57d57a81f52",
+        "dimensions": [
+          1420,
+          776
+        ],
+        "source": "native Metal gameplay capture"
+      },
+      "Graphics-065-Airless.png": {
+        "sha256": "71432dbe77dd30adf411ceabe6c85eef35677d5925821f4febf42e25b450286a",
+        "dimensions": [
+          1420,
+          776
+        ],
+        "source": "native Metal gameplay capture"
+      }
+    },
+    "current_player_save_restore": {
+      "frames": 300,
+      "exit_code": 0,
+      "isolated_copy": true,
+      "original_save_unchanged": true,
+      "session_sha256": "6dee8ee93a6f68b7cb3084050491e8fdf2fe46a83270bb00d03c874786d53a6f"
+    },
+    "bundled_catalogue_and_provenance_match_source": true
+  },
+  "graphics_066_verification": {
+    "version": "0.66.0",
+    "build": "93",
+    "improvements": [
+      "Geological relief now separates broad sedimentary plains from folded mountain provinces, with the same field used for parallax and self-shadow",
+      "Lava worlds have globe-local cellular cooling plates, connected molten boundaries, red cooling margins, broad melt pools and filtered fine fractures",
+      "Dry impact-basin bowls have darker floors and brighter rim/ejecta reflectance against their surrounding provinces",
+      "Gas-giant major storms have trailing wakes of smaller bright-rimmed vortices and darker centres in their own projected latitude bands",
+      "Optically thin stellar coronal sheets extend to 2.7 source radii, with a fixed stellar-local magnetic axis, layered streamers, inner limb emission and depth occlusion",
+      "Photospheric cell edges, cooler lanes and broader thermal regions are filtered by footprint before unresolved granulation becomes pixel noise; giant photosphere exposure is locally calibrated"
+    ],
+    "shader_backends_compiled": [
+      "metal",
+      "spirv",
+      "glsl"
+    ],
+    "shader_consumers": [
+      "shaders/fs_hyperion.sc",
+      "shaders/fs_hyperion_blur_solar.sc",
+      "shaders/fs_hyperion_flight.sc",
+      "shaders/fs_hyperion_flight_post.sc",
+      "shaders/fs_hyperion_lens.sc",
+      "shaders/fs_hyperion_stellar.sc",
+      "shaders/fs_hyperion_weather_post.sc",
+      "shaders/fs_xalaria_cabin.sc",
+      "shaders/fs_xalaria_stellar_scope.sc"
+    ],
+    "implementation": {
+      "new_render_targets": 0,
+      "new_render_passes": 0,
+      "new_texture_assets": 0,
+      "temporal_image_history": false,
+      "animated_dither": false,
+      "lava_cells": "3D 27-neighbour nearest/second-nearest field in globe coordinates, warped by retained procedural strata; footprint-filtered luminous seams",
+      "gas_giant_satellite_vortices": 9,
+      "stellar_envelope_outer_radius": 2.7,
+      "stellar_envelope_types": "Existing prominence-enabled main-sequence/protostar/giant/wind-star classes; no false corona added to compact or carbon stars",
+      "limitations": "Surface provinces and cooling plates are artistic read-only material relief, not a tectonic or magma simulation. The corona is an optical stellar-local field, not a magnetohydrodynamic simulation. Existing regional palettes and optical media remain active."
+    },
+    "preserved_sources": {
+      "src/ActivityMeshes.cpp": "0765a449c1a9fcd172a98f07a56b0f0acae865c31cf734fe4ef47df72d1a3f60",
+      "src/Cockpit.cpp": "63feee708a318d473ac7a9a08865b32f3f3b67f601deec84418c7a6ca644de7b",
+      "src/CockpitMotion.cpp": "4f8579375e423a1c3af4b28a48e6637bee9b650287bba7663ff8132b8e712990",
+      "src/Piloting.cpp": "f5d4eaa8864605fab7261e31c1d51e4000598dd0ea75d54ed1377b7171011f81",
+      "src/Renderer.cpp": "f35ddbfd00720a841c96b3902a093a7aa779d14753bd0ccfb5a235a32ea21653",
+      "src/HyperionRenderer.cpp": "415232c398d0aee84bab7ecd22ffa03baee2ab1ebe6417d071a1b7b9f93a317b",
+      "src/HyperionRenderer.hpp": "bd56f6714f885c809844d02ade826acade0e8e7b60f75f7e0e45a07256894cdc",
+      "src/ShipInterior.cpp": "0ca12e59e880c966c5694598c38da0d689c2ddaf55af915340ebcd28e84e8d30",
+      "src/Universe.cpp": "5db7b6ce79c20d06dbbdc4da4ed1fd260c638fdffaac2a75e224dee492b243e4",
+      "src/XalariaEconomy.cpp": "778998fd791f40134449c798ef89f239027172cc0347cdd7777c42456a3009d7",
+      "src/XalariaStories.cpp": "de1eddb63db3cf701f85186576e7822d87437a6b27c1b1ebc072dcb30a2f8b6f",
+      "shaders/hyperion_vintage_lens.sh": "8ddb0695860181647bd48a622ab02393136bcf189ddd996af1f5045f7baf5acd",
+      "shaders/hyperion_tone.sh": "4434689c9a92455737880c27bd47a732a028252008c6ab89ed13e1e6e3b96420",
+      "shaders/fs_hyperion_bokeh.sc": "87b36607ba436e6ce00da800b244bab3fdaab96d51e67ebad0e178768a9717a9",
+      "shaders/fs_xalaria_cabin_composite.sc": "8b2de69c555eb77183388fa9cc71ff41b4e53653a0a5e57cee2523c8b76f0068",
+      "shaders/hyperion_cabin.sh": "e0801d9d12c9057fbc04784d7de5b543470b5efd44cce23d6a56e9aade55aa00",
+      "shaders/fs_planet_rings.sc": "24d91a3828c42ad314ccf9400af973c2eef5231b6e9d8a796854cb571f32e5d5",
+      "shaders/vs_planet_rings.sc": "77074ed33e5d40b61285cc3551328445d54cfdde70d6ebbdd77ecfa1262c4a53"
+    },
+    "contrast_and_lens": "The global 0.62.1 contrast, vintage lens, bokeh, cabin lighting and cabin compositor remain byte-identical to 0.65. Individual giant photosphere source exposure changes to retain thermal detail.",
+    "native_frames": {
+      "charred": 100,
+      "verdant": 100,
+      "tidal": 100,
+      "acid": 100,
+      "vessel": 100,
+      "station": 658,
+      "cabin-control": 100,
+      "ship-deck": 200,
+      "packaged": 100
+    },
+    "stellar_checks": [
+      {
+        "scene": "hot-star",
+        "system_seed": 14940,
+        "frames": 100,
+        "exit_code": 0,
+        "camera_star_radii": 4.2
+      },
+      {
+        "scene": "red-giant",
+        "system_seed": 14941,
+        "frames": 100,
+        "exit_code": 0,
+        "camera_star_radii": 4.2
+      },
+      {
+        "scene": "carbon-giant",
+        "system_seed": 14738,
+        "frames": 100,
+        "exit_code": 0,
+        "camera_star_radii": 4.2
+      }
+    ],
+    "supplemental_checks": {
+      "native_checks": [
+        {
+          "scene": "player-before",
+          "frames": 300,
+          "exit_code": 0
+        },
+        {
+          "scene": "player-after",
+          "frames": 300,
+          "exit_code": 0
+        },
+        {
+          "scene": "rings",
+          "frames": 100,
+          "exit_code": 0
+        },
+        {
+          "scene": "stellar-before",
+          "frames": 100,
+          "exit_code": 0
+        },
+        {
+          "scene": "stellar-after",
+          "frames": 100,
+          "exit_code": 0
+        },
+        {
+          "scene": "planet-before",
+          "frames": 100,
+          "exit_code": 0
+        },
+        {
+          "scene": "planet-after",
+          "frames": 100,
+          "exit_code": 0
+        }
+      ],
+      "original_player_save_unchanged": true,
+      "player_save_sha256": "4d192f49ceaf72c09a903bae6e1d9f7a6242bd42fc30d3fa383f223c9154379c",
+      "comparison": "Production 0.65.0 and 0.66.0, with isolated copies of the same saved poses",
+      "planet_comparison_uses_isolated_sunward_pose": true
+    },
+    "matched_production_comparisons": {
+      "planet": {
+        "same_saved_pose": true,
+        "resolution": [
+          1420,
+          776
+        ],
+        "central_window_mean_absolute_luma_difference": 56.1456
+      },
+      "stellar": {
+        "same_saved_pose": true,
+        "resolution": [
+          1420,
+          776
+        ],
+        "central_window_mean_absolute_luma_difference": 12.8651
+      }
+    },
+    "ship_scale_checks": [
+      {
+        "log_metres": 3.0,
+        "native_frames": 100,
+        "exit_code": 0
+      },
+      {
+        "log_metres": 4.0,
+        "native_frames": 100,
+        "exit_code": 0
+      },
+      {
+        "log_metres": 5.0,
+        "native_frames": 100,
+        "exit_code": 0
+      }
+    ],
+    "ship_scale_comparison": [
+      {
+        "log_metres": 4,
+        "against": 3,
+        "hull_mean_absolute_luma_difference": 0.0584
+      },
+      {
+        "log_metres": 5,
+        "against": 3,
+        "hull_mean_absolute_luma_difference": 0.0647
+      }
+    ],
+    "reflection_toggle_native_comparison": {
+      "console": {
+        "mean_absolute_luma_difference": 0.819,
+        "max_difference": 88
+      },
+      "port_frame": {
+        "mean_absolute_luma_difference": 1.223,
+        "max_difference": 71
+      },
+      "starboard_frame": {
+        "mean_absolute_luma_difference": 0.778,
+        "max_difference": 67
+      },
+      "brow": {
+        "mean_absolute_luma_difference": 1.297,
+        "max_difference": 45
+      }
+    },
+    "acceleration_test": {
+      "frames": 960,
+      "fps": 60,
+      "tracking_method": "Continuous surface-projected 5x5 patches with bilinear sampling; no integer pixel-window jumps",
+      "maximum_actual_acceleration_m_s2": 76731.2,
+      "tracked_surface_patches": {
+        "brow": {
+          "boost_mean_gray": 76.174,
+          "boost_max_frame_change": 0.36,
+          "boost_p95_frame_change": 0.24,
+          "boost_max_alternating_change": 0.56,
+          "full_manoeuvre_max_frame_change": 1.84,
+          "boost_large_flashes_over_32_gray": 0,
+          "largest_transitions": [
+            {
+              "frame": 365,
+              "delta": 1.84,
+              "before": 75.8,
+              "after": 73.96
+            },
+            {
+              "frame": 842,
+              "delta": 1.44,
+              "before": 74.72,
+              "after": 76.16
+            },
+            {
+              "frame": 480,
+              "delta": 1.28,
+              "before": 75.04,
+              "after": 76.32
+            },
+            {
+              "frame": 361,
+              "delta": 1.24,
+              "before": 75.8,
+              "after": 74.56
+            }
+          ]
+        },
+        "port_frame": {
+          "boost_mean_gray": 38.068,
+          "boost_max_frame_change": 0.84,
+          "boost_p95_frame_change": 0.44,
+          "boost_max_alternating_change": 0.92,
+          "full_manoeuvre_max_frame_change": 19.96,
+          "boost_large_flashes_over_32_gray": 0,
+          "largest_transitions": [
+            {
+              "frame": 788,
+              "delta": 19.96,
+              "before": 70.8,
+              "after": 90.76
+            },
+            {
+              "frame": 789,
+              "delta": 19.64,
+              "before": 90.76,
+              "after": 110.4
+            },
+            {
+              "frame": 787,
+              "delta": 19.52,
+              "before": 51.28,
+              "after": 70.8
+            },
+            {
+              "frame": 790,
+              "delta": 13.92,
+              "before": 110.4,
+              "after": 124.32
+            }
+          ]
+        },
+        "starboard_frame": {
+          "boost_mean_gray": 41.325,
+          "boost_max_frame_change": 0.76,
+          "boost_p95_frame_change": 0.4,
+          "boost_max_alternating_change": 0.92,
+          "full_manoeuvre_max_frame_change": 7.92,
+          "boost_large_flashes_over_32_gray": 0,
+          "largest_transitions": [
+            {
+              "frame": 726,
+              "delta": 7.92,
+              "before": 54.08,
+              "after": 46.16
+            },
+            {
+              "frame": 723,
+              "delta": 7.8,
+              "before": 76.96,
+              "after": 69.16
+            },
+            {
+              "frame": 725,
+              "delta": 7.68,
+              "before": 61.76,
+              "after": 54.08
+            },
+            {
+              "frame": 724,
+              "delta": 7.4,
+              "before": 69.16,
+              "after": 61.76
+            }
+          ]
+        },
+        "console": {
+          "boost_mean_gray": 70.916,
+          "boost_max_frame_change": 0.52,
+          "boost_p95_frame_change": 0.44,
+          "boost_max_alternating_change": 0.92,
+          "full_manoeuvre_max_frame_change": 1.08,
+          "boost_large_flashes_over_32_gray": 0,
+          "largest_transitions": [
+            {
+              "frame": 421,
+              "delta": 1.08,
+              "before": 70.6,
+              "after": 69.52
+            },
+            {
+              "frame": 622,
+              "delta": 0.96,
+              "before": 70.76,
+              "after": 71.72
+            },
+            {
+              "frame": 739,
+              "delta": 0.92,
+              "before": 70.6,
+              "after": 71.52
+            },
+            {
+              "frame": 616,
+              "delta": 0.92,
+              "before": 70.76,
+              "after": 71.68
+            }
+          ]
+        }
+      },
+      "sequence_duration_seconds": 16,
+      "resolution": [
+        1280,
+        720
+      ],
+      "capture_wall_seconds": 54.21,
+      "capture_sha256": "7cb22f53caf7a6d580c760cf2bfd2521fc0fbb915b0d4451b9c75c606d94ec3e",
+      "instrumented_renderer_source_sha256": "7fc87a2188cb81cded6e161ab860437bd3715a9e2ee662194011358c16e2553e",
+      "passing_limits": "Unchanged: <8/255 frame change and <10/255 alternating change during steady boost, <32/255 throughout the manoeuvre. Fixed-step capture, not a real-time performance benchmark."
+    },
+    "gameplay_tests": "6 of 6 passed",
+    "signed_app_verified": true,
+    "packaged_executable_sections_match_build": true,
+    "bundled_catalogue_and_provenance_match_source": true,
+    "save_format_changed": false,
+    "world_or_cockpit_geometry_changed": false,
+    "collision_geometry_changed": false,
+    "flight_physics_changed": false,
+    "new_asset_dependencies": 0,
+    "previews": {
+      "Graphics-066.png": {
+        "sha256": "f1aacfd13a3a813c5d24ca5a8fed6189c918da8844ac6500ed35d342040c3d07",
+        "dimensions": [
+          1420,
+          776
+        ],
+        "source": "Unedited native Metal game capture"
+      },
+      "Graphics-066-Star.png": {
+        "sha256": "660254709f850eb48a38311dee40e29306acc4d1202eec7d6a58b6cde9aa7d79",
+        "dimensions": [
+          1420,
+          776
+        ],
+        "source": "Unedited native Metal game capture"
+      },
+      "Graphics-066-Giant.png": {
+        "sha256": "bba17e36af07af32b1f676d47df29d6dcd08530d7117496ca62b81457a85f5dc",
+        "dimensions": [
+          1420,
+          776
+        ],
+        "source": "Unedited native Metal game capture"
+      },
+      "Graphics-066-Verdant.png": {
+        "sha256": "f090bc24439f98cd319a14191f21cf04258db8f922667468ce3fe7265fc21b6b",
+        "dimensions": [
+          1420,
+          776
+        ],
+        "source": "Unedited native Metal game capture"
+      }
+    }
+  },
+  "explosion_067_verification": {
+    "visual_scale": 1.2,
+    "particle_multiplier": 1.5,
+    "particle_capacity": 204,
+    "previous_particle_capacity": 136,
+    "fire_lobes": 54,
+    "secondary_flashes": 6,
+    "debris_fragments": 60,
+    "embers": 48,
+    "vapour_counts_by_fuel": [
+      36,
+      36,
+      6,
+      9
+    ],
+    "previous_vapour_counts_by_fuel": [
+      24,
+      24,
+      4,
+      6
+    ],
+    "occlusion_envelope_scale": 1.2,
+    "secondary_flash_time_and_spatial_envelope_preserved": true,
+    "damage_collision_and_shake_unchanged": true,
+    "native_checks": {
+      "packaged": 100,
+      "combat": 426
+    },
+    "test_result": "6 of 6 passed, including per-family particle counts and visual scale assertions",
+    "capture_renderer_recompiled_for_expanded_particle_structure": true,
+    "save_format_changed": false
+  },
+  "living_universe_068_verification": {
+    "catalogue_systems": 7714,
+    "occupied_regions": 82,
+    "public_station_depots": 37441,
+    "strategic_turn_seconds": 300,
+    "clock": "playing time; earlier saves begin at their existing flight time",
+    "industries": [
+      "finite ore refining with nanomite input",
+      "neurocell farming and seed production",
+      "metal fabrication",
+      "metal-funded garrison replenishment"
+    ],
+    "supply": "one departure debit from shared station inventory, finite manifests, one arrival credit, captured/stolen cargo removed, no duplicate delivered cargo; live stranded manifests are held, not discarded",
+    "fleet_orders": [
+      "hold",
+      "follow flagship",
+      "finite funded trade",
+      "scheduled convoy escort",
+      "blockade and station capture",
+      "known wreck salvage"
+    ],
+    "fleet_verification": [
+      "real ion ray disables civilian prize",
+      "capture preserves hull seed, shape and pose",
+      "one collision body per hull",
+      "captain commission and repair",
+      "purchase consumes treasury and station metals",
+      "occupied collar prevents departure",
+      "trade voyage physically reaches destination",
+      "scheduled escort settles once",
+      "lawful disabled defender captured without warrant",
+      "four warships interdict supply and take station",
+      "station traffic fees collected once at actual berth",
+      "incoming blockade targets recognized by convoy escorts",
+      "live disabled freighter retains nickel across three strategic turns before one boarding transfer"
+    ],
+    "consequences": [
+      "persistent finite wreck salvage",
+      "finite recoverable survivors and captain recruits",
+      "evacuation lifeboats after station defeat",
+      "faction standing and access",
+      "finite held contraband from blockades"
+    ],
+    "intelligence": "empty start; physical orbit, docking, hails, scans, captured charts, informants and captain arrivals; atlas browsing reveals no remote events; earned reports kept ahead of unknown traffic noise",
+    "long_simulation": {
+      "opening_expeditions": 75,
+      "active_fronts_at_75_minutes": 141,
+      "station_surrenders_at_75_minutes": 11
+    },
+    "persistence": {
+      "outer_save_version": 5,
+      "legacy_versions": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "strategy_format": 1,
+      "invalid_save_transactional_rejection": true,
+      "market_and_fleet_roundtrip": true,
+      "legacy_metal_frames": 100,
+      "v5_reload_metal_frames": 100,
+      "fleet_ui_metal_frames": 240,
+      "interactive_F10_and_Tab_verified": true,
+      "final_signed_native_logs": [
+        "native-handoff-v4.log",
+        "native-handoff-v5.log",
+        "native-handoff-ui.log"
+      ]
+    },
+    "native_text_checks": {
+      "pages": 3,
+      "missing_controls": [],
+      "graphics_text_renderer_preserved": true
+    },
+    "ui_aspects_tested": [
+      1,
+      1.3333333333333333,
+      1.7777777777777777,
+      2.3333333333333335
+    ],
+    "limitations": [
+      "off-screen wars use bounded strategic calculations; nearby combat uses physical rays",
+      "garrison readiness uses a bounded local squadron",
+      "autonomous salvage searches known wrecks in the destination frame",
+      "simulation advances with playing time, not offline elapsed time"
+    ],
+    "tests": "ctest-handoff.log: 7 of 7 passed, 63.96 seconds",
+    "user_journey_backup": "separate legacy journey retained before migration; native tests use isolated profiles"
   }
 }

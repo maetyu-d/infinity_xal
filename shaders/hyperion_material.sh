@@ -20,6 +20,7 @@ uniform vec4 u_microParams;
 #include "hyperion_pigment.sh"
 #include "hyperion_tone.sh"
 #include "hyperion_acid.sh"
+#include "hyperion_surface_frame.sh"
 #ifndef INFINITY_REFLECTION_BUFFER
 #define INFINITY_REFLECTION_BUFFER 0
 #endif
@@ -29,7 +30,7 @@ uniform vec4 u_microParams;
 #define writeSurface(C,A,N,R,M) {gl_FragColor=vec4((C),(A));}
 #endif
 vec3 brdf(vec3 albedo,vec3 N,vec3 V,vec3 L,float rough,float metallic) {
- vec3 H=normalize(V+L);float nv=max(dot(N,V),.001),nl=max(dot(N,L),0.),nh=max(dot(N,H),0.),vh=max(dot(V,H),0.);
+ vec3 H=surfaceUnit(V+L,N);float nv=max(dot(N,V),.001),nl=max(dot(N,L),0.),nh=max(dot(N,H),0.),vh=max(dot(V,H),0.);
  float a=rough*rough,a2=a*a,denom=nh*nh*(a2-1.)+1.;float D=a2/max(3.14159*denom*denom,.00001);
  float k=(rough+1.)*(rough+1.)/8.;float G=nv/(nv*(1.-k)+k)*nl/(nl*(1.-k)+k);
  vec3 F0=mix(vec3(.035),albedo,metallic),F=F0+(1.-F0)*pow(1.-vh,5.);
@@ -59,56 +60,112 @@ float surfaceSun(vec3 position,float nl){
 }
 #define INFINITY_MATERIAL_REFLECTIONS 1
 #include "hyperion_illumination.sh"
+#include "hyperion_built_finish.sh"
 #include "hyperion_weather.sh"
 #include "hyperion_architecture.sh"
 #include "hyperion_cabin.sh"
+#include "hyperion_station_materials.sh"
+#include "hyperion_orbital_clouds.sh"
+#include "hyperion_geology.sh"
+#include "hyperion_impact_basins.sh"
+#include "hyperion_lava_provinces.sh"
 
-vec3 shadeCabin(vec3 base,float alpha,vec3 p,vec3 local,vec3 N,vec3 V,vec3 L){
+vec3 shadeCabin(vec3 base,float alpha,vec3 p,vec3 local,vec3 N,vec3 V,vec3 L,out vec4 reflection){
  float encoded=floor(alpha*255.+.5);
- float finish=floor(encoded/32.),emission=mod(encoded,32.)/31.;
+ float finish=floor(encoded/16.),emission=mod(encoded,16.)/15.;
  float polymer=1.-step(.25,abs(finish-1.));
  float brushed=1.-step(.25,abs(finish-2.));
  float bronze=1.-step(.25,abs(finish-3.));
- float display=step(3.5,finish);
- float grain=strataNoise(local*238.,vec3(0.));
- float wear=strataNoise(local*17.3+vec3(5.,9.,1.),vec3(0.));
- float brushedGrain=strataNoise(local*vec3(43.,670.,43.),vec3(0.));
- float coarse=smoothstep(.42,.69,wear+grain*.14);
- vec3 body=base*(.78+wear*.33+(grain-.5)*.24);
- body=mix(body,body*.64+vec3(.069,.061,.049),coarse*.17*(1.-polymer)*(1.-display));
- body*=1.+(brushedGrain-.5)*.36*(brushed+bronze);
- float relief=mix(grain,brushedGrain,brushed+bronze)-.5;
- N=materialBump(N,p,relief*mix(.00040,.00008,display),.20);
- float rough=mix(.47,.79,polymer)-brushed*.21-bronze*.17-display*.36;
- rough=clamp(rough+(grain-.5)*.13+coarse*.07,.085,.94);
- float metal=brushed*.66+bronze*.78;
- vec3 tint=cabinWindowLight();
- float sunlight=cabinWindowTransmission(p,L);
- vec3 lit=brdf(body,N,V,L,rough,metal)*tint*sunlight*1.8;
- lit+=body*tint*(.035+.11*max(dot(N,L),0.));
+ float display=1.-step(.25,abs(finish-4.));
+ float textile=1.-step(.25,abs(finish-5.));
+ float tread=1.-step(.25,abs(finish-6.));
+ float ceramic=1.-step(.25,abs(finish-7.));
+ float composite=1.-step(.25,abs(finish-12.));
+ bool station=stationInterior(p);
+ int room=station?stationAnnexSlot(p):-1;
+ float deck=step(1.16,p.z);
+ vec3 body;
+ float height,rough,metal;
+ if(station && display<.5){
+  StationSurface surface=stationSurface(base,finish,local,N);
+  body=surface.albedo;
+  height=surface.height;
+  rough=surface.roughness;
+  metal=surface.metallic;
+ }else{
+  float grain=cabinFinishNoise(local*170.,vec3(0.));
+  float wear=strataNoise(local*17.3+vec3(5.,9.,1.),vec3(0.));
+  float brushedGrain=cabinFinishNoise(local*vec3(12.,220.,12.),vec3(0.));
+  float coarse=smoothstep(.42,.69,wear+grain*.14)*mix(1.,.38,deck);
+  body=base*mix(.81+wear*.29+(grain-.5)*.15,.95+wear*.11+(grain-.5)*.09,deck);
+  body=mix(body,body*.64+vec3(.069,.061,.049),coarse*.17*(1.-polymer)*(1.-display));
+  body*=1.+(brushedGrain-.5)*.25*(brushed+bronze);
+  float relief=mix(grain,brushedGrain,brushed+bronze)-.5;
+  float weave=textile>.5?cabinWeave(local,N,238.):0.;
+  float grip=tread>.5?cabinTread(local):0.;
+  float painted=1.-step(.25,finish);
+  float seam=painted*cabinPanelSeam(local,N);
+  body*=1.+textile*(weave*.26-.10)+tread*(grip*.34-.08);
+  body*=1.-seam*.19;
+  relief+=weave*textile*.45+grip*tread*.8-seam*.29;
+  height=relief*mix(mix(.00028,.00016,deck),.00006,display);
+  rough=mix(.43,.79,polymer+textile+tread)-brushed*.16-bronze*.14-display*.31-ceramic*.20;
+  rough+=(grain-.5)*.10+coarse*.07;
+  metal=brushed*.84+bronze*.86;
+  // Hand-polished crests and recessed oxidation belong to the finish,
+  // rather than adding noisy geometry or inheriting the regional material.
+  float handling=smoothstep(.34,.73,cabinFinishNoise(local*vec3(9.,14.,11.)+vec3(5.,2.,17.),vec3(0.)));
+  float patina=smoothstep(.51,.72,wear)*bronze;
+  body=mix(body,body*vec3(.46,.67,.59),patina*.58);
+  rough+=patina*.17-handling*(brushed*.07+polymer*.08);
+  body*=1.+handling*(brushed*.12+ceramic*.055);
+  if(composite>.5){
+   float tow=cabinWeave(local,N,148.);
+   float fibre=cabinWeave(local,N,520.);
+   body=base*(.62+tow*.27+fibre*.10);
+   height=(tow-.5)*.00008;
+   rough=.28+(.5-fibre)*.045+handling*.035;
+   metal=.09;
+  }
+ }
+ vec3 panelNormal=N;
+ N=materialBump(N,p,height,station?.28:.025);
+ rough=clamp(rough,.19,.94);
+ vec3 dx=dFdx(N-panelNormal),dy=dFdy(N-panelNormal);
+ float variance=min(.16,max(dot(dx,dx),dot(dy,dy))*.4);
+ rough=pow(min(1.,pow(rough,4.)+variance),.25);
+ vec3 tint=mix(cabinWindowLight(),u_cabinSun[1].rgb,.45);
+ float sunlight=deck<.5 && u_cabinSun[0].w>.001?
+                cabinWindowTransmission(p,L)*u_cabinSun[0].w:0.;
+ float seal=room>=0?stationAnnexContact(p,room):cabinContactShade(p);
+ vec3 grainDirection=builtTangent(panelNormal,vec3(1.,.07,.13));
+ float machining=brushed*.65+bronze*.44;
+ vec3 lit=builtBrdf(body,N,V,L,rough,metal,grainDirection,machining)*tint*sunlight*2.15;
+ // Warm key and cool instrument bounce describe the bevels independently.
+ // The light positions remain attached to the physical roof and console.
+ if(deck<.5){
+  lit+=cabinStripLight(p,N,V,body,rough,metal,grainDirection,machining,-.59,
+                     vec3(1.,.76,.49),.62);
+  lit+=cabinStripLight(p,N,V,body,rough,metal,grainDirection,machining,.59,
+                     vec3(.48,.72,1.),.44);
+  // Recessed collar lamps wash the inner bevels and dashboard. Broad
+  // physical sources keep the result smooth while the ship accelerates.
+  lit+=deckLamp(p,N,V,body,rough,metal,vec3(-.51,.486,-1.325),
+                vec3(1.,.58,.25),.12);
+  lit+=deckLamp(p,N,V,body,rough,metal,vec3(.51,.486,-1.325),
+                vec3(1.,.70,.38),.10);
+ }
+ lit+=body*tint*(.007+.021*max(dot(N,L),0.))*(1.-deck*.87);
  // Light the interior from the roof strips with actual distance falloff.
  vec3 fixture=vec3(p.x<0.?-.59:.59,.578,clamp(p.z,-.98,.72));
  vec3 toLamp=fixture-p;
  float range2=max(dot(toLamp,toLamp),.007);
  vec3 downLight=normalize(toLamp+vec3(1e-12));
- float fill=(.04+.17*max(dot(N,downLight),0.))/(.60+range2*1.7);
- lit+=body*(vec3(.044,.064,.079)+vec3(1.,.84,.63)*fill);
+ float fill=(.012+.20*pow(max(dot(N,downLight),0.),1.24))/(.56+range2*1.9);
+ lit+=body*(vec3(.006,.012,.019)+vec3(1.,.84,.63)*fill)*(1.-deck*.86);
  if(p.z>1.16){
-  bool bay=p.z>3.70;
-  bool alcove=abs(p.x)>.72 && !bay;
-  vec3 deckLight=vec3(p.x<0.?-1.:1.,1.,1.);
-  deckLight.x*=bay?.76:alcove?1.55:.49;
-  deckLight.y=bay?1.12:.91;
-  deckLight.z=bay?clamp(4.45+floor((p.z-3.95)/1.04+.5)*1.04,4.45,6.53):
-                   alcove?clamp(p.z,2.05,3.19):clamp(p.z,1.45,3.53);
-  vec3 deckRay=deckLight-p;
-  float distance2=dot(deckRay,deckRay);
-  float lambert=max(0.,dot(N,normalize(deckRay+vec3(1e-8))));
-  lit+=body*(vec3(.060,.080,.092)+vec3(1.,.81,.57)*(.17+lambert*.76)/(.76+distance2*1.05));
-  float floorRail=exp(-abs(abs(p.x)-.54)*8.)*exp(-abs(p.y+1.10)*5.3);
-  lit+=body*vec3(.075,.46,.55)*floorRail*.27;
-  if(alcove && p.x>.75)
-   lit+=body*vec3(.16,.46,.82)*exp(-dot(p-vec3(1.39,-.11,2.65),p-vec3(1.39,-.11,2.65))*.87)*.33;
+  lit+=cabinDeckLighting(p,N,V,L,body,rough,metal,room);
+  lit+=cabinThresholdLight(p,N,V,body,rough,metal);
  }
  vec3 screenPosition=vec3(clamp(p.x,-.35,.35),-.420,-1.176);
  vec3 screenRay=screenPosition-p;
@@ -117,10 +174,32 @@ vec3 shadeCabin(vec3 base,float alpha,vec3 p,vec3 local,vec3 N,vec3 V,vec3 L){
  lit+=body*vec3(.055,.43,.32)*exp(-screenRange*13.)*(.07+.32*screenFacing)*(1.-display);
  float facing=clamp(dot(N,V),0.,1.);
  float fresnel=pow(1.-facing,5.);
- vec3 reflected=cabinFixtureReflection(p,reflect(-V,N),rough);
- lit+=reflected*mix(vec3(.035),body,metal)*(.23+fresnel*.95)*(1.-rough*.76);
- lit+=base*emission*1.17;
- return toneColour(lit,1.);
+ vec3 ray=reflect(-V,normalize(mix(panelNormal,N,station?.45:.24)));
+ vec3 reflected=station?stationFixtureReflection(p,ray,rough,room):
+                deck>.5?deckFixtureReflection(p,ray,rough):cabinFixtureReflection(p,ray,rough);
+ vec3 sheen=mix(vec3(.028),body,metal)+vec3(.026)*ceramic;
+ lit+=reflected*sheen*(.40+fresnel*1.25)*(1.-rough*.79);
+ // Brushed alloys stretch the fixture image along the machining direction.
+ // It is a broad, filtered lobe, not a high-frequency sparkling normal.
+ if(brushed+bronze>.5){
+  vec3 tangent=normalize(vec3(1.,.07,.13)-panelNormal*dot(vec3(1.,.07,.13),panelNormal)+vec3(1e-6));
+  vec3 wide=normalize(ray+tangent*.19);
+  vec3 narrow=normalize(ray-tangent*.19);
+  vec3 stretch=station?(stationFixtureReflection(p,wide,rough,room)+stationFixtureReflection(p,narrow,rough,room))*.5:
+               deck>.5?(deckFixtureReflection(p,wide,rough)+deckFixtureReflection(p,narrow,rough))*.5:
+               (cabinFixtureReflection(p,wide,rough)+cabinFixtureReflection(p,narrow,rough))*.5;
+  lit+=stretch*mix(vec3(.30),body,.62)*(.42+fresnel*.78)*(1.-rough);
+ }
+ // A thin clear finish on enamel and ceramic catches a second, restrained lobe.
+ lit+=reflected*vec3(.045,.052,.062)*(ceramic+polymer*.23+composite*.82)*(1.+fresnel*2.);
+ lit*=seal;
+ // Retain the actual bumped surface and finish for the cabin reflection
+ // resolve. Unpainted alloy reflects more than opaque paint or fabric.
+ float mirror=(.085+metal*.70+ceramic*.09+composite*.16)*(1.-display*.88);
+ reflection=vec4(N*mirror,rough);
+ vec3 colour=toneColour(lit+base*emission*1.24,1.);
+ // The cabin compositor extracts energy above one before rolling off the lamp cores.
+ return colour+base*(emission*emission*1.14)*u_materialDomain.w;
 }
 void main(){
  float strength=u_hyperion[0].x,seconds=u_hyperion[0].y,phase=u_hyperion[0].z,primitive=u_hyperion[0].w;
@@ -131,29 +210,25 @@ void main(){
   float bond=step(1.5,u_materialDomain.x)*(1.-step(2.5,u_materialDomain.x));
   writeSurface(base*(1.+strength*(.50+bond*1.8)),v_color0.a,vec3(0.,0.,1.),1.,0.);return;
  }
- vec3 V=normalize(u_hyperion[2].xyz-v_position),L=normalize(u_hyperion[3].xyz);
- vec3 N=normalize(cross(dFdx(v_position),dFdy(v_position)));
+ vec3 V=surfaceUnit(u_hyperion[2].xyz-v_position,vec3(0.,0.,1.)),L=surfaceUnit(u_hyperion[3].xyz,vec3(0.,1.,0.));
+ vec3 N=surfaceFrameNormal(v_position,V);
  if((primitive>.1 && primitive<1.5) || primitive< -1.5)N=normalize(v_sphere);
  // A field normal can lean behind the view while its coarse LOD triangle
  // remains visible. Reversing it would invert sun lighting into black seams.
  if(primitive< -1.5){float nv=dot(N,V);if(nv<.025)N=normalize(N+V*(.025-nv));}
  else if(dot(N,V)<0.)N=-N;
  if(u_materialDomain.x>4.5 && u_materialDomain.x<5.5 && u_materialDomain.y>.5){
-  if(u_materialDomain.w>.5){
-   // Dark suits retain a soft edge at grazing angles. Their ordinary
-   // cabin depth lets doorways, furniture and other crew occlude them.
-   float edge=1.-smoothstep(.035,.61,clamp(dot(N,V),0.,1.));
-   float top=.52+.48*max(N.y,0.);
-   vec3 rim=mix(u_hyperion[1].rgb,vec3(.67,.79,.82),.24);
-   vec3 suit=base*(.61+.29*max(N.y,0.))+rim*(edge*edge*top*.74+edge*.044);
-   writeSurface(suit,1.,N,.90,0.);return;
-  }
-  writeSurface(shadeCabin(base,v_color0.a,v_position,v_pattern,N,V,L),1.,N,.44,0.);return;
+  if(u_materialDomain.z>0. && v_position.y>=u_materialDomain.z)discard;
+  vec4 reflection;
+  vec3 cabin=shadeCabin(base,v_color0.a,v_position,v_pattern,N,V,L,reflection);
+  writeSurface(cabin,1.,reflection.xyz,reflection.w,length(reflection.xyz));return;
  }
  if(u_materialDomain.x>3.5 && u_materialDomain.x<4.5){
   vec4 reflection;
   vec3 lit=architecture(base,N,V,L,v_pattern,v_sphere,phase,surfaceSun(v_position-u_hyperion[2].xyz,dot(N,L))*weatherSun(v_position,u_hyperion[2].xyz,L),v_position,clamp(v_color0.a,0.,1.),reflection);
-  float mirror=reflection.w<0.?mix(.70,.26,smoothstep(.09,.55,abs(reflection.w))):0.;
+  // Modular hulls use directional environment light. Screen-space hits on
+  // the nearby apron jump between the runway, its rails and the clear sky.
+  float mirror=u_materialDomain.y>=-1.5 && reflection.w<0.?mix(.70,.26,smoothstep(.09,.55,abs(reflection.w))):0.;
   writeSurface(mix(base,lit,strength*.98),1.,reflection.xyz,reflection.w,mirror);return;
  }
  bool terrain=primitive< -1.5;
@@ -196,8 +271,9 @@ void main(){
   vec3 substrate=mix(u_planet[1].rgb,u_planet[2].rgb,elevationTone);
   albedo=mix(albedo,substrate*.35,.46);
  }
+ float giantHeight=0.;
  if(gas){
-  albedo=giantClouds(n,seconds)*.48+tapestry*.025;
+  albedo=giantClouds(n,seconds,giantHeight)*.48+tapestry*.025;
  }
  // Geological contrast follows the actual authored height and slopes at
  // every LOD. Reuse the inherited mineral pigment instead of evaluating a
@@ -222,9 +298,16 @@ void main(){
   float deposit=strataNoise(provincePoint,vec3(0.));
   float chips=strataNoise(provincePoint*3.1+deposit*1.7,vec3(0.));
   float strata=strataNoise(provincePoint*vec3(5.5,10.4,5.5)+v_elevation*87.,vec3(0.));
-  float erosion=smoothstep(.44,.68,deposit*.57+chips*.31+strata*.12);
-  albedo*=.71+deposit*.29+chips*.23+strata*.11;
-  albedo=mix(albedo,albedo*.76+u_terrainMaterial[1].rgb*.073,erosion*.58);
+  float elevationLayer=v_elevation*1660.+deposit*6.1+chips*1.8;
+  float bedding=(.5+.5*cos(elevationLayer))*(1.-smoothstep(.60,2.1,fwidth(elevationLayer)));
+  float slope=1.-clamp(dot(N,radial),0.,1.);
+  float exposed=smoothstep(.025,.21,slope);
+  float fracture=pow(max(0.,1.-abs(chips*2.-1.)),8.);
+  float erosion=smoothstep(.40,.72,deposit*.57+chips*.31+strata*.12);
+  albedo*=.59+deposit*.37+chips*.31+strata*.14;
+  albedo=mix(albedo,albedo*.67+u_terrainMaterial[1].rgb*.12,erosion*.61);
+  albedo=mix(albedo,albedo*(.82+strata*.24)+u_terrainMaterial[0].rgb*.11,
+             exposed*(bedding*.62+fracture*.31));
  }
  // Mineral identity and the existing geological lowland/temperature rule
  // control coating; no liquid plane, height field or new biome is generated.
@@ -393,6 +476,38 @@ void main(){
   etch=acidEtching(etchPosition+vec3(phase*19.,4.,8.));
   albedo=mix(albedo,acidMineral(etch)*.55,acid*.77);
  }
+ float reliefShadow=1.;
+ if(planet){
+  float inverseRadius=max(length(mul(mat3(u_pattern),N)),1e-20);
+  if(gas){
+   N=materialBump(N,v_position,(giantHeight-.5)*.0010/inverseRadius,.22);
+  }else{
+   vec3 localEye=mul(u_pattern,vec4(u_hyperion[2].xyz,1.)).xyz;
+   float orbitalDetail=smoothstep(1.003,1.035,length(localEye));
+   if(orbitalDetail>.001){
+    vec3 localView=normalize(localEye-n);
+    vec3 localSun=normalize(u_planet[4].xyz+vec3(1e-20));
+    vec4 relief=orbitalGeology(n,localView,localSun,phase);
+    float height=((relief.x-.5)*.0015+(relief.y-.5)*.00017)*orbitalDetail;
+    float preservation=(1.-smoothstep(.04,.35,u_environment.x))*(1.-wet)*
+                       (1.-smoothstep(750.,1200.,u_surface.z));
+    vec4 basins=vec4(0.,0.,0.,1.);
+    float basinCoverage=0.;
+    if(preservation>.001)basins=impactBasins(n,localSun,phase,basinCoverage);
+    // Impact melt smooths the old fracture relief inside a basin, so its
+    // bowl and raised rim remain legible against the surrounding geology.
+    height=height*(1.-basinCoverage*preservation*.86)+basins.x*preservation*orbitalDetail;
+    N=materialBump(N,v_position,height/inverseRadius,.47*orbitalDetail);
+    float exposed=smoothstep(.42,.78,relief.x);
+    vec3 stone=mix(u_terrainMaterial[1].rgb,u_terrainMaterial[0].rgb,exposed);
+    albedo=mix(albedo,albedo*(.52+relief.x*.55+relief.y*.21)+stone*relief.z*.038,
+               orbitalDetail*(1.-wet*.85)*(1.-basinCoverage*preservation*.70));
+    reliefShadow=mix(1.,relief.w,orbitalDetail*(1.-wet));
+    albedo*=1.+(basins.y*.44+basins.z*.30-basinCoverage*.24)*preservation*orbitalDetail;
+    reliefShadow*=mix(1.,basins.w,preservation*orbitalDetail);
+   }
+  }
+ }
  vec3 ndx=dFdx(N),ndy=dFdy(N);float variance=min(.25,max(dot(ndx,ndx),dot(ndy,ndy))*.5);
  rough=pow(min(1.,pow(rough,4.)+variance),.25);
  // Hyperion worldFragment's pixel-angle roughness floor suppresses distant
@@ -408,7 +523,7 @@ void main(){
  if(planet){
   visibility*=weatherSun(v_position,u_hyperion[2].xyz,L);
   vec3 localLight=normalize(u_planet[4].xyz+vec3(1e-20));
-  visibility*=planetRingSun(n,localLight);
+  visibility*=planetRingSun(n,localLight)*reliefShadow;
  }
  // Atmospheric sunset light changes only illumination, with the retained
  // stellar direction and pressure. Airless worlds keep their neutral sun.
@@ -417,8 +532,9 @@ void main(){
  float metallic=atom?.32:craft?(cockpit?.78:.82):u_hyperion[1].y;
  metallic*=1.-regolith*.70;
  if(!atom)metallic*=1.-u_regionLook[0].x*.72-acid*.88;
- vec3 lit=brdf(albedo,N,V,L,rough,metallic)*cavity*visibility*sunlight;
- lit+=diffuseEnvironment(N,up,albedo,skyDay,air)*cavity;
+ float keySide=smoothstep(-.16,.45,sunDot)*visibility;
+ vec3 lit=brdf(albedo,N,V,L,rough,metallic)*cavity*visibility*sunlight*(atom?1.:1.43);
+ lit+=diffuseEnvironment(N,up,albedo,skyDay,air)*cavity*(atom?1.:mix(.20,.70,keySide));
  if(gas){
   float grazing=pow(1.-clamp(dot(radial,V),0.,1.),3.);
   float dawn=smoothstep(-.28,.25,dot(radial,L));
@@ -430,8 +546,9 @@ void main(){
  vec3 reflected=reflectedEnvironment(reflect(-V,N),up,skyDay,phase,rough,planet?air:1.);
  vec3 f0=mix(vec3(.035),albedo,metallic);
  vec3 reflectance=environmentReflectance(f0,fresnel,rough);
- lit+=reflected*reflectance*(1.-rough*.65)*cavity*(1.+wet*1.4+ice*.38)*(1.-u_regionLook[0].x*.74-acid*.86);
- lit+=reflected*(.10+fresnel*.72)*glaze*cavity;
+ float reflectedFill=atom?1.:mix(.28,1.,max(keySide,fresnel*.54));
+ lit+=reflected*reflectance*(1.-rough*.65)*cavity*(1.+wet*1.4+ice*.38)*(1.-u_regionLook[0].x*.74-acid*.86)*reflectedFill;
+ lit+=reflected*(.10+fresnel*.72)*glaze*cavity*reflectedFill;
  if(planet){
   // Low-energy transmission tint at glacial grazing angles; the dark
   // fractures and opaque silhouettes continue to come from the material.
@@ -445,6 +562,13 @@ void main(){
   float shoreResolved=1.-smoothstep(.00010,.00060,fwidth(v_elevation));
   vec3 foam=mix(vec3(.24,.34,.31),coatHue*.35+.08,.22);
   lit+=foam*shore*shoreResolved*liquid*(1.-ice)*(.06+.36*day)*visibility;
+  if(wet>.01 && ice<.5){
+   // A broad solar path with a sharper, normal-dependent specular centre.
+   float solarPath=pow(max(0.,dot(reflect(-V,N),L)),mix(74.,11.,rough));
+   float broken=1.-smoothstep(.35,.73,strataNoise(n*215.+phase*8.,vec3(0.)));
+   vec3 glint=mix(vec3(1.08,.54,.24),vec3(1.,.94,.76),skyDay);
+   lit+=glint*solarPath*wet*visibility*(.09+.18*broken)*(.28+.72*max(0.,sunDot));
+  }
  }
  // Hyperion worldFragment's gear contact shadow. The CPU supplies the actual
  // retained terrain point and physical hull size; this changes colour only.
@@ -463,11 +587,15 @@ void main(){
  }else if(craft){
   lit+=base*(cockpit?.008:.035)+pigment(phase+fresnel*.4)*fresnel*(cockpit?.16:.38);
  }else{
+  // Incandescent worlds get their light from the molten/crust model below.
+  // Keep the general mineral contour accent from drawing bright outlines
+  // across otherwise dark basalt rafts.
+  float contourEnergy=planet&&!gas?.045:1.;
   float ecPhase=elevation*176.+detail*2.+sin(n.x*29.+n.z*17.)*.24;
   float ecVeins=thread(ecPhase,.065),ecLace=thread(ecPhase*2.7+u_materialDomain.y*5.,.025);
   vec3 ecColour=pigment(elevation*6.3+phase+n.z*.18+seconds*.0008);
-  lit+=ecColour*(ecVeins*.58+ecLace*.19)*u_hyperion[1].w*(.045+.955*day)*(terrain?.025:gas?.12:1.);
-  lit+=(tapestry*(.016+.075*fresnel)*(.12+.88*day)+flow*.012*day)*(terrain?.12:gas?.20:1.);
+  lit+=ecColour*(ecVeins*.58+ecLace*.19)*u_hyperion[1].w*(.045+.955*day)*(terrain?.025:gas?.12:1.)*contourEnergy;
+  lit+=(tapestry*(.016+.075*fresnel)*(.12+.88*day)+flow*.012*day)*(terrain?.12:gas?.20:1.)*contourEnergy;
   lit+=mix(pigment(n.z*.9+phase+fresnel*.35),coatHue,terrain?.35:0.)*fresnel*(terrain?.025:gas?.07:.15)*(.18+.82*day);
   if(planet && !terrain){
    float air=gas?1.:clamp(u_environment.x*.7,0.,1.);
@@ -479,21 +607,17 @@ void main(){
  // Incandescence follows the retained surface temperature and geological
  // height contours. It never changes the solid world's terrain or deposits.
  if(planet && u_planet[0].x>5.5 && u_planet[0].x<6.5){
-  float contour=v_elevation*4000.+dot(n,vec3(3.,5.,2.));
-  float footprint=max(.025,fwidth(contour));
-  float fissures=1.-smoothstep(.06,.06+footprint,abs(sin(contour)));
-  vec3 field=n*12.+vec3(phase*21.,13.,4.);
-  float basin=strataNoise(field,vec3(0.));
-  float crust=strataNoise(field*3.3+basin*1.4,vec3(0.));
-  float skin=smoothstep(.33,.68,basin*.57+crust*.43);
-  float molten=pow(1.-skin,3.);
-  float thermal=clamp(pow(max(0.,u_surface.z)/1400.,4.),0.,4.);
-  vec3 heat=mix(vec3(1.5,.055,.006),vec3(2.1,.65,.045),smoothstep(1150.,1800.,u_surface.z));
-  lit=lit*(.16+.25*skin)+heat*thermal*(.007+.115*molten+fissures*(.071+.25*molten));
+  lit=lavaProvinces(lit,n,phase,u_surface.z,day);
  }
  // The existing cutaway remains visible behind the specimen, with lower
  // reflected illumination so its facets do not overwhelm the inspected sites.
  if(u_surface.w>.5)lit*=.22;
+ if(planet && !gas && ice<.5){
+  vec3 localEye=mul(u_pattern,vec4(u_hyperion[2].xyz,1.)).xyz;
+  float altitudeBlend=smoothstep(1.015,1.075,length(localEye));
+  lit=orbitalCloudLight(lit,n,radial,V,L,normalize(u_planet[4].xyz+vec3(1e-20)),
+                        phase,seconds,u_environment.x,u_surface.z,altitudeBlend);
+ }
  if(glaze>.01){
   vec3 coat=brdf(vec3(.055,.026,.015),N,V,L,max(.055,rough*.55),.68);
   lit+=coat*visibility*sunlight*glaze*.65;

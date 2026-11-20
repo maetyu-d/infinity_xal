@@ -22,6 +22,7 @@ XalariaMapLayout::XalariaMapLayout(double aspect):width(900*aspect){
     links = {controls+279, 94, 75, 40};
     close = {width-170, 24, 146, 42};
     economy = {close.x-99, 24, 89, 42};
+    dispatch = {economy.x-130, 24, 120, 42};
     fly = {24, 840, 175, 43};
     pause = {209, 840, 142, 43};
     cancel = {361, 840, 94, 43};

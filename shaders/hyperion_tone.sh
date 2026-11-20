@@ -97,6 +97,15 @@ vec3 acidGrade(vec3 c,float peak){
  grade=mix(grade,yellow,sulphur);
  return mix(grade,vec3(1.,.99,.76),smoothstep(2.,8.,peak)*.84);
 }
+vec3 chiaroscuro(vec3 colour){
+ float peak=max(colour.r,max(colour.g,colour.b));
+ float value=mix(dot(colour,vec3(.299,.587,.114)),peak,.34);
+ // A deep but continuous toe keeps shadow detail without lifting blacks.
+ // The shoulder keeps the colour of strong light and emissive fixtures.
+ float toe=mix(.18,1.,smoothstep(.026,.53,value));
+ float shoulder=1.+.10*smoothstep(.45,.91,value);
+ return clamp(colour*toe*shoulder,vec3(0.),vec3(1.));
+}
 vec3 toneColour(vec3 c,float built){
  float brightness=dot(c,vec3(.299,.587,.114));c=max(vec3(0.),mix(vec3(brightness),c,mix(1.28,1.06,built)));
  c=max(c*1.36,vec3(0.));
@@ -104,7 +113,7 @@ vec3 toneColour(vec3 c,float built){
  vec3 film=(c*(2.51*c+.03))/(c*(2.43*c+.59)+.14);
  c=clamp(mix(film,c/max(peak,.0001)*mappedPeak,.86),vec3(0.),vec3(1.));
  c=pow(c,vec3(1./2.2));
- if(built>=.999)return c;
+ if(built>=.999)return chiaroscuro(c);
  // Retain the small incandescent range above the ordinary surface exposure.
  vec3 grade=vec3(0.);
  if(u_regionLook[1].y>0.)
@@ -112,7 +121,7 @@ vec3 toneColour(vec3 c,float built){
  if(u_regionLook[0].x>0.)grade+=verdantGrade(c,peak)*u_regionLook[0].x;
  if(u_regionLook[1].x>0.)grade+=tidalGrade(c,peak)*u_regionLook[1].x;
  if(u_regionLook[1].z>0.)grade+=acidGrade(c,peak)*u_regionLook[1].z;
- return mix(grade,c,built);
+ return chiaroscuro(mix(grade,c,built));
 }
 vec3 toneColour(vec3 c){
  return toneColour(c,0.);

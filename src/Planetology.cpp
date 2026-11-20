@@ -142,6 +142,14 @@ glm::vec3 giantAlbedo(const PlanetTraits& t, glm::dvec3 d) {
 PlanetTraits planetTraits(const Node& p){
     auto t=generatedPlanetTraits(p);
     if(const auto source=xalariaWorldFacts(p.planetSeed?p.planetSeed:p.seed)){
+        // Use the same equator for the cloud bands, ring plane and ring shadows.
+        if (source->ringOuter > source->ringInner) {
+            // Legacy records still define an orbital plane. Use its pole
+            // when the catalogue has no measured orientation for the ring.
+            const double tilt = source->tilt, node = source->tiltRotation;
+            t.axis = source->ringAxis.value_or(
+                glm::normalize(glm::dvec3(-tilt * std::sin(node), 1., -tilt * std::cos(node))));
+        }
         t.rings={t.seed,source->ringInner,source->ringOuter,source->ringOuter>source->ringInner?.18:0,source->freezing?.8:.15,t.axis};
         t.haze=std::max(t.haze,source->cloudCover*.7);
         if(source->composition==0&&source->cloudColor.size()==6){

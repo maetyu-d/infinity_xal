@@ -5,6 +5,7 @@
 #include "infinity/Discovery.hpp"
 #include "infinity/WarpTravel.hpp"
 #include "infinity/SurfaceHazards.hpp"
+#include "infinity/XalariaTraffic.hpp"
 #include <algorithm>
 #include <charconv>
 #include <cmath>
@@ -156,6 +157,8 @@ void Pilot::resetMotion() {
     instrument();
 }
 void Pilot::brake() {
+    if (docking_.phase() == DockingPhase::Docked)
+        return;
     dropWarp();
     docking_.cancel();
     dockingArmed_ = false;
@@ -253,10 +256,29 @@ void Pilot::setCargoMass(double kg) {
     if (std::isfinite(kg) && kg >= 0 && kg <= maxShipPayloadKg)
         cargoMassKg_ = kg;
 }
+bool Pilot::shieldDeployed() const {
+    return universe_.xalaria()&&ship_.hull>0.&&!ship_.landed&&!ship_.shrinking&&!ship_.cruise&&
+           !ship_.driveBraking&&!dockingArmed_&&!landing_&&launchTime_<=0.;
+}
+ShieldReadout Pilot::shield() const {
+    return universe_.xalaria()?playerShield_.read(combatShieldCapacity_,ship_.flightSeconds,shieldDeployed()):
+                             ShieldReadout{};
+}
+void Pilot::setCombatFit(double capacity,double armour) {
+    if(!std::isfinite(capacity)||capacity<28.||capacity>100.||!std::isfinite(armour)||armour<.4||armour>1.)return;
+    playerShield_.spent*=capacity/combatShieldCapacity_;
+    combatShieldCapacity_=capacity;combatArmour_=armour;
+}
 void Pilot::applyCombatDamage(double points) {
+    applyWeaponDamage(points,{0,0,-1});
+}
+void Pilot::applyWeaponDamage(double points,glm::dvec3 incoming) {
     if (!std::isfinite(points) || points <= 0)
         return;
-    ship_.hull = std::max(0., ship_.hull - std::min(100., points * shipDamageMultiplier(sizeRatio())));
+    double damage=std::min(100.+combatShieldCapacity_,points*shipDamageMultiplier(sizeRatio()));
+    if(shieldDeployed())
+        damage-=playerShield_.absorb(damage,combatShieldCapacity_,ship_.flightSeconds,incoming);
+    ship_.hull=std::max(0.,ship_.hull-damage*combatArmour_);
     instrument();
 }
 void Pilot::applyPortRepairs(uint64_t purchasedPoints) {
@@ -706,6 +728,18 @@ void Pilot::trackWaypoint(const FlightWaypoint& waypoint) {
         !waypoint_ || waypoint_->reference != waypoint.reference || waypoint_->label != waypoint.label ||
         bool(waypoint_->berth) != bool(waypoint.berth) ||
         (waypoint_->berth && waypoint.berth && waypoint_->berth->id != waypoint.berth->id);
+    const bool moving=waypoint.berth&&waypoint.berth->vessel();
+    const double sampleStep=ship_.flightSeconds-berthSampleSeconds_;
+    if(changed||!moving||sampleStep>.25)berthAcceleration_=berthTurn_={};
+    else if(sampleStep>1e-5){
+        berthAcceleration_=(waypoint.berth->velocity-waypoint_->berth->velocity)/sampleStep;
+        auto delta=waypoint.berth->orientation*glm::conjugate(waypoint_->berth->orientation);
+        if(delta.w<0.)delta=-delta;
+        const glm::dvec3 vector(delta.x,delta.y,delta.z);
+        const double magnitude=glm::length(vector);
+        berthTurn_=magnitude>1e-10?vector*(2.*std::atan2(magnitude,delta.w)/(magnitude*sampleStep)):glm::dvec3(0);
+    }
+    berthSampleSeconds_=ship_.flightSeconds;
     if (waypoint_ && waypoint_->berth && !waypoint.berth && dockingArmed_) {
         autopilot_ = false;
         phase_ = "DOCKING ABORTED / BERTH UNAVAILABLE";
@@ -733,6 +767,11 @@ void Pilot::trackWaypoint(const FlightWaypoint& waypoint) {
     instrument();
 }
 void Pilot::navigateWaypoint(const FlightWaypoint& waypoint) {
+    if (restoredDockCandidate_ && waypoint.berth) {
+        trackWaypoint(waypoint);
+        if (docking_.phase() == DockingPhase::Docked)
+            return;
+    }
     navigate(waypoint.reference);
     landingPlanet_.reset();
     if (waypoint.surfacePort) {
@@ -758,8 +797,24 @@ void Pilot::clearWaypoint() {
         instrument();
     }
 }
+void Pilot::releaseWaypointControl() {
+    // Manual assist uses a different thrust envelope from the waypoint helm.
+    // Keep momentum and attitude while clearing its actuator demands.
+    ship_.thrusters={};
+    ship_.angularThrusters={};
+    ship_.throttle=0.;
+    clearWaypoint();
+}
+void Pilot::alignMovingClamp() {
+    if(docking_.phase()!=DockingPhase::Docked)return;
+    const auto berth=dockingTarget();
+    if(!berth||!berth->vessel())return;
+    clampToBerth(*berth,nav_.cameraPosition()*std::pow(10.,nav_.logDistance),false,0.);
+    instrument();
+}
 bool Pilot::dock() {
-    if (!waypoint_ || !waypoint_->berth || ship_.hull <= 0 || ship_.shrinking || sizeRatio() < .99)
+    if (!waypoint_ || !waypoint_->berth || ship_.hull <= 0 || ship_.shrinking || sizeRatio() < .99 ||
+        docking_.phase() == DockingPhase::Docked || docking_.phase() == DockingPhase::Departure)
         return false;
     dockingArmed_ = true;
     docking_.cancel();
@@ -778,6 +833,29 @@ bool Pilot::dock() {
     phase_ = "DOCKING / ARRIVAL REQUEST ACCEPTED";
     instrument();
     return true;
+}
+bool Pilot::dockManually(const FlightWaypoint& waypoint) {
+    if (!waypoint.berth || ship_.landed || ship_.hull <= 0 || ship_.shrinking || sizeRatio() < .99 ||
+        docking_.phase() == DockingPhase::Docked || docking_.phase() == DockingPhase::Departure)
+        return false;
+    dropWarp();
+    restoredDockCandidate_ = false;
+    clearAssistCapture();
+    autopilot_ = landing_ = false;
+    landingPlanet_.reset();
+    debrisLanding_.reset();
+    ship_.assist = true;
+    ship_.throttle = ship_.boost = 0;
+    trackWaypoint(waypoint);
+    dockingArmed_ = true;
+    docking_.beginManual();
+    phase_ = std::string(dockingPhaseName(docking_.phase()));
+    instrument();
+    return true;
+}
+const ActivityId* Pilot::clampedHarbour() const {
+    return docking_.phase()==DockingPhase::Docked && waypoint_ && waypoint_->berth
+        ? &waypoint_->berth->id : nullptr;
 }
 glm::dvec3 Pilot::landingHeading(const Address& planet) const {
     const auto pose = universe_.relative(planet, nav_.anchor, nav_.logDistance);
@@ -955,6 +1033,16 @@ std::optional<DockingBerth> Pilot::dockingTarget() const {
     if (!waypoint_ || !waypoint_->berth)
         return {};
     auto b = *waypoint_->berth;
+    if (b.vessel()) {
+        // The renderer samples traffic once per frame. Advance the collar to
+        // the time of each physics substep before measuring clamp clearance.
+        const double elapsed = std::clamp(ship_.flightSeconds-berthSampleSeconds_,0.,.25);
+        b.metres += (b.velocity+berthAcceleration_*(.5*elapsed))*elapsed;
+        b.velocity += berthAcceleration_*elapsed;
+        const double angularSpeed = glm::length(berthTurn_);
+        if (angularSpeed>1e-10)
+            b.orientation = glm::angleAxis(angularSpeed*elapsed,berthTurn_/angularSpeed)*b.orientation;
+    }
     const auto reference = universe_.describe(waypoint_->reference);
     const auto rotation = universe_.relative(waypoint_->reference, nav_.anchor, 0).orientation;
     b.metres = universe_.pointRelative(waypoint_->reference,
@@ -963,8 +1051,24 @@ std::optional<DockingBerth> Pilot::dockingTarget() const {
     b.orientation = rotation * b.orientation;
     return b;
 }
-void Pilot::step(const HelmInput& input, double dt) {
+void Pilot::clampToBerth(const DockingBerth& berth, glm::dvec3 eye, bool newlyDocked, double dt) {
+    const auto previousVelocity = ship_.velocity;
+    nav_.orientation = berth.orientation;
+    nav_.offset = berth.metres / std::pow(10., nav_.logDistance) - nav_.orientation * glm::dvec3(0, 0, 1);
+    ship_.travelMetres += glm::length(berth.metres - eye);
+    ship_.velocity = berth.velocity;
+    ship_.angularVelocity = ship_.thrusters = ship_.angularThrusters = ship_.positionResidual = {};
+    ship_.throttle = 0;
+    properAcceleration_ = {};
+    ship_.flightSeconds += dt;
+    phase_ = std::string(dockingPhaseName(DockingPhase::Docked));
+    if (newlyDocked)
+        contactFeedback(previousVelocity);
+}
+void Pilot::step(const HelmInput& input,double dt,std::span<const TrafficMotion> traffic,
+                 double frameStart,double frameDuration) {
     const auto oldEye = nav_.cameraPosition();
+    const auto oldAxes = nav_.orientation;
     if (ship_.landed) {
         if (input.throttle > .01 || input.lift > .01)
             launch();
@@ -977,7 +1081,8 @@ void Pilot::step(const HelmInput& input, double dt) {
     const bool manual = std::abs(input.throttle) + std::abs(input.strafe) + std::abs(input.lift) +
                             std::abs(input.pitch) + std::abs(input.yaw) + std::abs(input.roll) >
                         .02;
-    if (manual && launchTime_ <= 0) {
+    const bool stationManeuver = manualDocking(docking_.phase()) || docking_.phase() == DockingPhase::Docked;
+    if (manual && launchTime_ <= 0 && !stationManeuver) {
         if (warpRoute())
             dropWarp();
         docking_.cancel();
@@ -986,18 +1091,30 @@ void Pilot::step(const HelmInput& input, double dt) {
         debrisLanding_.reset();
         phase_ = "MANUAL";
     }
-    if (input.brake)
+    if (input.brake && !stationManeuver)
         brake();
-    if (!autopilot_ || ship_.shrinking || sizeRatio() < .99 || ship_.hull <= 0 || !waypoint_ || !waypoint_->berth) {
+    if ((!autopilot_ && !stationManeuver) || ship_.shrinking || sizeRatio() < .99 || ship_.hull <= 0 ||
+        !waypoint_ || !waypoint_->berth) {
         docking_.cancel();
         dockingArmed_ = false;
     }
+    const auto manualBerth = manualDocking(docking_.phase()) ? dockingTarget() : std::nullopt;
+    const bool movingBerth=dockingArmed_&&waypoint_&&waypoint_->berth&&waypoint_->berth->vessel();
+    const auto berthFrame=movingBerth?universe_.relative(waypoint_->reference,nav_.anchor,0.).orientation:
+                                       glm::dquat(1,0,0,0);
+    const auto berthTurn=movingBerth?berthFrame*berthTurn_:glm::dvec3(0);
+    if (docking_.phase() == DockingPhase::Docked)
+        if (const auto berth = dockingTarget()) {
+            clampToBerth(*berth, oldEye * std::pow(10., nav_.logDistance), false, dt);
+            return;
+        }
     if (autopilot_ || launchTime_ > 0 ||
         std::abs(input.throttle) + std::abs(input.strafe) + std::abs(input.lift) > .01)
         clearAssistCapture();
-    ship_.boost += ((input.boost && !input.precision && !autopilot_ ? 1. : 0.) - ship_.boost) *
+    ship_.boost += ((input.boost && !input.precision && !autopilot_ && !manualBerth ? 1. : 0.) - ship_.boost) *
                    (1 - std::exp(-dt / .18));
-    ship_.throttle = std::clamp(ship_.throttle + input.throttle * dt * .36, 0., 1.);
+    ship_.throttle = manualBerth ? std::abs(input.throttle) :
+                                  std::clamp(ship_.throttle + input.throttle * dt * .36, 0., 1.);
     const auto beforeGround = continuumContact() ? ground() : std::optional<Ground>{};
     if (landing_ && !landingRiskAccepted_ && beforeGround && beforeGround->altitude < 2500 && instruments_.surfaceLandingHold) {
         autopilot_ = landing_ = false;
@@ -1016,7 +1133,7 @@ void Pilot::step(const HelmInput& input, double dt) {
     glm::dvec3 wanted = nav_.orientation * glm::dvec3(input.strafe * limit * .28, input.lift * limit * .30,
                                                       -ship_.throttle * limit);
     glm::dvec3 spin = manualSpin(input);
-    if (autopilot_ && !debrisLanding_) {
+    if (autopilot_ && !debrisLanding_ && (waypoint_ || destination_)) {
         auto delta = (destinationPoint() - oldEye) * std::pow(10., nav_.logDistance);
         const double routeRange = glm::length(delta);
         if (landingPlanet_ && beforeGround && beforeGround->planet.address == *landingPlanet_) {
@@ -1078,7 +1195,7 @@ void Pilot::step(const HelmInput& input, double dt) {
             glm::dot(nav_.orientation * shipForce(properties, brakeWrench.linear) / properties.massKg +
                          gravity,
                      -direction));
-        const auto target = universe_.describe(*destination_);
+        const auto target = universe_.describe(waypoint_ ? waypoint_->reference : *destination_);
         const double targetRadius = std::pow(10., target.frame.logRadius);
         double arrival = std::clamp(targetRadius * .00001, 2. * sizeRatio(), 500. * sizeRatio());
         if (waypoint_)
@@ -1136,7 +1253,7 @@ void Pilot::step(const HelmInput& input, double dt) {
             phase_ = "ARRIVED / L SELECTS LANDING SITE";
         }
     }
-    if (crewQuality_ > 0) {
+    if (crewQuality_ > 0 && !manualBerth) {
         if (crewVelocity_ && !dockingArmed_) {
             wanted = universe_.relative(crewCourseFrame_, nav_.anchor, 0).orientation * *crewVelocity_;
             // An order cannot command a descent inside the existing stopping envelope.
@@ -1160,7 +1277,27 @@ void Pilot::step(const HelmInput& input, double dt) {
         wanted = glm::mix(assistCapture_, wanted, t * t * (3 - 2 * t));
         assistCaptureTime_ = std::max(0., assistCaptureTime_ - dt);
     }
-    if (dockingArmed_) {
+    if (manualBerth) {
+        const auto& berth = *manualBerth;
+        const auto eye = oldEye * std::pow(10., nav_.logDistance);
+        const auto drift=dockingFrameVelocity(berth,eye,berthTurn);
+        const auto readout = dockingReadout(berth, eye, ship_.velocity-(drift-berth.velocity), nav_.orientation);
+        if (docking_.updateManual(readout, dt)) {
+            clampToBerth(berth, eye, true, dt);
+            return;
+        }
+        const double speed = manualDockingSpeed(readout.range) * (input.precision ? .28 : 1.);
+        const glm::dvec3 axes(input.strafe, input.lift, -input.throttle);
+        // Match the station's velocity at neutral. Every translation and
+        // rotation command during the approach still comes from the helm.
+        wanted = drift + nav_.orientation * limited(axes, 1.) * speed;
+        if(movingBerth&&docking_.phase()==DockingPhase::ManualCapture&&glm::length(axes)<.02){
+            const double standOff=std::lerp(.55,.07,smoothstep(0.,.85,docking_.capture()));
+            wanted+=berth.orientation*limited((glm::dvec3(0,0,standOff)-readout.offset)*1.15,1.);
+        }
+        spin+=glm::inverse(nav_.orientation)*berthTurn;
+        phase_ = std::string(dockingPhaseName(docking_.phase()));
+    } else if (dockingArmed_) {
         if (const auto berth = dockingTarget()) {
             const auto eye = oldEye * std::pow(10., nav_.logDistance);
             if (docking_.phase() == DockingPhase::None &&
@@ -1168,23 +1305,14 @@ void Pilot::step(const HelmInput& input, double dt) {
                 docking_.begin();
             if (docking_.phase() != DockingPhase::None) {
                 const auto previousPhase = docking_.phase();
-                const auto guide = docking_.update(*berth, eye, ship_.velocity, nav_.orientation, dt);
+                const auto guide = docking_.update(*berth, eye, ship_.velocity, nav_.orientation, dt,berthTurn);
                 if (guide.clamp) {
-                    // The latch closes only after a sub-metre, sub-0.18 m/s capture dwell.
-                    const auto previousVelocity = ship_.velocity;
-                    nav_.offset += (berth->metres - eye) / std::pow(10., nav_.logDistance);
-                    ship_.velocity = berth->velocity;
-                    ship_.angularVelocity = ship_.thrusters = ship_.angularThrusters = ship_.positionResidual = {};
-                    ship_.throttle = 0;
-                    properAcceleration_ = {};
-                    ship_.flightSeconds += dt;
-                    phase_ = std::string(dockingPhaseName(DockingPhase::Docked));
-                    if (previousPhase != DockingPhase::Docked)
-                        contactFeedback(previousVelocity);
+                    clampToBerth(*berth, eye, previousPhase != DockingPhase::Docked, dt);
                     return;
                 }
                 wanted = guide.finished ? ship_.velocity : guide.velocity;
-                spin = angularTarget(nav_.orientation, guide.forward, guide.up) * .60;
+                spin = angularTarget(nav_.orientation, guide.forward, guide.up) * .60+
+                       glm::inverse(nav_.orientation)*berthTurn;
                 phase_ = std::string(dockingPhaseName(docking_.phase()));
                 if (guide.finished) {
                     dockingArmed_ = autopilot_ = false;
@@ -1195,7 +1323,7 @@ void Pilot::step(const HelmInput& input, double dt) {
         }
     }
     const bool manualAssist = ship_.assist && !autopilot_ && launchTime_ <= 0;
-    glm::dvec3 movingFrameAcceleration{};
+    glm::dvec3 movingFrameAcceleration=movingBerth?berthFrame*berthAcceleration_:glm::dvec3(0);
     if (auto pad = localDebrisPad(debrisStepSeconds_)) {
         spin = angularTarget(nav_.orientation, pad->forward, pad->up);
         const auto delta = oldEye * std::pow(10., nav_.logDistance) - pad->eye;
@@ -1253,7 +1381,7 @@ void Pilot::step(const HelmInput& input, double dt) {
         const auto drag = atmosphericDrag(properties, nav_.orientation,
                                           ship_.velocity - environmentSample_.wind * sizeRatio(),
                                           environmentSample_.airDensity * continuum, dt);
-        const auto support = inverse * (-gravity - drag / properties.massKg);
+        const auto support = inverse * (movingFrameAcceleration-gravity-drag/properties.massKg);
         const auto command = inverse * (wanted - ship_.velocity) * glm::dvec3(2.4, 2.4, 1.6);
         const auto steering =
             allocateForce(support, {command.x, command.y, 0}, authority.caps, authority.retro);
@@ -1398,6 +1526,44 @@ void Pilot::step(const HelmInput& input, double dt) {
             autopilot_=landing_=false;phase_="RELIC STRUCTURE CONTACT / BRAKED";
             if(sizeRatio()<1)ship_.hull=std::max(0.,ship_.hull-shipContactDamage(glm::length(contactVelocity),sizeRatio(),.3));
             contactFeedback(contactVelocity);
+        }
+    }
+    if(!traffic.empty()){
+        const double begin=std::clamp((ship_.flightSeconds-frameStart)/frameDuration,0.,1.);
+        const double end=std::clamp(begin+dt/frameDuration,0.,1.);
+        if(const auto hit=sweepXalariaTraffic(universe_,nav_.anchor,traffic,oldEye*units,
+                nav_.cameraPosition()*units,oldAxes,nav_.orientation,collisionRadius(),begin,end,dt)){
+            const auto previous=ship_.velocity;
+            const double inward=std::max(0.,glm::dot(hit->surfaceVelocity-ship_.velocity,hit->normal));
+            const bool clearedForTarget=dockingArmed_&&waypoint_&&waypoint_->berth&&waypoint_->berth->id==hit->vessel->id;
+            double damage=shipContactDamage(inward,sizeRatio(),.32);
+            if(shieldDeployed()){
+                const auto toward=glm::conjugate(nav_.orientation)*(-hit->normal);
+                damage=std::max(0.,damage-playerShield_.absorb(std::max(damage,inward*.08),combatShieldCapacity_,
+                                                               ship_.flightSeconds+dt,toward));
+            }
+            nav_.offset=hit->eye/units-nav_.orientation*glm::dvec3(0,0,1);
+            ship_.velocity+=hit->normal*(1.14*inward);
+            ship_.hull=std::max(0.,ship_.hull-damage);
+            ship_.positionResidual=ship_.thrusters=ship_.angularThrusters={};
+            ship_.throttle=0.;
+            dropWarp();
+            docking_.cancel();
+            dockingArmed_=autopilot_=landing_=false;
+            waypoint_.reset();
+            destination_.reset();
+            trafficContact_=hit->vessel->name;
+            if(inward>.15){
+                const auto& target=*hit->vessel;
+                const auto axes=universe_.relative(nav_.anchor,target.id.home,0.).orientation;
+                const TrafficStrike strike{target.id,axes*(-hit->normal),hit->leverage,inward,target.radius,target.kind,
+                                           glm::conjugate(target.orientation)*hit->leverage,clearedForTarget};
+                const auto existing=std::find_if(trafficStrikes_.begin(),trafficStrikes_.end(),
+                    [&](const auto& impact){return impact.target==target.id;});
+                if(existing==trafficStrikes_.end())trafficStrikes_.push_back(strike);
+                else if(existing->closingSpeed<inward)*existing=strike;
+            }
+            contactFeedback(previous);
         }
     }
     ship_.flightSeconds += dt;
@@ -1551,6 +1717,12 @@ void Pilot::contactFeedback(glm::dvec3 previousVelocity) {
     }
 }
 void Pilot::update(const HelmInput& input, double dt, const std::shared_ptr<const Geometry>& visible) {
+    update(input,dt,visible,{});
+}
+void Pilot::update(const HelmInput& input,double dt,const std::shared_ptr<const Geometry>& visible,
+                   std::span<const TrafficMotion> traffic) {
+    trafficContact_.clear();
+    trafficStrikes_.clear();
     if (!std::isfinite(dt) || dt <= 0)
         return;
     for (double v : {input.throttle, input.strafe, input.lift, input.pitch, input.yaw, input.roll})
@@ -1585,7 +1757,8 @@ void Pilot::update(const HelmInput& input, double dt, const std::shared_ptr<cons
     precisionScale_ = input.precision ? .18 : 1.;
     environment_.refresh(universe_, nav_, spatial_);
     const double initialLog = nav_.logDistance;
-    double remaining = std::min(dt, .1);
+    const double frameDuration=std::min(dt,.1),frameStart=ship_.flightSeconds;
+    double remaining=frameDuration;
     if (!ship_.driveBraking)
         warpExitNotice_ = std::max(0., warpExitNotice_ - remaining);
     landingSettle_ = std::max(0., landingSettle_ - remaining / 1.35);
@@ -1617,7 +1790,7 @@ void Pilot::update(const HelmInput& input, double dt, const std::shared_ptr<cons
         const double stepTime = std::min({.01, remaining, safeStep});
         debrisStepSeconds_ = std::max(0., debrisClock_ - remaining);
         resize(stepTime);
-        step(bounded, stepTime);
+        step(bounded,stepTime,traffic,frameStart,frameDuration);
         remaining -= stepTime;
     }
     if (landedDebris())
@@ -1770,8 +1943,11 @@ void Pilot::instrument() {
     t.travelMetres = ship_.travelMetres;
     t.navigating = autopilot_;
     if (const auto berth = dockingTarget()) {
-        t.docking = dockingReadout(*berth, nav_.cameraPosition() * std::pow(10., nav_.logDistance),
-                                   ship_.velocity, nav_.orientation);
+        const auto eye=nav_.cameraPosition()*std::pow(10.,nav_.logDistance);
+        const auto turn=berth->vessel()?universe_.relative(waypoint_->reference,nav_.anchor,0.).orientation*berthTurn_:
+                                         glm::dvec3(0);
+        t.docking = dockingReadout(*berth,eye,ship_.velocity-(dockingFrameVelocity(*berth,eye,turn)-berth->velocity),
+                                   nav_.orientation);
         t.docking.phase = docking_.phase();
         if (t.docking.phase == DockingPhase::Departure) {
             t.docking.localForward = -t.docking.localForward;
@@ -1782,8 +1958,10 @@ void Pilot::instrument() {
         t.docking.active = dockingArmed_;
         t.docking.docked = docking_.phase() == DockingPhase::Docked;
         t.docking.capture = docking_.capture();
+        if (manualDocking(t.docking.phase))
+            t.driveSpeed = manualDockingSpeed(t.docking.range) * (precisionScale_ < .5 ? .28 : 1.);
     }
-    t.phase = phase_;
+    t.phase = trafficContact_.empty()?phase_:"SHIP CONTACT / "+trafficContact_;
     t.logMetres = nav_.logDistance;
     t.scaleRate = scaleRate_;
     t.drive = ship_.shrinking ? (t.driveSpeed > 350 * sizeRatio() * 4 ? "SHRINK FIELD / SCALE TRANSIT"
@@ -1886,6 +2064,14 @@ void Pilot::instrument() {
         t.range = glm::length(delta) * std::pow(10., nav_.logDistance);
         t.localTarget = glm::inverse(nav_.orientation) * delta;
         t.targetVisible = glm::length(delta) > 1e-30;
+        if (manualDocking(t.docking.phase) && t.docking.offset.z > 0 && t.docking.range > 80. &&
+            glm::length(glm::dvec2(t.docking.offset)) >= t.docking.width * .25) {
+            const auto& berth = *waypoint_->berth;
+            const double intercept = std::clamp(t.docking.offset.z, 0., berth.laneLength());
+            t.localTarget -= t.docking.localForward * (intercept / std::pow(10., nav_.logDistance));
+        }
+        if (t.docking.docked)
+            t.targetVisible = false;
         if (waypoint_)
             t.destination = waypoint_->label;
         else {
@@ -1949,7 +2135,8 @@ std::string Pilot::serialize() const {
     out.imbue(std::locale::classic());
     out << std::setprecision(17);
     const bool exposure=ship_.exposure.heat>1e-9||ship_.exposure.charge>1e-9;
-    out << (exposure ? "INFINITY_SHIP 8 " : warpRoute() ? "INFINITY_SHIP 7 " : landedDebris() ? "INFINITY_SHIP 6 " : "INFINITY_SHIP 5 ") << ship_.frame.str();
+    const bool saveShield=universe_.xalaria()&&playerShield_.remaining(combatShieldCapacity_,ship_.flightSeconds)<combatShieldCapacity_-1e-8;
+    out << (saveShield ? "INFINITY_SHIP 9 " : exposure ? "INFINITY_SHIP 8 " : warpRoute() ? "INFINITY_SHIP 7 " : landedDebris() ? "INFINITY_SHIP 6 " : "INFINITY_SHIP 5 ") << ship_.frame.str();
     for (auto v : {ship_.velocity, ship_.angularVelocity, ship_.thrusters, ship_.positionResidual})
         out << ' ' << v.x << ' ' << v.y << ' ' << v.z;
     out << ' ' << ship_.throttle << ' ' << ship_.boost << ' ' << ship_.hull << ' ' << ship_.assist << ' '
@@ -1961,11 +2148,14 @@ std::string Pilot::serialize() const {
         << ship_.cruiseSpeed << ' ' << ship_.flightSeconds << ' ' << ship_.travelMetres;
     out << ' ' << ship_.angularThrusters.x << ' ' << ship_.angularThrusters.y << ' '
         << ship_.angularThrusters.z << ' ' << ship_.driveBraking << ' ' << ship_.appliedRepairPoints;
-    if(exposure)
+    if(exposure||saveShield)
         out<<' '<<(landedDebris()?landedDebris()->str():"-")<<' '<<debrisSide_<<' '<<warpRoute()
            <<' '<<ship_.exposure.heat<<' '<<ship_.exposure.charge;
     else if (const auto* id = landedDebris())
         out << ' ' << id->str() << ' ' << debrisSide_;
+    if(saveShield)
+        out<<' '<<playerShield_.spent*playerShieldCapacity/combatShieldCapacity_<<' '<<playerShield_.hitAt<<' '<<playerShield_.strength<<' '
+           <<playerShield_.direction.x<<' '<<playerShield_.direction.y<<' '<<playerShield_.direction.z;
     return out.str();
 }
 bool Pilot::restore(std::string_view text) {
@@ -1987,7 +2177,7 @@ bool Pilot::restore(std::string_view text) {
         int version;
         ShipState candidate;
         glm::dvec3 direction;
-        if (!(in >> header >> version >> frame) || !matchesSaveTag(header, "INFINITY_SHIP") || (version < 1 || version > 8))
+        if (!(in >> header >> version >> frame) || !matchesSaveTag(header, "INFINITY_SHIP") || (version < 1 || version > 9))
             return false;
         candidate.frame = Address::parse(frame);
         for (auto* v : {&candidate.velocity, &candidate.angularVelocity, &candidate.thrusters})
@@ -2056,7 +2246,7 @@ bool Pilot::restore(std::string_view text) {
             return false;
         std::optional<ActivityId> debris;
         int side = 1;
-        if (version == 6 || version == 8) {
+        if (version == 6 || version >= 8) {
             std::string fragment;
             if (!(in >> fragment >> side) || (side != -1 && side != 1))
                 return false;
@@ -2068,11 +2258,14 @@ bool Pilot::restore(std::string_view text) {
             }
         }
         bool route = version == 7;
-        if(version==8){unsigned guided;
+        if(version>=8){unsigned guided;
             if(!(in>>guided)||guided>1||!real(candidate.exposure.heat)||!real(candidate.exposure.charge)||
                 candidate.exposure.heat<0||candidate.exposure.heat>1.3||candidate.exposure.charge<0||candidate.exposure.charge>1)return false;
             route=guided;
         }
+        ShieldCharge shield;
+        if(version==9&&(!real(shield.spent)||!real(shield.hitAt)||!real(shield.strength)||!vector(shield.direction)||
+                       !shield.valid(playerShieldCapacity,candidate.flightSeconds)))return false;
         if (route && (!candidate.cruise || !candidate.assist || candidate.landed || candidate.hull <= 0 ||
                       !dest || dest->kind() < Kind::Galaxy || dest->kind() > Kind::Planet))
             return false;
@@ -2081,6 +2274,7 @@ bool Pilot::restore(std::string_view text) {
             (candidate.landed && ((!body && !debris) || !candidate.gear)))
             return false;
         ship_ = candidate;
+        playerShield_=shield;combatShieldCapacity_=playerShieldCapacity;combatArmour_=1.;
         exposureSample_ = {};
         docking_.cancel();
         dockingArmed_ = false;

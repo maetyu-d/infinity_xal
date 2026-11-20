@@ -24,10 +24,11 @@ class XalariaNavigation {
     bool advanceFlight(const HelmInput&, double seconds, const std::shared_ptr<const Geometry>& visible = {});
     void pause();
     bool resume();
-    void cancel();
+    void cancel(bool brake=true);
     void update(double seconds);
     FlightInstruments instruments() const;
     double levelRollInput() const;
+    const std::optional<ActivityId>& trafficWaveOff() const {return trafficWaveOff_;}
     Phase phase() const {return phase_;}
     std::string serialize() const;
     bool restore(std::string_view);
@@ -37,7 +38,8 @@ class XalariaNavigation {
     Pilot& pilot_;
     const XalariaCatalog& catalog_;
     XalariaEconomy* economy_=nullptr;
-    std::optional<std::array<XalariaWormholeMouth,2>> wormholeMouths_;
+    mutable std::map<std::pair<uint32_t,uint32_t>,XalariaWormholeMouth> wormholeMouths_;
+    std::optional<ActivityId> trafficWaveOff_;
     Phase phase_=Phase::Idle,pausedPhase_=Phase::Transit;
     std::vector<uint32_t> route_;
     std::optional<uint64_t> world_;

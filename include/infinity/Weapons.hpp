@@ -153,6 +153,10 @@ class WeaponSystem {
     const std::vector<WeaponShot>& shots() const {
         return shots_;
     }
+    void presentShot(WeaponShot shot) {
+        if(shots_.size()>=96)shots_.erase(shots_.begin());
+        shots_.push_back(std::move(shot));
+    }
     std::span<const WeaponMissile> missiles() const { return missiles_; }
     const std::vector<WeaponDamage>& damage() const {
         return damage_;

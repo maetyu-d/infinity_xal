@@ -14,11 +14,23 @@ if(NOT EXISTS "${INFINITY_ENGINE_BUILD}/libinfinity_core.a")
 endif()
 set(dep "${INFINITY_ENGINE_ROOT}/external")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/EmbedHyperion.cmake")
-add_library(hybrid_objects OBJECT src/Universe.cpp src/Geometry.cpp src/ActivityMeshes.cpp src/Cockpit.cpp src/ShipInterior.cpp src/AtlasFont.cpp src/Xalaria.cpp src/Flight.cpp src/Planetology.cpp src/XalariaMap.cpp src/XalariaNavigation.cpp src/XalariaEconomy.cpp)
-target_include_directories(hybrid_objects PUBLIC include "${dep}/glm" "${dep}/FastNoise2/include"
+set(story_library "${CMAKE_CURRENT_SOURCE_DIR}/data/story-library.tsv")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${story_library}")
+file(READ "${story_library}" story_library_text)
+set(story_expansion "${CMAKE_CURRENT_SOURCE_DIR}/data/story-expansion.tsv")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${story_expansion}")
+file(READ "${story_expansion}" story_expansion_text)
+string(APPEND story_library_text "\n${story_expansion_text}")
+string(REPLACE "\n" ")XALARIA_STORIES\",\nR\"XALARIA_STORIES(" story_library_rows "${story_library_text}")
+set(story_header "#pragma once\n#include <string_view>\ninline constexpr std::string_view xalariaStoryLibrary[] = {\nR\"XALARIA_STORIES(${story_library_rows})XALARIA_STORIES\"};\n")
+set(story_header_path "${CMAKE_BINARY_DIR}/generated/XalariaStoryData.hpp")
+file(WRITE "${story_header_path}" "${story_header}")
+add_library(hybrid_objects OBJECT src/Universe.cpp src/Geometry.cpp src/ActivityMeshes.cpp src/Cockpit.cpp src/CockpitContext.cpp src/ShipInterior.cpp src/StationLayout.cpp src/CrewSilhouette.cpp src/AtlasFont.cpp src/Xalaria.cpp src/Flight.cpp src/Piloting.cpp src/Docking.cpp src/Planetology.cpp src/XalariaMap.cpp src/XalariaNavigation.cpp src/XalariaEconomy.cpp src/XalariaTraffic.cpp src/XalariaStories.cpp src/XalariaIncidents.cpp src/XalariaDiscovery.cpp src/XalariaInvestigation.cpp src/XalariaCombat.cpp src/XalariaConvoys.cpp src/WarpTravel.cpp)
+target_include_directories(hybrid_objects PUBLIC include "${CMAKE_BINARY_DIR}/generated" "${dep}/glm" "${dep}/FastNoise2/include"
   "${dep}/FastSIMD/include" "${dep}/oneTBB/include" "${dep}/zstd/lib"
   "${INFINITY_ENGINE_BUILD}/external/FastNoise2/src/fastsimd/FastSIMD_FastNoise/include")
 target_compile_definitions(hybrid_objects PUBLIC FASTNOISE_STATIC_LIB FASTSIMD_STATIC_LIB)
+target_sources(hybrid_objects PRIVATE src/ShipExplosion.cpp src/CockpitMotion.cpp src/XalariaStrategy.cpp src/XalariaFleet.cpp src/XalariaStrategySave.cpp src/XalariaStrategyUI.cpp)
 target_compile_options(hybrid_objects PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
 set(engine_libraries
   "${INFINITY_ENGINE_BUILD}/libinfinity_core.a"
@@ -50,3 +62,19 @@ add_test(NAME integrated_map_journey_and_controls COMMAND xalaria_navigation_tes
 add_executable(xalaria_economy_tests tests/XalariaEconomyTests.cpp)
 target_link_libraries(xalaria_economy_tests PRIVATE hybrid_objects ${engine_libraries})
 add_test(NAME integrated_economy_and_physical_trade COMMAND xalaria_economy_tests "${CMAKE_CURRENT_SOURCE_DIR}/data/catalog.tsv")
+
+add_executable(xalaria_combat_tests tests/XalariaCombatTests.cpp)
+target_link_libraries(xalaria_combat_tests PRIVATE hybrid_objects ${engine_libraries})
+add_test(NAME piracy_warfare_and_boarding COMMAND xalaria_combat_tests "${CMAKE_CURRENT_SOURCE_DIR}/data/catalog.tsv")
+
+add_executable(xalaria_convoy_tests tests/XalariaConvoyTests.cpp)
+target_link_libraries(xalaria_convoy_tests PRIVATE hybrid_objects ${engine_libraries})
+add_test(NAME universe_convoys_escort_piracy_and_factions COMMAND xalaria_convoy_tests "${CMAKE_CURRENT_SOURCE_DIR}/data/catalog.tsv")
+
+add_executable(xalaria_cockpit_motion_tests tests/CockpitMotionTests.cpp)
+target_link_libraries(xalaria_cockpit_motion_tests PRIVATE hybrid_objects ${engine_libraries})
+add_test(NAME stable_cockpit_feedback COMMAND xalaria_cockpit_motion_tests)
+
+add_executable(xalaria_strategy_tests tests/XalariaStrategyTests.cpp)
+target_link_libraries(xalaria_strategy_tests PRIVATE hybrid_objects ${engine_libraries})
+add_test(NAME living_universe_supply_fleets_and_consequences COMMAND xalaria_strategy_tests "${CMAKE_CURRENT_SOURCE_DIR}/data/catalog.tsv")

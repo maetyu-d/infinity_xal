@@ -1,6 +1,7 @@
 uniform vec4 u_stellar[3];
 uniform mat4 u_starFromEye;
 #include "hyperion_star_types.sh"
+#include "hyperion_corona.sh"
 // Hyperion's source-depth test over the actual solar disc. Bearings, radius,
 // temperature and eclipse area come from immutable scene descriptions.
 float stellarVisibility(bool includeCloud){
@@ -42,7 +43,7 @@ vec3 stellarProminences(vec2 uv){
  if(u_stellar[0].w<=0. || resolved<=0. || kind<.5 || kind>6.5)return vec3(0.);
  vec2 offset=(uv-u_stellar[0].xy)*vec2(u_stellar[2].x,1.);
  float r=length(offset)/radius;
- if(r<.992 || r>1.53)return vec3(0.);
+ if(r<.992 || r>2.70)return vec3(0.);
  if(texture2D(s_opaqueDepth,uv).r>u_stellar[1].w*1.03+1e-10)return vec3(0.);
  vec2 radial=normalize(offset);
  float altitude=r-1.;
@@ -51,10 +52,17 @@ vec3 stellarProminences(vec2 uv){
  float spin=mod(seconds*u_starType[1].y,1.)*6.283;
  float aa=max(u_stellar[2].z/radius,.002);
  vec3 local=mul(mat3(u_starFromEye),vec3(radial.x,radial.y*u_starFromEye[3].w,0.));
+ vec3 envelope=stellarCoronaEnvelope(local,max(0.,altitude),aa);
+ if(r>1.53)return envelope*resolved*u_stellar[2].y;
  float density=strataNoise(local*vec3(19.,10.,19.)+phase*13.,vec3(0.));
  float threads=strataNoise(local*62.+vec3(0.,0.,altitude*10.),vec3(0.));
- float plume=exp(-max(0.,altitude)/(.075+.24*density*density));
- vec3 corona=u_stellar[1].rgb*plume*(.011+.12*pow(density,2.5)+threads*.029);
+ float plume=exp(-max(0.,altitude)/(.075+.26*density*density));
+ float current=strataNoise(local*vec3(27.,13.,24.)+vec3(altitude*7.,phase*11.,seconds*.06),vec3(0.));
+ float streamer=pow(clamp(threads*.66+current*.34,0.,1.),4.)*
+                exp(-altitude/(.067+.26*density*density));
+ float chromosphere=exp(-altitude/max(.013,aa))*smoothstep(.24,.68,density);
+ vec3 corona=u_stellar[1].rgb*(plume*(.009+.13*pow(density,2.5)+threads*.031)+
+                              streamer*.45+chromosphere*.47);
  for(int i=0;i<4;i++){
   float index=float(i);
   float heading=phase*6.283+index*2.39996+spin;
@@ -72,13 +80,14 @@ vec3 stellarProminences(vec2 uv){
   arch*=.93+.07*sin(seconds*.42+index*2.3);
   float distanceToArch=abs(altitude-arch);
   float core=exp(-distanceToArch/max(.010,aa*.7));
-  float hair=exp(-abs(altitude-arch*.77-.012)/max(.008,aa*.65));
+  float hair=exp(-abs(altitude-arch*.77-.012)/max(.008,aa*.65))+
+             exp(-abs(altitude-arch*1.16-.007)/max(.006,aa*.56))*.49;
   float halo=exp(-distanceToArch/.045)*.24;
   float detail=.38+.62*threads;
   corona+=u_stellar[1].rgb*(core*.87+hair*.31+halo)*limbVisibility*detail;
  }
  float limb=smoothstep(.992,1.02,r)*(1.-smoothstep(1.34,1.53,r));
- return corona*limb*resolved*u_stellar[2].y;
+ return (corona*limb+envelope*smoothstep(.992,1.02,r))*resolved*u_stellar[2].y;
 }
 // Actual Hyperion postFragment streak and ghost, evaluated in the existing
 // third-resolution bloom pass. Analytic box filtering keeps thin streaks

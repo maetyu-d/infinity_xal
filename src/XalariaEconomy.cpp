@@ -1,4 +1,7 @@
 #include "infinity/XalariaEconomy.hpp"
+#include "infinity/XalariaCombat.hpp"
+#include "infinity/XalariaTraffic.hpp"
+#include "infinity/XalariaStories.hpp"
 #include <algorithm>
 #include <bit>
 #include <cmath>
@@ -11,6 +14,7 @@
 namespace infinity {
 namespace {
 constexpr int64_t moneyLimit=1000000000000000LL;
+constexpr uint32_t publishedPortSlot=60000, privatePortSlot=70000, privatePlaceOffset=100000;
 constexpr std::array<XGoodInfo,xGoodCount> goods{{
  {"ALUMINIUM",4000,true},{"IRON",5000,true},{"TIN",6500,false},{"NICKEL",12000,true},
  {"CHROMIUM",18000,true},{"TITANIUM",32000,true},{"IRIDIUM",280000,false},
@@ -37,8 +41,14 @@ std::string_view xFactionName(XFaction f){constexpr std::array<std::string_view,
 XalariaEconomy::XalariaEconomy(const Universe& u):universe_(u),catalog_(*u.xalaria()){
  view.place={14940,2,0,false};if(!validPlace(view.place)){const auto& s=catalog_.stars.begin()->second;view.place.system=s.seed;view.place.world=s.worlds.begin()->first;}
 }
+void XalariaEconomy::setCombat(XalariaCombat* combat){combat_=combat;if(combat_)combat_->strategy().adoptMarkets();}
 unsigned XalariaEconomy::technology() const{return level(technologyXP_);}
 unsigned XalariaEconomy::culture() const{return level(cultureXP_);}
+void XalariaEconomy::rewardDispatch(int64_t cents,unsigned technology,unsigned culture){
+ credits_+=std::clamp(cents,int64_t(0),moneyLimit-credits_);
+ technologyXP_+=std::min<int64_t>(technology,std::max<int64_t>(0,50000-technologyXP_));
+ cultureXP_+=std::min<int64_t>(culture,std::max<int64_t>(0,50000-cultureXP_));
+}
 int64_t XalariaEconomy::cargoUnits() const{
  int64_t n=artwork_.size();for(auto q:cargo_)n+=q;
  for(const auto& c:contracts_)if(c.state==XContract::State::Active)n+=c.units;return n;
@@ -69,22 +79,41 @@ std::string XalariaEconomy::placeName(const XPlace& p) const{
  return w.name+" STATION "+std::to_string(p.station+1);
 }
 XFaction XalariaEconomy::faction(const XPlace& p) const{
+ if(combat_)if(const auto* s=combat_->strategy().station(p))return s->owner;
+ return baseFaction(p);
+}
+XFaction XalariaEconomy::baseFaction(const XPlace& p) const{
  if(p.station>=100000)for(const auto& a:assets_)if(a.id==p.station-100000)return a.tradeFlag?XFaction::Trade:XFaction::Independent;
  const auto r=mix64(key(p))%20;return r<7?XFaction::Trade:r<12?XFaction::Nature:r<16?XFaction::Freedom:r<18?XFaction::Rebel:XFaction::Independent;
 }
 bool XalariaEconomy::canTrade(const XPlace& p) const{
+ if(combat_&&!combat_->permits(p))return false;
  if(!validPlace(p))return false;
  if(p.city)return landed_&&currentSystem_==p.system&&currentWorld_==p.world;
  return docked_&&*docked_==p;
 }
 void XalariaEconomy::show(uint32_t s,uint64_t w){
- catalog_.star(s).worlds.at(w);auto list=venues(s,w);view.place=list.empty()?XPlace{s,w,0,false}:list.front();view.scroll=0;view.open=true;
+ catalog_.star(s).worlds.at(w);auto list=venues(s,w);view.place=list.empty()?XPlace{s,w,0,false}:list.front();view.scroll=0;
+ view.cargoTerminal=false;view.open=true;
+}
+bool XalariaEconomy::openCargoTerminal() {
+ if (!docked_ || !canTrade(*docked_))
+  return false;
+ const auto largest = std::max_element(cargo_.begin(),cargo_.end());
+ view.place = *docked_;
+ view.page = XEconomyView::Page::Market;
+ view.good = std::distance(cargo_.begin(),largest);
+ view.quantity = std::clamp<int64_t>(*largest,1,600);
+ view.message = "STATION LINK OPEN / CARGO TRANSFERS AVAILABLE";
+ view.cargoTerminal = view.open = true;
+ return true;
 }
 void XalariaEconomy::cycleVenue(){
  auto list=venues(view.place.system,view.place.world);if(list.empty()){failure("NO STATION OR CITY MARKET ON THIS WORLD");return;}
  auto it=std::find(list.begin(),list.end(),view.place);view.place=it==list.end()?list.front():list[(size_t(it-list.begin())+1)%list.size()];
 }
 XMarket& XalariaEconomy::market(const XPlace& p) const{
+ if(combat_)if(auto* market=combat_->strategy().market(p))return *market;
  if(!validPlace(p))throw std::invalid_argument("No market at this location");
  auto [it,created]=markets_.try_emplace(p);auto& m=it->second;Random r{key(p)};
  if(created){for(size_t g=0;g<xGoodCount;++g){
@@ -106,7 +135,8 @@ int64_t XalariaEconomy::midpoint(const XPlace& p,XGood good,int64_t amount) cons
  if(g==rich)multiplier*=.60+.15*r.unit(50+g);
  double scarcity=1+double(m.target[g]-amount)/std::max<int64_t>(1,m.target[g])*.18;
  double trust=p.city?std::max(.55,1-.15*aesthetics(p.system,p.world)):1.;
- return std::max<int64_t>(1,int64_t(std::llround(goods[g].base*multiplier*std::clamp(scarcity,.55,1.8)*trust)));
+ const double incident=(stories_?stories_->marketFactor(p,good):1.)*(combat_?combat_->convoys().marketFactor(p,good)*combat_->strategy().marketFactor(p,good):1.);
+ return std::max<int64_t>(1,int64_t(std::llround(goods[g].base*multiplier*std::clamp(scarcity,.55,1.8)*trust*incident)));
 }
 int64_t XalariaEconomy::stock(const XPlace& p,XGood g) const{return validPlace(p)?market(p).stock[size_t(g)]:0;}
 XQuote XalariaEconomy::quote(const XPlace& p,XGood good,int64_t units,bool buying) const{
@@ -130,13 +160,17 @@ bool XalariaEconomy::buy(XGood good,int64_t count){
  if(cargoUnits()+count>capacity_)return failure("NOT ENOUGH ROOM IN THE HOLD");
  if(q.total>credits_)return failure("NOT ENOUGH GALACTIC CREDITS");
  credits_-=q.total;market(view.place).cash+=q.total;market(view.place).stock[size_t(good)]-=count;cargo_[size_t(good)]+=count;spent(q.total);
+ if(combat_)combat_->strategy().tax(view.place,q.fee);
  view.message="BOUGHT "+std::to_string(count)+" "+std::string(goods[size_t(good)].name)+" / "+xMoney(q.total);return true;
 }
 bool XalariaEconomy::sell(XGood good,int64_t count){
  if(!canTrade(view.place))return failure("YOU MUST BE AT THIS MARKET TO SELL");
  if(count<=0||count>10000||size_t(good)>=xGoodCount||cargo_[size_t(good)]<count)return failure("THAT CARGO IS NOT IN YOUR HOLD");
+ if(combat_&&!combat_->maySell(view.place,good,count))return failure("STOLEN CARGO NEEDS AN INDEPENDENT OR REBEL FENCE");
+ const auto before=cargo_[size_t(good)];
  const auto q=quote(view.place,good,count,false);if(!q.available||market(view.place).cash<q.total||credits_>moneyLimit-q.total)return failure("THE MARKET CANNOT TAKE THAT SALE");
  credits_+=q.total;market(view.place).cash-=q.total;market(view.place).stock[size_t(good)]+=count;cargo_[size_t(good)]-=count;
+ if(combat_){combat_->cargoSold(good,count,before);combat_->strategy().tax(view.place,q.fee);}
  view.message="SOLD "+std::to_string(count)+" "+std::string(goods[size_t(good)].name)+" / "+xMoney(q.total);return true;
 }
 bool XalariaEconomy::refuel(){
@@ -242,7 +276,7 @@ bool XalariaEconomy::feedAsset(uint32_t id){
  if(a->kind==XAssetKind::Farm){auto& held=cargo_[size_t(XGood::Seed)];const auto n=std::min(held,a->seedNeeded);a->seedNeeded-=n;held-=n;delivered+=n;}
  else{
   auto& nano=cargo_[size_t(XGood::Nanomites)];const auto n=std::min(nano,a->nanoNeeded);a->nanoNeeded-=n;nano-=n;delivered+=n;
-  for(size_t g=0;g<xGoodCount;++g)if(goods[g].structural){const auto q=std::min(cargo_[g],a->metalNeeded);cargo_[g]-=q;a->metalNeeded-=q;delivered+=q;}
+  for(size_t g=0;g<xGoodCount;++g)if(goods[g].structural){const auto before=cargo_[g];const auto q=std::min(before,a->metalNeeded);cargo_[g]-=q;if(combat_)combat_->cargoSold(XGood(g),q,before);a->metalNeeded-=q;delivered+=q;}
  }
  if(!delivered)return failure("NONE OF THE NEEDED MATERIALS ARE IN THE HOLD");
  a->lastFed=int64_t(seconds_);
@@ -309,6 +343,7 @@ bool XalariaEconomy::buildFuelStation(uint32_t id){
 bool XalariaEconomy::store(uint32_t id,XGood good,int64_t units,bool retrieve){
  auto* a=asset(id);if(!a||a->kind!=XAssetKind::Vault||!atAsset(*a,true)||units<=0||units>10000||size_t(good)>=xGoodCount)return failure("DOCK AT YOUR VAULT TO MOVE CARGO");
  auto& from=retrieve?a->stored[size_t(good)]:cargo_[size_t(good)];auto& to=retrieve?cargo_[size_t(good)]:a->stored[size_t(good)];
+ if(!retrieve&&combat_&&units>cargo_[size_t(good)]-combat_->stolen()[size_t(good)])return failure("FENCE STOLEN CARGO BEFORE VAULT STORAGE");
  if(from<units||(retrieve&&cargoUnits()+units>capacity_)||to>1000000-units)return failure("NOT ENOUGH CARGO OR STORAGE ROOM");
  from-=units;to+=units;view.message=retrieve?"CARGO RETRIEVED":"CARGO STORED IN YOUR PRIVATE VAULT";return true;
 }
@@ -352,14 +387,40 @@ XContract XalariaEconomy::offer(const XPlace& p) const{
  XContract c;c.origin=p;c.deadline=day()+7;Random r{key(p)^mix64(uint64_t(day()))};
  c.id=mix64(key(p)^mix64(uint64_t(day()))^0x434f4e5452414354ULL);c.reward=std::array<int64_t,3>{100000,300000,800000}[r.bits(0)%3];c.units=2+r.bits(1)%4;
  const auto& links=catalog_.star(p.system).wormholes;
+ if(p==phehmyarStation&&std::find(links.begin(),links.end(),eunhiaStation.system)!=links.end()&&validPlace(eunhiaStation)){
+  const auto signedCharter=std::find_if(contracts_.rbegin(),contracts_.rend(),
+                                       [&](const auto& old){return old.id==c.id;});
+  if(signedCharter!=contracts_.rend())return *signedCharter;
+  c.destination=eunhiaStation;return c;
+ }
  for(auto id:links)for(const auto& [wid,w]:catalog_.star(id).worlds){auto list=venues(id,wid);if(!list.empty()){c.destination=list.front();return c;}}
  c.units=0;return c;
 }
 bool XalariaEconomy::acceptContract(){
- if(!canTrade(view.place))return failure("VISIT THE STATION OR CITY TO ACCEPT ITS WORK");
- const auto c=offer(view.place);if(!c.units)return failure("NO DELIVERY WORK AT THIS MARKET");
+ return loadCharter(view.place);
+}
+bool XalariaEconomy::collectLoadingBayFreight(){
+ if(!docked_)return failure("CLAMPS MUST BE SECURE TO LOAD STATION FREIGHT");
+ return loadCharter(*docked_);
+}
+bool XalariaEconomy::collectTrafficFreight(const XalariaTrafficContact& contact,const Pilot& pilot){
+ const auto* clamp=pilot.clampedHarbour();
+ if(!clamp||*clamp!=contact.body.id||!xalariaVesselBerth(contact.body))
+  return failure("CLAMPS MUST BE SECURE ON THIS SHIP TO TRANSFER FREIGHT");
+ if(!validPlace(contact.port))return failure("NO RECEIVING PORT FOR THIS PARCEL");
+ return loadParcel(xalariaVesselParcel(*this,contact));
+}
+bool XalariaEconomy::charterClaimed(uint64_t id) const{
+ return std::any_of(contracts_.rbegin(),contracts_.rend(),[&](const auto& charter){return charter.id==id;});
+}
+bool XalariaEconomy::loadCharter(const XPlace& port){
+ if(!canTrade(port))return failure("VISIT THE STATION OR CITY TO ACCEPT ITS WORK");
+ return loadParcel(offer(port));
+}
+bool XalariaEconomy::loadParcel(const XContract& c){
+ if(!c.units)return failure("NO DELIVERY WORK AT THIS MARKET");
  if(contracts_.size()>=1000)return failure("THE CONTRACT JOURNAL IS FULL");
- for(const auto& old:contracts_)if(old.id==c.id)return failure("THIS CHARTER HAS ALREADY BEEN TAKEN");
+ if(charterClaimed(c.id))return failure("THIS CHARTER HAS ALREADY BEEN TAKEN");
  if(cargoUnits()+c.units>capacity_)return failure("MAKE ROOM FOR THE SEALED PARCEL");
  contracts_.push_back(c);view.message="PARCEL LOADED / DELIVER TO "+placeName(c.destination);return true;
 }
@@ -389,26 +450,70 @@ std::vector<XOpportunity> XalariaEconomy::opportunities(XGood good,int64_t units
  std::sort(out.begin(),out.end(),[](const auto& a,const auto& b){return a.profit>b.profit;});if(out.size()>3)out.resize(3);return out;
 }
 ActivityBody XalariaEconomy::portBody(const XPlace& p,double seconds) const{
- if(p.city||!validPlace(p))throw std::invalid_argument("No orbital port");
- const auto planet=universe_.describe(catalog_.address(p.system).child(Kind::Planet,p.world));
- auto b=sampleActivity(planet,0,seconds);const auto ordinal=p.station>=100000?p.station-100000+3:p.station;
+ const auto id=orbitalStationId(p);
+ if(!id)throw std::invalid_argument("No orbital port");
+ const auto planet=universe_.describe(id->home);
+ auto b=sampleActivity(planet,0,seconds);
+ const bool owned=p.station>=privatePlaceOffset;
+ const auto ordinal=owned?p.station-privatePlaceOffset+3:p.station;
  const auto rotation=glm::angleAxis(std::fmod(ordinal*2.399963229728653,2*std::numbers::pi),glm::dvec3(0,1,0));
- b.position=rotation*b.position;b.orientation=rotation*b.orientation;b.id={planet.address,p.station>=100000?70000+p.station-100000:60000+p.station};
- b.name=placeName(p);b.status="BERTH OPEN / "+std::string(xFactionName(faction(p)));b.economicBrief="F4 MARKET / DOCK TO TRADE";
+ b.position=rotation*b.position;b.orientation=rotation*b.orientation;
+ // A vault can share an orbit with a full catalogue of public stations.
+ // Keep a separate berth when its historical ordinal matches one of those stations.
+ if(owned&&ordinal<catalog_.star(p.system).worlds.at(p.world).stations)
+  b.position+=b.orientation*glm::dvec3(0,4200,0);
+ b.id=*id;
+ b.radius=orbitalStationRadius;
+ b.name=placeName(p);b.status=std::string(stationRoleName(stationDesignKey(b.id).role))+" / BERTH OPEN";
+ b.economicBrief="F4 MARKET / DOCK TO BOARD";
  b.tint=faction(p)==XFaction::Trade?glm::vec3(.9,.72,.3):faction(p)==XFaction::Nature?glm::vec3(.3,.85,.6):glm::vec3(.5,.75,1);
  return b;
 }
+std::optional<ActivityId> XalariaEconomy::orbitalStationId(const XPlace& port) const {
+ if(port.city||!validPlace(port))return std::nullopt;
+ const auto slot=port.station>=privatePlaceOffset?privatePortSlot+(port.station-privatePlaceOffset)
+                                                :publishedPortSlot+port.station;
+ return ActivityId{catalog_.address(port.system).child(Kind::Planet,port.world),slot};
+}
+std::optional<XPlace> XalariaEconomy::orbitalPlace(const ActivityId& id) const {
+ if(id.home.kind()!=Kind::Planet||id.slot<publishedPortSlot)
+  return std::nullopt;
+ const auto system=uint32_t(id.home.parent().id());
+ const XPlace port{system,id.home.id(),id.slot>=privatePortSlot
+                   ? privatePlaceOffset+(id.slot-privatePortSlot) : id.slot-publishedPortSlot,false};
+ const auto canonical=orbitalStationId(port);
+ return canonical&&*canonical==id?std::optional{port}:std::nullopt;
+}
+StationKey XalariaEconomy::stationDesignKey(const ActivityId& id) const {
+ const bool vault=id.slot>=privatePortSlot&&std::any_of(assets_.begin(),assets_.end(),[&](const auto& asset){
+     return asset.id==id.slot-privatePortSlot&&asset.kind==XAssetKind::Vault;
+ });
+ return stationKey(id,vault);
+}
 std::vector<ActivityBody> XalariaEconomy::orbitalBodies(const Node& n,double seconds) const{
- std::vector<ActivityBody> out;if(n.address.kind()!=Kind::Planet)return out;
- for(const auto& p:venues(uint32_t(n.address.parent().id()),n.address.id()))if(!p.city)out.push_back(portBody(p,seconds));
+ std::vector<ActivityBody> out;if(combat_){out=combat_->convoys().bodies(n.address,seconds);auto frame=n.address;while(frame.kind()>Kind::System)frame=frame.parent();for(auto& body:combat_->strategy().bodies(uint32_t(frame.id()),seconds))if(body.id.home==n.address)out.push_back(std::move(body));}if(n.address.kind()!=Kind::Planet)return out;
+ for(const auto& p:venues(uint32_t(n.address.parent().id()),n.address.id()))if(!p.city){
+  out.push_back(portBody(p,seconds));
+  if(combat_)for(auto& actor:combat_->actors(p,seconds))out.push_back(std::move(actor));
+ }
  return out;
 }
-bool XalariaEconomy::travelToPort(const XPlace& p,Navigation& nav,Pilot& pilot){
+bool XalariaEconomy::travelToPort(const XPlace& p,Navigation& nav,Pilot& pilot,bool manual){
  if(!validPlace(p)||p.city)return failure("CHOOSE AN ORBITAL STATION");
+ if(combat_&&!combat_->permits(p))return failure("LOCAL WARRANT / FIND AN INDEPENDENT OR REBEL HAVEN");
  if(currentSystem_!=p.system||currentWorld_!=p.world||!nearOrbit_)return failure("FLY TO THIS WORLD FIRST");
+ if(pilot.instruments().docking.docked||pilot.instruments().docking.phase==DockingPhase::Departure)
+  return failure("CLEAR THE CURRENT BERTH FIRST");
  const auto body=portBody(p);const auto berth=dockingBerth(body);if(!berth)return failure("THE BERTH IS CLOSED");
  FlightWaypoint point;point.reference=body.id.home;point.metres=berth->metres;point.velocity=berth->velocity;point.standOff=0;point.label=body.name;point.berth=berth;
- if(point.reference!=nav.anchor)nav.select(point.reference);pilot.navigateWaypoint(point);view.message="AUTOMATIC DOCKING / "+body.name;return true;
+ if(manual){
+  if(!pilot.dockManually(point))return failure("MANUAL DOCKING NEEDS A FREE, FULL-SIZE SHIP");
+ }else{
+  if(point.reference!=nav.anchor)nav.select(point.reference);
+  pilot.navigateWaypoint(point);
+ }
+ view.message=(manual?"MANUAL DOCKING / ":"AUTOMATIC DOCKING / ")+body.name;
+ return true;
 }
 void XalariaEconomy::sync(const Navigation& nav,const Pilot& pilot){
  auto sys=nav.anchor;while(sys.kind()>Kind::System)sys=sys.parent();if(sys.kind()==Kind::System)currentSystem_=uint32_t(sys.id());
@@ -419,13 +524,11 @@ void XalariaEconomy::sync(const Navigation& nav,const Pilot& pilot){
   nearOrbit_=glm::length(eye)<=std::pow(10.,n.frame.logRadius)*6;
   if(nearOrbit_&&visited_.insert({currentSystem_,world.id()}).second)technologyXP_+=2;
  }
- const auto previous=docked_;docked_.reset();
- if(pilot.instruments().docking.docked&&currentWorld_){
-  const auto frame=universe_.describe(nav.anchor);
-  const auto eye=universe_.pointRelative(nav.anchor,nav.cameraPosition()*std::pow(10.,nav.logDistance-frame.frame.logRadius),catalog_.address(currentSystem_).child(Kind::Planet,*currentWorld_),0);
-  double nearest=100;
-  for(const auto& p:venues(currentSystem_,*currentWorld_))if(!p.city){const auto berth=dockingBerth(portBody(p));if(berth){const auto distance=glm::length(eye-berth->metres);if(distance<nearest){nearest=distance;docked_=p;}}}
- }
+ const auto previous=docked_;
+ const auto* clamp=pilot.clampedHarbour();
+ docked_=clamp?orbitalPlace(*clamp):std::nullopt;
+ if(docked_!=previous)
+  dockedStationKey_=docked_?std::optional{stationDesignKey(*clamp)}:std::nullopt;
  if(docked_&&docked_!=previous&&faction(*docked_)==XFaction::Trade&&goodwillDue()){
   const auto due=std::min(goodwillDue(),moneyLimit-credits_);credits_+=due;rebatePoints_=goodwill();view.message="TRADE GOODWILL PAID / "+xMoney(due);
  }

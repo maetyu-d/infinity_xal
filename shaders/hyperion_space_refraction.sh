@@ -17,16 +17,17 @@ vec3 refractSpace(vec2 uv,vec3 original){
  if(texture2D(s_opaqueDepth,uv).r>0.)return original;
  float boundary=smoothstep(.0,.06,min(min(uv.x,uv.y),min(1.-uv.x,1.-uv.y)));
  float edge=exp(-abs(sin(fold.x*2.25+.13*sin(fold.y*3.7)))*4.);
- vec2 bend=slope*aspectCorrection*(.004+.014*edge)*u_spaceGlass.x*boundary;
+ float opposing=exp(-abs(sin(fold.y*2.60+.16*cos(fold.x*2.3)+1.3))*5.4);
+ vec2 bend=slope*aspectCorrection*(.003+.014*edge+.003*opposing)*u_spaceGlass.x*boundary;
  vec2 through=clamp(uv+bend,vec2(.001),vec2(.999));
  vec2 inside=clamp(uv-bend*.62,vec2(.001),vec2(.999));
  float clearA=step(texture2D(s_opaqueDepth,through).r,0.);
  float clearB=step(texture2D(s_opaqueDepth,inside).r,0.);
  vec3 refracted=texture2D(s_scene,through).rgb;
- vec2 fringe=clamp(through+bend*.31,vec2(.001),vec2(.999));
+ vec2 fringe=clamp(through+bend*.27,vec2(.001),vec2(.999));
  if(texture2D(s_opaqueDepth,fringe).r<=0.)
-  refracted.b=mix(refracted.b,texture2D(s_scene,fringe).b,edge*.60);
- vec3 c=mix(original,refracted,(.30+.41*edge)*clearA*boundary);
- c=mix(c,texture2D(s_scene,inside).rgb,(.06+.24*edge)*clearB*boundary);
+  refracted.g=mix(refracted.g,texture2D(s_scene,fringe).g,edge*.33);
+ vec3 c=mix(original,refracted,(.28+.43*edge)*clearA*boundary);
+ c=mix(c,texture2D(s_scene,inside).rgb,(.045+.17*edge+.13*opposing)*clearB*boundary);
  return c;
 }

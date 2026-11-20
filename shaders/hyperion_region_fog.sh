@@ -35,19 +35,27 @@ vec3 regionalFog(vec2 uv,vec3 scene,inout float built){
   float broad=strataNoiseSample(q,vec3(0.));
   float wisps=strataNoiseSample(q*2.17+vec3(3.,-1.,.2),vec3(0.));
   float folds=strataNoiseSample(q*4.07+vec3(-4.,8.,.7),vec3(0.));
-  float volume=smoothstep(.30,.72,broad*.56+wisps*.30+folds*.14);
+  float fibres=strataNoise(q*vec3(7.9,2.7,5.1)+vec3(wisps*1.3,4.,folds*.8),vec3(0.));
+  float volume=smoothstep(.30,.73,broad*.45+wisps*.33+folds*.17+fibres*.05);
   float side=strataNoiseSample(q+vec3(.39,.24,-.16),vec3(0.));
   float litDepth=strataNoiseSample(q+vec3(.79,.48,-.32),vec3(0.));
   float edge=max(0.,broad-side*.61-litDepth*.39);
   float rim=4.*volume*(1.-volume)*smoothstep(.37,.65,wisps);
-  float glow=clamp(rim*(.31+.42*belt)+edge*1.7+sunGlow*.65,0.,1.);
-  float shadow=exp(-max(0.,side*.55+litDepth*.45-.35)*(1.2+volume*1.5));
+  float filaments=pow(max(0.,1.-abs(folds*.66+fibres*.34-.51)*4.4),5.);
+  float glow=clamp(rim*(.36+.47*belt)+edge*2.9+sunGlow*.80+filaments*.12,0.,1.);
+  float shadow=exp(-max(0.,side*.55+litDepth*.45-.31)*(1.8+volume*2.8));
   vec3 lit=mix(vec3(.025,.22,.12),vec3(.54,.92,.19),i*.16+.23*belt);
-  vec3 scatterLight=mix(vec3(.003,.014,.009),lit,glow*glow*shadow);
+  vec3 scatterLight=mix(vec3(.002,.009,.007),lit,pow(glow,1.55)*shadow);
+  scatterLight+=vec3(.27,.67,.20)*filaments*rim*shadow*(.055+.08*belt);
   scatterLight+=vec3(.58,.53,.082)*sunGlow*(.58+rim*.42);
-  float opacity=1.-exp(-(.018+volume*volume*(.58+.57*belt)));
+  float opacity=1.-exp(-(.012+volume*volume*(.63+.64*belt))*(.77+fibres*.35));
   scattered+=transmission*opacity*scatterLight;
   transmission*=1.-opacity;
  }
- return mix(scene,scene*transmission+scattered,strength);
+ // Preserve the shape and convection of a resolved photosphere behind the
+ // fog while retaining a layer of scattered light over its limb.
+ vec2 stellarOffset=solarOffset/max(.00001,u_stellar[0].z);
+ float disc=(1.-smoothstep(.90,1.13,length(stellarOffset)))*u_stellar[0].w;
+ float through=mix(transmission,max(.57,transmission),disc);
+ return mix(scene,scene*through+scattered*(1.-disc*.35),strength);
 }

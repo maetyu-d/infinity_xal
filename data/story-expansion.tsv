@@ -1,0 +1,721 @@
+# Additional authored outlines: kind|id|headline|premise|choice0|choice1
+0|41|The airlock recognizes only its installer|A launch's pressure lock accepts the retired installer's handprint and rejects its living crew.|Verify the access archive|Authorize a witnessed reset
+0|42|The ambulance carries the wrong gravity|An ambulance's treatment deck maintains gravity opposite to the patient's support cradle.|Verify the cradle orientation|Request a different treatment berth
+0|43|A survivor inside the instrument casing|Rescuers hear a worker through a spectrometer housing marked safe for external storage.|Trace the worker's handset|Audit the storage clearance
+0|44|The boarding ladder lost its ground|A boarding ladder's electrical return runs through the only occupied pressure suit.|Witness an isolated transfer|Inspect the ladder's power record
+0|45|The missing translator on the medical channel|A patient answers only in a language absent from the ship's emergency translator.|Request a human interpreter|Preserve the patient's own recording
+0|46|The rescue shuttle has no return address|An automated rescue shuttle reaches the witnesses but cannot authenticate a receiving port.|Verify the receiving clinic|Reconstruct the dispatch order
+0|47|The stretcher that owns its patient|A rented stretcher refuses release until the patient's account accepts its contract.|Record emergency consent|Seek a witnessed equipment release
+0|48|The hatch opens into a vacuum locker|A freighter's evacuation diagram sends crew through an unpressurized equipment locker.|Verify an alternate route|Preserve the faulty diagram
+0|49|The pressure gauge measures a memory|A cabin displays its last good pressure reading after the live sensor failed.|Compare independent readings|Audit the display's fallback mode
+0|50|The firefighter's suit is a prototype|A rescue worker discovers the borrowed suit has never completed a thermal certification.|Verify the suit's limits|Arrange certified replacement gear
+0|51|The rescue invoice arrives first|A stranded crew receives a completed rescue invoice before any recovery ship acknowledges them.|Authenticate the recovery order|Trace the premature invoice
+0|52|An occupied berth marked for sterilization|An exhausted crew sleeps in a compartment scheduled for automatic sterilization.|Verify the occupancy watch|Suspend the cleaning authorization
+0|53|The emergency handwheel turns another door|A manual pressure control operates a shutter on the opposite deck.|Trace the control linkage|Record an alternate escape route
+0|54|The coolant sample came from a person|A laboratory courier carries a vial wrongly labelled industrial coolant instead of a patient's tissue.|Verify the sample identity|Seek protected clinical custody
+0|55|The rescue captain has no valid signature|A recovery captain's signing key expired while their ship was completing the approach.|Verify the captain's mandate|Seek independent witness authority
+0|56|A signal from a discarded helmet|A helmet in a salvage bin transmits a live worker's pulse and position.|Trace the live connection|Audit the helmet's disposal tag
+0|57|The crew's emergency water is medicinal|A stranded transport has water treated for patients but no safe supply for its healthy crew.|Request a clinical allocation|Find independently tested water
+0|58|The inspection arm will not let go|A dock's automatic inspector has clamped a worker's tool harness to an outbound vessel.|Verify an emergency release|Audit the inspection sequence
+0|59|The smoke warning excludes the bunks|A ship's alarm network treats its newly fitted sleeping pods as unoccupied storage.|Record the occupied compartments|Recover the missing safety profile
+0|60|The backup ventilator needs a licence|A medical ventilator's emergency software rejects the ship's transferred equipment licence.|Witness a clinical override|Find the original licence custodian
+0|61|The last warm room is a brig|A heating failure leaves only the holding compartment warm, while its security lock rejects the crew.|Verify emergency shelter rights|Request a supervised security release
+0|62|The lifeboat's fuel belongs to a museum|A restored lifeboat has a live emergency beacon and inert exhibition propellant.|Trace the restoration record|Arrange a certified recovery tow
+0|63|The beacon points at the pursuer|A frightened courier's distress location follows a nearby patrol instead of their own vessel.|Record independent bearings|Inspect the tracking configuration
+0|64|The breathing masks have two standards|A ship carries masks certified to a pressure standard incompatible with its replacement regulator.|Compare the certifications|Seek matched emergency equipment
+0|65|The pilot's prosthesis holds a flight key|An injured pilot's prosthetic hand stores the navigation key required by their replacement.|Witness limited key access|Seek a registry recovery order
+0|66|The shutoff handle is in the sealed bay|A faulty pipe can be isolated only from the compartment it has already contaminated.|Verify a remote isolation plan|Record a protected entry procedure
+0|67|The rescue channel is a paid subscription|A distress crew can receive advertisements but its emergency uplink is locked behind an unpaid account.|Authenticate a public relay|Audit the service restriction
+0|68|The escape pod has forgotten its passengers|An escape pod's count resets to zero whenever its cabin batteries are changed.|Record a witnessed passenger count|Recover the pod's retained logs
+0|69|The crew can hear only the cooling pump|A communications repair routed the rescue receiver through the ship's vibration monitor.|Establish a text channel|Trace the receiver routing
+0|70|An emergency patch covers the collar sensor|A crew's temporary hull patch blocks the sensor used to authorize visiting rescue craft.|Witness an alternate range check|Verify the patch inspection
+0|71|The injured surveyor is carrying the master clock|A surveyor's wearable instrument is the only synchronized clock for a stranded fleet.|Seek a medical transfer record|Establish an independent time reference
+0|72|The docking receipt belongs to a dead pilot|A crew cannot request recovery because the port still assigns its vessel to a deceased pilot.|Verify the current crew mandate|Audit the ownership succession
+0|73|The lift's emergency power is outside|A power module required to release a jammed occupied lift was removed to an external rack.|Record a protected retrieval plan|Verify an alternate lift release
+0|74|The galley alarm is the only working radio|A damaged freighter can send short messages only through its kitchen fire-warning transmitter.|Relay a coded distress record|Seek a compatible emergency receiver
+0|75|The sleeper's name is an obsolete character|A medical capsule cannot identify its passenger after a registry stopped accepting the script of their name.|Preserve the original identity record|Seek a clinical identification witness
+0|76|The transfer blanket is bonded evidence|A chilled survivor is wrapped in a blanket listed as evidence in an unresolved cargo dispute.|Witness emergency medical custody|Seek a consented evidence transfer
+0|77|The cabin's oxygen tally includes plants|A ship's life support controller counts ornamental plants as crew when rationing emergency oxygen.|Verify the living crew count|Audit the controller's biological model
+0|78|The passenger's implant broadcasts a fire alarm|A failing implant repeatedly triggers the transport's automated evacuation routine.|Request medical signal isolation|Verify a supervised alarm watch
+0|79|The crew are locked out by their own drill|An emergency exercise left the actual crew registered as simulated visitors.|Reconcile the training roster|Authorize a witnessed access correction
+0|80|The spare collar is the wrong handedness|A relief ship's replacement transfer collar matches every dimension but reverses the pressure seal.|Verify a safe adapter plan|Arrange a compatible receiving vessel
+0|81|The recovery cable contains a listening device|A stranded crew rejects the offered tow because its cable carries an undeclared recorder.|Witness limited recovery consent|Seek an independently inspected cable
+0|82|The medicine drawer follows the cargo clock|A timed medical cabinet unlocks according to the freight schedule, several hours behind its patient.|Verify a clinical time correction|Seek supervised access to the medicine
+0|83|The distress battery is an escrow deposit|A private beacon can use its full battery only after an owner confirms the emergency bond.|Authenticate the crew's request|Audit the emergency bond terms
+0|84|The hatch label came from another ship|A reused hatch carries an evacuation instruction incompatible with its new compartment.|Verify the actual compartment map|Preserve the misleading instruction
+0|85|The survivor is in the return parcel|A cargo handler reports a living stowaway inside a refrigerated return shipment.|Record a medical receiving plan|Verify the return shipment's custody
+0|86|The damaged hull is carrying an election|An evacuation transport holds the only sealed ballots from a remote settlement.|Protect the passenger transfer|Witness custody of the ballots
+0|87|The ambulance is waiting for the wrong blood|A medical convoy was supplied using a translation that exchanged donor and recipient compatibility.|Verify the clinical translation|Request an independent supply match
+0|88|The rescue dog is the only trained guide|An injured navigator depends on an assistance animal barred from the offered recovery compartment.|Record an accessible transfer plan|Verify a suitable receiving berth
+0|89|The spare air tank is a calibration source|An emergency cylinder contains a reference gas mixture intended for an instrument test.|Verify an independent air supply|Audit the cylinder's issue record
+0|90|The crew's last map is dissolving|A chemical leak is destroying the physical chart that carries the ship's emergency safe route.|Preserve a witnessed chart copy|Compare independent route bearings
+0|91|The bridge camera sees an empty ship|A rescue crew's camera stream shows a recorded empty cabin while its live occupants call for help.|Authenticate a live visual challenge|Audit the camera's playback mode
+0|92|The alarm repeats a captain's confession|A ship's emergency message includes a private recording accidentally loaded as its warning tone.|Relay a limited distress packet|Preserve the original message in custody
+0|93|The pressure door is also the antenna|A damaged hatch must stay closed for breathing air and open for the only effective emergency transmission.|Witness a relay schedule|Seek an external receiving watch
+0|94|The treatment pump wants a software witness|A clinical pump requires approval from a service agent no longer employed by its manufacturer.|Verify clinical operating authority|Trace the service mandate
+0|95|The escape pod's map is an advert|A rescue capsule displays a commercial destination in place of its assigned receiving port.|Verify the navigation packet|Audit the display update
+0|96|The tow crew cannot read the hull numbers|A ship's identifiers were painted over for a ceremony shortly before it became disabled.|Verify the internal registry|Record independent crew testimony
+0|97|The emergency corridor contains dormant passengers|A transport's escape passage was converted into sleeping space without changing its safety plan.|Record a supervised evacuation order|Audit the cabin conversion
+0|98|The cold worker is on the warm roster|A suit crew's heating allocation follows an obsolete assignment to an indoor compartment.|Verify the actual work assignment|Seek a witnessed heating allocation
+0|99|The stretcher won't pass the renovated hatch|A station's new privacy screen narrows the only medical transfer route.|Verify an alternate transfer path|Audit the renovation clearance
+0|100|The emergency loan charges for every breath|A leased life support unit counts each emergency activation as a new long-term contract.|Witness temporary medical custody|Audit the activation receipts
+0|101|The rescue boat has an untrained passenger pilot|An evacuation craft has assigned command to the first passenger who acknowledged its screen.|Authenticate a qualified watch|Record a supervised remote command
+0|102|The medic is registered as cargo|A travelling clinician's berth receipt was converted into a freight consignment during booking.|Verify the medical assignment|Reconcile the passenger receipt
+0|103|The suit won't accept borrowed hands|A damaged glove controller refuses commands from replacement prostheses used by its wearer.|Record an accessible control plan|Verify a safe replacement suit
+0|104|The only hot meal is a reference sample|A stranded crew's edible stores are protected samples from a food safety investigation.|Witness an emergency release|Arrange an independent food supply
+0|105|The hull repair hides a memorial capsule|A temporary brace covers a privately placed capsule that inspectors mistake for loose debris.|Record its custodians' consent|Verify a safe conservation plan
+0|106|The lost cabin has a different floor number|An occupied compartment was renumbered twice and appears under neither emergency roster.|Verify the physical compartment|Reconcile the numbering records
+0|107|The battery is healthy but its meter is dead|A recovery crew is about to discard a working reserve because its display shows no charge.|Record an independent load test|Audit the meter replacement
+0|108|The visitor's suit carries the ship's virus warning|A repair visitor's identifier triggers a biological warning left over from a previous voyage.|Verify current exposure records|Audit the warning's expiry
+0|109|The rescue notice was sent as a receipt|A ship's translated distress packet is filed automatically as confirmation that help already arrived.|Authenticate a new emergency packet|Trace the message classification
+0|110|The last navigator is an apprentice|A disabled vessel's only conscious navigator has training credentials that the port refuses to recognize.|Witness supervised navigation|Seek qualified remote assistance
+0|111|The exhausted pilot has no legal rest berth|Every available bunk is assigned to sealed freight under the ship's lease.|Verify an emergency rest plan|Audit the berth allocation
+0|112|The crew's radio certificate excludes whispers|A damaged crew can speak only softly, below the radio's certified voice activation threshold.|Establish a continuous listening watch|Record an alternate signalling plan
+0|113|The patient's cradle is tied to a departing tug|A medical transfer cradle still uses the tug's local reference after crossing to another ship.|Verify a new motion reference|Witness an isolated cradle transfer
+0|114|The emergency seal is behind a rented cabinet|A private storage unit blocks the shutoff needed by the ship's pressure crew.|Witness emergency access|Trace the cabinet's installation approval
+0|115|The air supply arrived with no regulator|A relief delivery includes tested cylinders and fittings certified to an incompatible interface.|Verify a matched supply chain|Arrange a compatible transfer vessel
+0|116|The rescued crew cannot cross their own border|Two crew members lose their residence status when the recovery route enters another jurisdiction.|Witness a protected medical passage|Preserve their residency records
+0|117|The repair robot believes the crew are intruders|A maintenance robot was restored with a registry from before the vessel's sale.|Verify the crew's mandate|Audit the robot's stored registry
+0|118|The distress lamp is shaded by a sponsor banner|A promotional skin covers the window used for the ship's independent emergency lamp.|Record the obstructed signal|Verify an alternate beacon channel
+0|119|The passenger list is on the damaged deck|A crew can count survivors but cannot retrieve the signed passenger register safely.|Record witnessed survivor identities|Reconstruct the register from receiving copies
+0|120|The transfer cage opens toward the sun|A damaged rotation lock holds the rescue cage in an unsafe thermal orientation.|Verify a protected transfer interval|Audit the orientation controller
+0|121|The crew clinic is the ship's evidence locker|A medical compartment was reassigned to sealed legal storage while its patients remained aboard.|Witness clinical access|Review the storage authorization
+0|122|The emergency responder is a training account|A real distress call was accepted by a dispatch trainee's simulated desk.|Authenticate a live dispatch authority|Preserve the trainee's receiving record
+0|123|The capsule's reserve excludes its youngest passenger|A life support model omits a newborn added after the launch manifest closed.|Verify the complete passenger count|Seek a clinical reserve allocation
+0|124|The pilot hears the previous watch|An intercom fault sends recorded instructions from an earlier shift to the current pilot.|Establish a verified live watch|Audit the recorded command channel
+0|125|The borrowed suit has a remote owner|A suit lender retains the ability to end support while the borrower is still outside.|Witness emergency wearer control|Review the lending agreement
+0|126|The medication has two expiry clocks|A transport uses a storage clock while its receiving clinic uses time since activation.|Reconcile the clinical clocks|Seek an independently certified replacement
+0|127|The rescue berth is a disputed inheritance|A stranded family's assigned berth is locked pending a dispute over their deceased sponsor's estate.|Verify temporary emergency custody|Record the family's independent claim
+0|128|The warning siren cancels the doctor's radio|The ship's emergency siren shares a power circuit with its clinical uplink.|Verify a supervised radio interval|Seek an independent medical relay
+0|129|The suit's cooling water is sacred property|A borrowed ceremonial suit requires consent before its cooling reservoir can be drained for repairs.|Record limited repair consent|Arrange an alternative pressure suit
+0|130|The landing party returned with one extra heartbeat|A transport counts a pulse from a sealed specimen carrier alongside its returning workers.|Verify the worker roster|Seek supervised biological assessment
+0|131|The pressure leak leads into a sealed charity parcel|A crew's leak detector points to a relief parcel whose donor forbids opening.|Witness a safety inspection|Seek the donor's limited consent
+0|132|The lifeboat's legal owner is still at war|A civilian crew borrowed a capsule whose registry triggers military detention on arrival.|Verify civilian emergency use|Seek neutral receiving custody
+0|133|The heat blanket transmits a location|A survivor discovers that a borrowed medical blanket reports their position to a private debtor registry.|Witness a limited medical transfer|Audit the tracking consent
+0|134|The navigation archive remembers a removed engine|A repair crew's emergency route assumes thrust from an engine that was sold last season.|Verify a current capability record|Reconstruct a lower-thrust route
+0|135|The rescue crew's return cable is impounded|Customs seized a returning rescue team's tether as undeclared equipment.|Verify its rescue assignment|Seek a witnessed temporary release
+0|136|The patient's name has been censored|A medical packet replaces the patient's identity with a diplomatic secrecy notice.|Record consented clinical identity|Seek protected independent custody
+0|137|The occupied shelter is marked decommissioned|A station's last heated refuge no longer appears on its published safety map.|Verify actual shelter occupancy|Audit the decommissioning notice
+0|138|The pilot's breathing rhythm triggers the autopilot|An assistive control interface mistakes respiratory distress for flight commands.|Verify a clinical control handover|Audit the interface interpretation
+0|139|The first aid kit is a subscription sample|A donated emergency kit contains demonstration equipment that cannot be activated for patients.|Verify the kit's usable inventory|Trace the donation certificate
+0|140|The rescue hold contains incompatible climates|Two survivor groups need different temperatures in the only available recovery cabin.|Witness separate support zones|Seek another receiving vessel
+0|141|The disabled courier has a living cargo seal|A bonded shipment uses a passenger's implant as its custody key, preventing medical separation.|Record clinical priority consent|Seek an independent cargo custodian
+0|142|The pressure suit's manual is a funeral text|A restored heritage suit carries ceremonial instructions instead of its working emergency procedure.|Verify the actual suit configuration|Locate the technical archive
+0|143|The ship's rescue fund is in another currency|A crew's emergency bond cannot be released because its issuing settlement changed currency.|Verify the original bond claim|Seek a neutral temporary guarantee
+0|144|The medical monitor follows an empty bed|A patient was moved but the monitor still assigns its readings to the original compartment.|Verify the patient-monitor link|Audit the bed transfer record
+0|145|The tow contract excludes the crew's home|A recovery operator offers to save the vessel but treats its inhabited module as disposable cargo.|Record the residents' consent|Seek a protected whole-hull recovery
+0|146|The emergency dock was booked for a wedding|A medical receiving bay is occupied under a private ceremony contract.|Verify emergency receiving priority|Seek another certified medical berth
+0|147|The suit alarm is correct in another gravity|A wearable monitor uses a reference gravity from the wearer's previous assignment.|Verify the present work environment|Audit the monitor's calibration profile
+0|148|The rescue packet contains an impossible age|A survivor's records apply two different time standards to their date of birth.|Record a clinical identity witness|Reconcile the source calendars
+0|149|The damaged berth is still advertising vacancies|A disabled accommodation vessel continues selling occupied emergency bunks automatically.|Verify the real berth count|Audit the booking controller
+0|150|The return capsule carries the wrong shields|An evacuation capsule's radiation certificate covers a different protective liner.|Verify the installed liner|Arrange a protected alternative route
+0|151|The last crew member is a legal witness|A rescue desk delays a survivor's transfer because they are scheduled to testify in another system.|Witness a protected medical transfer|Record remote testimony consent
+0|152|The visiting medic cannot leave quarantine|A clinician is isolated under a rule intended for their unoccupied equipment case.|Verify the exposure assessment|Review the quarantine classification
+0|153|The rescue coordinates use the ship's old length|A beacon locates its emergency hatch using dimensions from before a hull extension.|Survey the actual hatch position|Audit the conversion drawings
+0|154|The recovery ship has no accessible toilet|An extended medical transfer was planned without facilities usable by its patient.|Verify a suitable transfer plan|Seek an accessible receiving cabin
+0|155|The ship's library is its only insulated room|A thermal failure forces survivors into a library protected by a private access agreement.|Witness emergency shelter access|Record the custodian's limited consent
+0|156|The distress message is signed by a child|A ship's adults are incapacitated and its emergency desk rejects the remaining passenger's signature.|Authenticate a live welfare call|Seek qualified remote guardianship
+0|157|The escape ladder belongs to a different deck|A replacement ladder reaches the access hatch only under an obsolete floor arrangement.|Verify an alternative escape route|Audit the replacement specification
+0|158|The rescued worker is missing from payroll|A contractor disowns an injured temporary worker whose suit still carries its maintenance key.|Preserve the employment evidence|Seek independent medical sponsorship
+0|159|The emergency tank is full of cleaning gas|A mislabeled bottle reached a crew's breathing reserve during routine servicing.|Verify the remaining air supply|Audit the servicing chain
+0|160|The medical buoy keeps choosing its own home|A rescue buoy changes destination to its original manufacturer whenever the current receiving port acknowledges it.|Verify the live destination record|Audit the factory return rule
+1|41|The roof garden becomes a pressure vessel|A habitat's sealed garden retains gas after its relief vent was landscaped over.|Survey the garden pressure|Audit the landscaping permit
+1|42|The flood barrier protects the warehouse|A settlement's automatic gate diverts water away from commercial stock and toward occupied homes.|Record actual flood paths|Review the gate priorities
+1|43|The last reserve pump was sold as scrap|A public maintenance list marks an operational emergency pump as retired inventory.|Verify surviving pump capacity|Trace the disposal order
+1|44|The storm siren rings in a locked office|Residents' warning receiver was moved behind a private security boundary.|Verify public warning coverage|Audit the receiver relocation
+1|45|The oxygen farm exports its own reserve|A growing station's automated sales system draws down supplies intended for emergencies.|Verify the reserve balance|Audit automatic export authority
+1|46|The dock extension obscures the escape signs|New structural braces hide the directions used by visiting crews during evacuation.|Survey actual exit visibility|Review the extension inspection
+1|47|The contaminated air follows a private duct|A workshop's ventilation bypass reaches housing omitted from the contractor's plan.|Trace the bypass route|Record household exposure reports
+1|48|The maintenance forecast uses another moon|A settlement's structural warning model was calibrated for a different gravity.|Review the reference parameters|Survey actual structural loading
+1|49|The warning network excludes the night workers|A shift roster routes alarms only to staff registered as awake during local day.|Verify all occupied shifts|Audit the alarm routing rules
+1|50|The evacuation lift has an advertising override|A sponsor demonstration repeatedly interrupts the lift's emergency operating mode.|Verify emergency control priority|Preserve the override log
+1|51|The water depot's certificate is counterfeit|Several depots rely on identical test results signed by a laboratory that never received samples.|Collect independent water samples|Trace the false certificates
+1|52|The tunnel cooler heats the shelter|A reversible climate unit sends waste heat into a refuge after a configuration change.|Record the thermal flow|Audit the configuration update
+1|53|The harbor's retaining cable is ceremonial|A refurbished safety cable is a decorative replica attached to original inspection tags.|Survey the remaining restraints|Audit the refurbishment records
+1|54|The clinic's emergency bed is a display model|A municipal inventory counts a showroom demonstration as available medical capacity.|Verify usable treatment capacity|Trace the inventory transfer
+1|55|The fire watch was booked twice|The same safety team is assigned to supervise incompatible hazardous operations.|Record the real watch roster|Review concurrent work permits
+1|56|The reserve generator belongs to the lift|Two safety plans allocate the same backup generator to different emergency loads.|Verify shared load capacity|Reconcile the safety plans
+1|57|The radiation map omits the workers' route|A shield survey excludes the passage used by contractors between shifts.|Record the actual route|Audit the survey boundary
+1|58|The grain store contains borrowed fuel|A sealed food depot was temporarily leased for industrial storage without a safety review.|Verify the current contents|Audit the temporary lease
+1|59|The disaster shelter charges an entry bond|A refuge's access controller demands a financial guarantee from evacuees.|Witness emergency admission|Review the access contract
+1|60|The pressure wall is scheduled for demolition|A renovation team treats an active habitat boundary as an abandoned partition.|Verify the occupied boundary|Preserve the demolition authorization
+1|61|The waste plume crosses a new nursery|A new child-care module was opened inside a processing plant's permitted exhaust envelope.|Map the exposure corridor|Review the siting permit
+1|62|The rescue boats share one launch rail|A safety plan assumes simultaneous evacuation from capsules mounted on a single rail.|Verify sequential evacuation capacity|Audit the launch assumptions
+1|63|The storm shutters seal the air intakes|A protective closure stops ventilation to occupied underground rooms.|Record actual ventilation paths|Review the closure sequence
+1|64|The hydroponic floor has no drain|A growing deck's overflow plan depends on a drain removed during expansion.|Survey emergency overflow paths|Audit the expansion drawings
+1|65|The fuel hose carries a food label|A depot uses matching connectors for incompatible cargo lines.|Verify the connected supplies|Review the connector standard
+1|66|The evacuation map contains a private gate|A planned public escape route crosses property whose controller rejects emergency passage.|Witness temporary public access|Audit the route agreement
+1|67|The sensor mast is sinking|A settlement's warning equipment rests on a foundation excluded from maintenance surveys.|Record the foundation movement|Review the maintenance boundary
+1|68|The battery room's fire alarm has no power|A detector receives its supply from the same battery bank it must monitor during isolation.|Verify independent alarm coverage|Audit the power design
+1|69|The reservoir's inspection was a simulation|A training result was entered as the reservoir's actual pressure certification.|Repeat the physical inspection|Trace the certificate entry
+1|70|The greenhouse's emergency lights attract pests|A protective lighting system draws insects away from pollination and into ventilation intakes.|Survey the changed biological flow|Review the lighting spectrum
+1|71|The crowded ferry is within a fictional limit|A passenger counter applies an approved capacity for a larger hull.|Record the actual occupancy|Audit the hull designation
+1|72|The recycling plant forgot its own filter|Replacement instructions omit the final stage of a hazardous waste process.|Collect independent discharge samples|Audit the service manual
+1|73|The heat shield was painted for visibility|A safety campaign applied a coating that changed the shield's thermal behavior.|Record the thermal response|Review the coating approval
+1|74|The clinic shares a contaminated laundry|A new service contract mixes medical linen with industrial cleaning loads.|Trace the washing process|Record affected medical deliveries
+1|75|The flood warning arrived at an abandoned terminal|Emergency messages still route to a depot demolished before the current settlement opened.|Verify the live warning route|Audit the old terminal registry
+1|76|The reserve fuel evaporates on the ledger|A depot's accounting system treats measured loss as automatic replenishment.|Verify the physical fuel reserve|Review the reconciliation rule
+1|77|The emergency bus requires a council badge|Public evacuation transport rejects passengers without employee access cards.|Witness public boarding authority|Audit the access profile
+1|78|The dock's shadow freezes a water pipe|An expanded platform blocks the heating cycle assumed by an exposed utility line.|Record the new shadow pattern|Review the pipe's thermal plan
+1|79|The grain silo reports another silo's level|Two storage controllers share an address after a network merge.|Verify both physical inventories|Audit controller identities
+1|80|The quarantine wall leaks through a cable tray|A sealed compartment retains an unrecorded opening for electrical services.|Survey the actual boundary|Review the seal inspection
+1|81|The relief vessel has no receiving crane|Emergency supplies arrive in containers incompatible with the damaged port's remaining equipment.|Verify an alternate unloading plan|Audit the relief packing order
+1|82|The evacuation timetable assumes no wheelchair users|A shelter drill measures transfer capacity using equipment unavailable to several residents.|Witness an accessible evacuation survey|Review the drill assumptions
+1|83|The generator's fuel is pledged to creditors|A public power reserve has been assigned as security for an unrelated loan.|Verify emergency-use authority|Audit the collateral agreement
+1|84|The structural sensor was installed upside down|A new warning system interprets increasing stress as a return toward safe limits.|Record an independent stress reading|Review the installation test
+1|85|The fireproof curtain was washed incorrectly|A public venue's protective fabric lost its certification after routine cleaning.|Verify remaining protection|Audit the cleaning instructions
+1|86|The pressure drill was repeated during surgery|A station's test timetable ignores the clinical reserve's operating schedule.|Record the conflicting schedules|Review test authorization
+1|87|The public tank is a contractor's workshop|A sanitation reserve has been occupied under a long-expired temporary permit.|Verify replacement sanitation capacity|Audit the temporary occupancy
+1|88|The surface landing pad lost its dust monitors|A budget consolidation moved all monitors to the busier commercial arrival point.|Survey the medical pad conditions|Review monitor allocation
+1|89|The emergency fund cannot pay for oxygen|A relief account's permitted categories omit the life support it was created to secure.|Verify a supervised emergency payment|Audit the fund's spending rules
+1|90|The observation dome's shade is ballast|A contractor removed a protective shade without realizing its mass balanced the rotating dome.|Survey the changed balance|Review the removal instructions
+1|91|The water warning was translated as permission|A hazardous-water advisory reached several communities with its negation missing.|Verify a common warning text|Preserve each translated notice
+1|92|The safety ladder stops at a rented floor|An added mezzanine blocks the ladder used by the original evacuation plan.|Verify the actual escape path|Audit the mezzanine approval
+1|93|The spare regulator is still a prototype|A laboratory loan entered a municipal emergency store as certified equipment.|Verify the installed regulator|Trace the loan agreement
+1|94|The contaminated soil has been sold twice|Two agencies claim they already transferred the same cleanup obligation.|Record actual site conditions|Reconcile the transfer contracts
+1|95|The evacuation officer's key expired|A safety controller rejects the designated officer at the moment a real warning is issued.|Witness alternate emergency authority|Audit credential expiry rules
+1|96|The pressure relief pipe points at the school|A relocated vent discharges into a route used by arriving children.|Map the discharge envelope|Review the relocation approval
+1|97|The shelter's roof is a rented greenhouse|A refuge's structural weather protection depends on a private growing business remaining in place.|Verify the shared structural duties|Audit the lease boundary
+1|98|The reservoir map predates the second settlement|A hazard model assumes an empty valley now occupied by a newer community.|Survey actual settlement exposure|Review the model's land-use data
+1|99|The recovery crane has a ceremonial operator|A public appointment awarded control authority to someone who never completed equipment training.|Verify a qualified operating watch|Audit the appointment's scope
+1|100|The gas detector measures a banned substitute|A replacement sensor responds to a discontinued gas and ignores the chemical now in use.|Collect independent air readings|Review substitution certification
+1|101|The emergency siren borrows the museum's clock|An alarm sequence follows a heritage clock that intentionally pauses for public ceremonies.|Verify an independent alarm clock|Audit the timing dependency
+1|102|The floodgate's manual handle is underwater|Its operating platform was lowered after the original emergency survey.|Verify a protected operating route|Review the platform modification
+1|103|The cooling pond is a public swimming berth|A settlement opened recreation access to water retained for industrial emergencies.|Record actual water uses|Audit the access permit
+1|104|The relief package carries old instructions|A disaster kit's contents were updated while its printed directions remained unchanged.|Verify the usable equipment|Audit the kit revision
+1|105|The nursery's shelter is a freight lift|A safety map counts temporary lift capacity as a permanent protected room.|Verify actual protected space|Review the shelter designation
+1|106|The inspection camera loops an empty corridor|A damaged video link masks increasing smoke in a service passage.|Record independent corridor conditions|Preserve the camera buffer
+1|107|The debris screen has no maintenance owner|A shared defensive screen falls between two stations' service contracts.|Survey its current condition|Reconcile maintenance responsibility
+1|108|The disaster reserve was booked as festival stock|Food and heating equipment were reassigned to a ceremony while retaining emergency labels.|Verify the physical reserve|Audit the booking authority
+1|109|The clinic's backup air is chemically different|A regulator substitution changes the mixture supplied during generator outages.|Record independent mixture readings|Review the substitution order
+1|110|The hull panel carries its own expiry date|An imported structural panel has a shorter certified life than the station's maintenance interval.|Survey the installed panels|Audit the replacement schedule
+1|111|The evacuation marshal serves another station|A mutual-aid agreement lists a marshal whose assignment was transferred years ago.|Verify the present response roster|Review the aid agreement
+1|112|The farm's drainage enters a medical intake|A growing-deck expansion connects wastewater to an uncharted shared conduit.|Trace the actual drainage|Review conduit ownership
+1|113|The storm refuge is advertised as apartments|An emergency compartment was leased as permanent housing without replacement capacity.|Verify remaining refuge space|Audit the housing conversion
+1|114|The warehouse fire crosses an insurance boundary|Two insurers dispute authority while the affected compartments share one pressure system.|Record the shared safety boundary|Seek witnessed emergency custody
+1|115|The cargo lift's balance model excludes people|A passenger conversion left a freight-only loading model in the controller.|Verify an occupied load test|Audit the conversion certificate
+1|116|The shelter's emergency food needs refrigeration|Its reserve plan assumes passive storage for supplies that now require cooling.|Verify the actual reserve conditions|Review food substitution records
+1|117|The sewage warning goes to a private landlord|Public health staff were removed from the alarm distribution list after a lease transfer.|Verify a public warning channel|Audit the subscriber changes
+1|118|The flood barrier's sensors see advertising lights|A new commercial display saturates the optical warning equipment.|Record an independent level check|Review the display's approval
+1|119|The station's smoke map stops at an archive|A protected collection was omitted from hazard surveys because its doors were sealed.|Survey the actual smoke boundary|Review the survey exemption
+1|120|The emergency drill trained the wrong bodies|A simulation assumes crew dimensions incompatible with the current residents' mobility equipment.|Witness an accessible route test|Audit the simulation profile
+1|121|The drinking supply is a decorative fountain|A settlement's reserve calculation includes ornamental water treated with unsafe additives.|Verify potable reserve volume|Audit the reserve definition
+1|122|The new wall moves the pressure gradient|A renovation creates an unplanned differential across an old laboratory partition.|Record the actual pressure profile|Review the partition's rating
+1|123|The warning buoy is privately silenced|A nuisance-noise order disabled a buoy that also carries hazard alerts.|Verify an alternate hazard signal|Audit the silencing order
+1|124|The emergency hatch is a protected artwork|A heritage designation prevents routine servicing of the settlement's oldest escape door.|Verify operational access|Review conservation consent
+1|125|The hospital generator serves a casino|A utility reroute assigns the clinic's independent supply to an entertainment concession.|Verify the actual emergency load|Audit the utility transfer
+1|126|The cooling loop contains cleaning foam|A servicing crew left a test medium in equipment returned to normal use.|Record the circulating material|Preserve the service checklist
+1|127|The reserve batteries have one shared defect|Every nominally independent bank comes from the same recalled manufacturing batch.|Verify independent backup capacity|Trace the batch recall
+1|128|The evacuation signs all lead to reception|A branding update replaced directional arrows with a generic visitor route.|Survey the actual signed paths|Audit the signage revision
+1|129|The maintenance tunnel is a border crossing|Two councils require incompatible permits for emergency work in a shared tunnel.|Witness emergency access|Review the jurisdiction agreement
+1|130|The habitat's tree roots reached a cable tray|A long-established indoor grove interferes with newly exposed power equipment.|Record the actual interference|Review the equipment installation
+1|131|The disaster account belongs to an old council|A new administration cannot authorize relief from the reserve inherited with the station.|Verify continuity of authority|Audit the reserve trusteeship
+1|132|The launch rail heats the shelter wall|An upgraded capsule launcher transfers waste heat into an occupied refuge.|Survey the thermal path|Review the launcher upgrade
+1|133|The clinic's clean room has a public return vent|A ventilation merge reconnects protected clinical space to the public concourse.|Trace the actual air return|Audit the ventilation merge
+1|134|The emergency vehicle follows obsolete doors|A response robot's map predates a new wall across its preferred route.|Verify a current response path|Review map update responsibility
+1|135|The fire reserve was drained for a survey|A structural test emptied a tank without notifying the public safety watch.|Record the remaining reserve|Preserve the test authorization
+1|136|The pressure detector has a shipping plug|Protective transport hardware was left inside an installed safety instrument.|Record independent pressure data|Audit the commissioning checklist
+1|137|The settlement's clean water is a tax estimate|Its published reserve uses financial deliveries instead of measured stored volume.|Verify physical water stocks|Review the reserve accounting
+1|138|The observation platform shares a rescue anchor|A new viewing deck occupies the attachment used by emergency recovery tethers.|Survey actual recovery access|Audit the platform concession
+1|139|The cooling alert is a private trade secret|A contractor refuses to disclose warning thresholds needed by public operators.|Verify an independent warning standard|Review the disclosure agreement
+1|140|The grain reserve is being used as seed|A growing programme draws from emergency food stocks under a different departmental name.|Record all reserve withdrawals|Review the programme's authority
+1|141|The siren's backup language is missing|A translator fallback reaches some communities as unintelligible phonemes.|Verify community reception|Audit the fallback language pack
+1|142|The evacuation map assumes a removed bridge|A public passage was dismantled while the printed escape chart remained in service.|Survey alternate escape capacity|Preserve the dismantling notice
+1|143|The flood relief kit fits another valve standard|Emergency replacement fittings were purchased using the neighbouring settlement's specifications.|Verify compatible supplies|Audit the procurement standard
+1|144|The habitat's firebreak is a storage aisle|A temporary cargo concession occupies the gap intended to contain a spreading incident.|Record the occupied boundary|Review the storage concession
+1|145|The clinic's air filter is an empty housing|An inspection tag was transferred to a replacement casing before the filter arrived.|Verify the installed filtration|Trace the tag transfer
+1|146|The emergency register omits visiting families|A public shelter count includes workers but excludes accompanying dependants.|Witness a complete occupancy survey|Review the register's eligibility rules
+1|147|The pressure shutters share a failed controller|Several independent safety barriers depend on the same unprotected control unit.|Record actual control dependencies|Review independent backup capacity
+1|148|The reserve transport is awaiting repossession|A lender locks the only designated evacuation ferry over a disputed installment.|Verify emergency-use rights|Audit the repossession order
+1|149|The warning network has no receiving watch|Alarms are delivered correctly to a desk removed during an administrative merger.|Verify a staffed receiving channel|Review the merger's safety plan
+1|150|The relief depot's address is a memorial|Cargo destined for emergency storage arrives at a demolished site retained as a commemorative name.|Verify current storage capacity|Reconcile the depot registry
+1|151|The frost alarm is calibrated for rain|A surface shelter's detector misses accumulated ice because its model assumes liquid precipitation.|Record the actual accumulation|Review the detector model
+1|152|The utility corridor has become a nursery|An occupancy permit failed to record the hazardous services still passing through new residential space.|Survey the actual utility routes|Audit the occupancy permit
+1|153|The fire brigade's reserve suits were auctioned|Certified response equipment left public storage under an abandoned-property sale.|Verify current responder equipment|Trace the auction authorization
+1|154|The relief crane uses a training certificate|An uncompleted simulation was accepted as the only heavy unloading qualification.|Verify a qualified operating team|Audit the certificate acceptance
+1|155|The emergency airlock is behind a quarantine seal|Two public safety orders conflict over the station's only large evacuation exit.|Witness a coordinated access plan|Record both safety mandates
+1|156|The reserve heat bank has been disconnected|A power-saving programme removed equipment still listed on the cold-weather safety plan.|Verify actual heating capacity|Review the disconnection authority
+1|157|The flood map's lowest point is inhabited|A revised survey locates an emergency drainage basin under recently occupied homes.|Record actual resident exposure|Compare the planning surveys
+1|158|The radiation shelter stores a luminous exhibit|A travelling installation occupies the only compartment rated for heightened stellar activity.|Verify replacement shelter access|Audit the exhibit booking
+1|159|The last public pump has a private password|A software migration transferred operating rights to a former maintenance vendor.|Witness emergency operating authority|Trace the password custody
+1|160|The safety dispatch was merged with freight billing|An administrative change puts live emergency messages into an unmonitored invoice queue.|Verify a live receiving watch|Audit the message routing
+2|41|The hospital's flag changed overnight|A hospital vessel wakes to find its registry transferred to a belligerent state.|Verify medical neutrality|Audit the registry transfer
+2|42|The truce excludes the orbital night|Patrols disagree whether a ceasefire covers the station's artificially dark shift.|Verify the signed wording|Seek a shared watch order
+2|43|The negotiator arrived as sealed cargo|A mediator's passage contract was classified as freight and its receiving crew refuses access.|Authenticate the mediator's mandate|Review the receiving contract
+2|44|The blockade's food exception has no units|Two inspection desks interpret the permitted ration allowance using different measures.|Verify a common ration standard|Record the disputed seizures
+2|45|The refugee ship inherited a targeting key|A purchased military receiver still authenticates a displaced civilian vessel as an active patrol.|Verify the civilian conversion|Seek neutral equipment custody
+2|46|The peace monitor is an unpaid intern|The only observer assigned to a fragile truce lacks signing authority for incident reports.|Witness the observer's record|Seek an accredited receiving desk
+2|47|The mine warning predates the current orbit|A published exclusion chart was never updated after the protected station moved.|Survey the present boundaries|Preserve the original warning
+2|48|The ceasefire map is copyrighted|An intelligence contractor withholds the only common boundary chart from civilian pilots.|Verify public safety access|Seek an independently witnessed chart
+2|49|The surrender receipt is a debt note|A captured crew's custody document has been traded as a commercial claim.|Verify the crew's legal status|Audit the document's custody
+2|50|The fleet's translators disagree on retreat|Two language versions of an order send opposing patrols toward the same corridor.|Compare the signed translations|Seek a common holding instruction
+2|51|The inspection queue contains an ambulance|A medical transfer waits behind commercial hulls because its exemption uses an obsolete code.|Authenticate the medical exemption|Record the queue decisions
+2|52|The neutral relay flies a borrowed flag|A communications station's emergency transponder belongs to one of the fighting fleets.|Verify civilian operation|Review the borrowed credentials
+2|53|The armistice count includes training drones|A disarmament inspection counts simulated patrol objects as live combat equipment.|Verify the physical inventory|Audit the exercise records
+2|54|The refugee berth requires military service|A receiving port conditions emergency accommodation on joining its defense watch.|Record voluntary civilian consent|Seek neutral accommodation rights
+2|55|The demobilized crew are still on the enemy list|A fleet's targeting roster was frozen before its opponent's civilian conversion.|Verify demobilization records|Seek a witnessed roster correction
+2|56|The aid convoy's escorts claim its medicine|An escort commander treats medical supplies as security for unpaid fuel bills.|Witness protected medical custody|Review the escort's invoice authority
+2|57|The prisoner's home changed sides|An exchange agreement assigns a captive to a government that no longer governs their settlement.|Record the captive's wishes|Review the current receiving mandate
+2|58|The damaged chapel is also a relay|A protected religious site continues transmitting military routing data without its custodians' knowledge.|Verify the civilian functions|Preserve the routing record
+2|59|The border buoy is on a school timetable|A former training transmitter now issues live military boundary warnings.|Verify the active warning authority|Audit the transmitter's reassignment
+2|60|The hospital charter names the previous war|A medical protection certificate covers a conflict whose formal title has changed.|Verify continuity of protection|Seek a current witnessed endorsement
+2|61|The peace conference's interpreters are detained|Language workers cannot cross the cordon because their employer serves both delegations.|Verify civilian work assignments|Seek protected conference passage
+2|62|The escort's fuel contract names an enemy port|A civilian convoy's safe route depends on refuelling rights suspended by a declaration of war.|Verify neutral refuelling rights|Seek a witnessed alternative stop
+2|63|The prisoner list is a payroll export|A receiving fleet mistakenly classifies civilian maintenance staff as captured combatants.|Compare employment records|Seek a neutral custody review
+2|64|The no-fire marker is a festival lantern|A local celebration uses a transmitter identical to one marking protected civilian space.|Verify the protected coordinates|Audit transmitter registration
+2|65|The mediator's evidence was translated twice|A crucial watch log reached each delegation through incompatible intermediary translations.|Preserve the original language|Witness a joint translation
+2|66|The border patrol's charter has expired|An armed inspection crew acts under a mandate that its own authority stopped renewing.|Verify the present mandate|Record the inspected crews' claims
+2|67|The evacuation manifest is politically censored|A receiving government removes disfavoured place names from survivor records.|Preserve the original identities|Seek protected neutral intake
+2|68|The ceasefire observers share a private employer|Both supposedly independent monitoring teams work under the same undisclosed contract.|Audit observer affiliations|Seek an external witness record
+2|69|The neutral clinic is inside a customs hold|An inspection order seals the compartment where an independent hospital is operating.|Verify protected clinical access|Record the conflicting orders
+2|70|The damaged patrol wants civilian salvage status|A stranded military crew asks a nearby port to recognize it as a private wreck.|Verify the crew's mandate|Review neutral recovery custody
+2|71|The war levy follows a vessel's old owner|A civilian purchaser is charged for military operations conducted before the sale.|Verify the sale timeline|Audit the levy account
+2|72|The last truce tape has been erased|A communications desk reused the storage holding a ceasefire acknowledgement.|Reconstruct independent receipts|Preserve surviving radio buffers
+2|73|The occupation office rents the public archive|Residents cannot inspect their own property records without military permission.|Witness resident access claims|Review the archive's custody agreement
+2|74|The patrol recognizes only founding citizens|A checkpoint applies an emergency nationality rule predating generations of naturalization.|Verify current citizenship records|Record the checkpoint's decisions
+2|75|The disarmament crane is privately impounded|A fleet cannot unload prohibited equipment because its handling gear is under a commercial lien.|Verify neutral unloading authority|Audit the impoundment order
+2|76|The refugee ship's pilot is an opposing reservist|A civilian evacuation depends on a qualified navigator listed in a dormant military reserve.|Record the civilian assignment|Seek a neutral navigation witness
+2|77|The inspection drone retained a siege map|An automated checkpoint treats a rebuilt settlement as a prohibited military target.|Verify present civilian occupancy|Audit the drone's map revision
+2|78|The convoy's safe-passage code is public advertising|A contractor reused the protected code as a marketing identifier.|Verify a replacement civilian code|Preserve the reuse evidence
+2|79|The peace petition carries a forged signature|One delegation challenges a negotiator's signature on a widely circulated truce request.|Witness fresh authorization|Review the signature's provenance
+2|80|The fleet's hospital has a private admissions rule|A public neutrality pledge conflicts with the hospital operator's membership restrictions.|Record the affected patients|Review the neutrality agreement
+2|81|The ceasefire includes a vanished station|Both fleets expect to exchange crews at a facility dismantled before the war.|Verify an alternative neutral site|Audit the treaty's facility list
+2|82|The refugee census counts missing ships as people|An emergency settlement's political quota uses corrupted evacuation totals.|Verify surviving passenger records|Review the quota calculation
+2|83|The arms inspector's equipment is sanctioned|A neutral inspection team cannot import the instruments it needs to certify disarmament.|Verify inspection exemptions|Seek independently certified equipment
+2|84|The patrol's warning reaches the wrong orbit|A coordinate conversion sends a live exclusion order to an unrelated civilian station.|Record the affected traffic|Audit the coordinate conversion
+2|85|The amnesty excludes contract mechanics|A peace agreement protects regular crew while omitting temporary workers on the same military vessels.|Verify worker assignments|Seek a witnessed protection request
+2|86|The last battle's wreck is a water depot|A civilian community has reused a wreck still claimed as military evidence.|Record current civilian needs|Review protected evidence custody
+2|87|The occupation permit expires during childbirth|A civilian family's medical transfer crosses an administrative deadline for residence.|Witness protected clinical passage|Preserve the family's residency record
+2|88|The blockade fines its own relief crews|A supply convoy receives penalties for delays caused by the inspecting fleet.|Preserve the clearance timestamps|Review the penalty authority
+2|89|The demilitarized beacon retains an alarm command|A civilian transmitter can still issue an old fleet mobilization alert.|Verify the transmitter's current role|Audit retained command authority
+2|90|The prisoners' pay is held as a negotiation fund|A delegation treats captured workers' wages as available diplomatic collateral.|Record the personal wage claims|Review custody of the account
+2|91|The aid ship's maps reveal shelters|A requested inspection would expose the locations of vulnerable civilian refuge sites.|Witness limited navigation disclosure|Seek neutral evidence custody
+2|92|The ceasefire's witnesses cannot enter the room|Both sides agreed to neutral testimony but failed to authorize the witnesses' arrival.|Authenticate witness passage rights|Record the exclusion decisions
+2|93|The border registry divides a family ship|A mixed household's vessel receives incompatible nationality assignments for separate compartments.|Verify common civilian ownership|Seek a single neutral registration
+2|94|The truce clock stops during festivals|An official timing authority pauses its civic clock while military deadlines continue.|Verify an independent reference|Review the ceasefire's timing clause
+2|95|The peace convoy carries recalled identification|A batch of civilian transponders was revoked without notifying the evacuation office.|Verify issued passenger clearances|Audit the recall distribution
+2|96|The captured observatory still makes weather forecasts|A military administration restricts data needed by civilian relief pilots.|Verify public safety access|Seek a neutral observing record
+2|97|The checkpoint demands a nonexistent licence|An inspection desk asks civilian ships for a permit that its government never issued.|Record the requested condition|Review valid clearance requirements
+2|98|The neutral port's tug is a war prize|A recovery service uses a captured vessel whose original crew still claims custody.|Verify protected recovery service|Review the vessel's custody chain
+2|99|The armistice translator omitted the moons|A disputed clause protects a planet while one language version also names its satellites.|Preserve both signed texts|Witness a common geographical reading
+2|100|The refugee council's meeting is a restricted assembly|A military watch treats routine civilian housing decisions as political mobilization.|Record the meeting mandate|Seek protected civic access
+2|101|The surrendering ship has a private security crew|Its captain cannot order contractors to release equipment under a separate agreement.|Verify the captain's authority|Review the contractors' custody terms
+2|102|The hospital convoy's ration bill is classified|Medical crews cannot verify their supplies because the escort office treats quantities as intelligence.|Witness a protected stock count|Seek independent supply certification
+2|103|The ceasefire archive is held on a hostile server|A neutral committee cannot access its own records after a network boundary closes.|Preserve receiving copies|Seek witnessed archive transfer
+2|104|The demobilization camp is an old quarantine site|Former combatants receive accommodation subject to unrelated biological restrictions.|Verify current health requirements|Review the accommodation designation
+2|105|The peace delegation's ship is repossessed|A lender seizes the transport carrying witnesses needed for an imminent truce hearing.|Verify protected witness travel|Review the repossession conditions
+2|106|The patrol's rules were copied from a simulator|A military checkpoint applies test restrictions to live civilian traffic.|Preserve the live orders|Audit the training-to-watch transfer
+2|107|The humanitarian corridor has no return direction|An agreement allows evacuation outward but fails to cover returning medical teams.|Verify protected return passage|Seek a witnessed corridor amendment
+2|108|The refugee fleet carries a claimant government|A civilian transport's passengers include officials whose presence changes its diplomatic classification.|Record civilian passenger consent|Seek neutral receiving custody
+2|109|The weapons audit counts disabled prostheses|An inspector classifies discarded assistive equipment under an overly broad military category.|Verify the equipment's function|Review the audit definitions
+2|110|The border station uses an inherited password|A new civilian watch cannot operate controls still assigned to the retreating garrison.|Verify continuity of authority|Seek a witnessed control transfer
+2|111|The amnesty notice never reached the outer docks|Some crews continue surrendering equipment under orders already revoked centrally.|Preserve the received notices|Verify distribution of the amnesty
+2|112|The exchange manifest uses incompatible ship names|Each delegation refers to vessels by different historical registry names.|Reconcile the physical identities|Witness a shared exchange register
+2|113|The recovery contract excludes enemy nationals|A neutral salvage operator refuses to transfer survivors from one side of the conflict.|Record protected rescue obligations|Seek another neutral receiving desk
+2|114|The military ration uses a civilian seed reserve|A fleet requisition threatens a settlement's next planting cycle.|Verify the reserve's purpose|Review the requisition's scope
+2|115|The truce inspection would break a biological seal|A cargo compartment needs controlled clinical access that the patrol cannot provide.|Witness limited inspection custody|Seek qualified neutral oversight
+2|116|The last observer's report is an unsigned draft|A mediator disappeared before authenticating a key account of a disputed incident.|Preserve the draft's custody|Reconstruct independent witness receipts
+2|117|The occupied port rents its patrol uniforms|A security contractor threatens to withdraw identification equipment during a handover.|Verify the current watch mandate|Review continuity of civilian identification
+2|118|The refugee ship arrived before its own clearance|A routing delay makes a valid authorization appear to have been issued after departure.|Compare signed timing records|Verify the clearance's origin
+2|119|The peace charter leaves the supply drones armed|An agreement addresses crewed vessels but omits autonomous escort equipment.|Review the equipment definitions|Seek a witnessed civilian safety clause
+2|120|The blockade inspects the same vessel repeatedly|A damaged identity relay causes a convoy to rejoin the inspection queue at every watch change.|Verify the completed inspections|Audit the identity relay
+2|121|The neutral translator is a detained relative|A delegation's only trusted interpreter is held under an unrelated family residency dispute.|Verify protected conference work|Seek independent interpretation custody
+2|122|The surrender chamber is inside a private berth|A military meeting site cannot admit negotiators without the commercial tenant's approval.|Verify safe meeting access|Review the berth-use agreement
+2|123|The displaced school has a military address|A classroom moved into an abandoned barracks still listed as an active fleet installation.|Verify present civilian occupancy|Audit the installation registry
+2|124|The border watch receives two surrender orders|Two governments claim authority to receive the same decommissioned patrol.|Preserve both signed mandates|Seek neutral receiving custody
+2|125|The ceasefire requires an unavailable witness|A treaty names a specific observer who has retired and relinquished their signing key.|Verify successor authority|Review the original witnessing clause
+2|126|The relief convoy's escort changes halfway|Two fleets each approve only half the humanitarian route.|Verify a continuous civilian clearance|Record the two escort commitments
+2|127|The hospital's landing beacon is a targeting landmark|A civilian relocation left its old coordinates inside a military reference database.|Verify the current clinical site|Audit the landmark update
+2|128|The prison transport's medic is seeking asylum|An exchange convoy's only clinician requests protection from the authority receiving the captives.|Record independent medical consent|Seek neutral clinical custody
+2|129|The sanctions list contains a relief acronym|An automated inspection confuses a medical programme's abbreviation with a prohibited contractor.|Verify the programme's identity|Audit the matching rule
+2|130|The truce chart has no depth coordinate|A flattened boundary map assigns opposing patrols to the same apparent position.|Survey a shared spatial reference|Review the signed map's conventions
+2|131|The civilian archive contains fleet pensions|A public records office faces seizure because it stores documents for retired military workers.|Verify protected personal records|Seek limited independent custody
+2|132|The inspection fee funds the inspecting fleet|A blockade directly finances its continued operation through charges on delayed civilians.|Preserve the fee ledger|Review the inspection mandate
+2|133|The war memorial is a live navigation aid|A protected monument's transmitter guides commercial traffic through a contested area.|Verify public navigation access|Record the custodians' mandate
+2|134|The captured tug carries a disabled civilian vessel|A recovery service cannot release its tow because both hulls are listed as one military prize.|Verify separate ownership records|Seek neutral separation custody
+2|135|The ceasefire excludes maintenance transmissions|A quiet-channel rule prevents engineers from reporting defects in the shared warning network.|Verify safety-channel exemptions|Record the suppressed reports
+2|136|The refugee fleet's insurance requires an enemy escort|A civilian contract recognizes only the opposing navy as an approved recovery authority.|Review protected civilian cover|Seek a neutral insurance endorsement
+2|137|The surrender terms were sold as salvage advice|A broker redistributed a confidential agreement as commercially licensed route information.|Preserve the agreement's provenance|Verify a public civilian summary
+2|138|The peace monitor's home has been annexed|An observer loses recognized neutrality after a territorial change beyond their control.|Verify continuing independence|Seek a renewed joint accreditation
+2|139|The border clinic treats both delegations' witnesses|Opposing watch desks each demand exclusive access to the same medical records.|Record patient disclosure consent|Seek neutral clinical custody
+2|140|The evacuation order has an obsolete signature|A crew receives authentic instructions signed by an office dissolved during a government change.|Verify successor responsibility|Preserve the original order
+2|141|The armistice archive omits the contractors|Civilian suppliers find their protected claims absent from the final military settlement.|Record surviving contracts|Review the settlement annexes
+2|142|The relief vessel carries a protected exhibit|An evacuation ship is delayed because a cultural cargo requires separate wartime clearance.|Verify combined humanitarian passage|Seek independent cultural custody
+2|143|The ceasefire's dawn has three definitions|The agreement uses a local sunrise that different stations calculate from different horizons.|Verify a shared timing event|Preserve the competing interpretations
+2|144|The checkpoint's translator cannot say neutral|Its language pack maps civilian neutrality onto a word meaning temporary allegiance.|Witness a corrected translation|Review previous inspection decisions
+2|145|The demobilized fleet still owns the rescue reserve|A civilian port cannot draw emergency equipment assigned to a fleet that no longer exists.|Verify successor custody|Seek a witnessed public-use agreement
+2|146|The peace courier is carrying both originals|Two delegations claim their signed treaty must never share custody with the other's copy.|Witness sealed dual custody|Seek independent receiving acknowledgements
+2|147|The disputed orbit contains a public maternity ward|A newly enforced boundary cuts across a long-established medical transfer route.|Verify protected clinical passage|Record the boundary's civilian effects
+2|148|The inspection vessel is itself unregistered|A patrol demands proof of ownership while using credentials revoked by its own government.|Verify current inspection authority|Preserve the patrol's challenge packets
+2|149|The refugee aid fund charges a nationality premium|An emergency insurer assigns higher recovery costs to households from one side of the conflict.|Record affected household claims|Review the public aid mandate
+2|150|The truce desk is listening on a dead frequency|A communications migration left the negotiated emergency channel unstaffed.|Verify a live common channel|Audit the channel handover
+2|151|The recovery corridor crosses a witness archive|A new military exclusion boundary prevents civilian investigators from reaching protected evidence.|Verify independent investigator access|Review the protected-site grant
+2|152|The exchange ferry has an inherited military debt|A lender seeks to impound a neutral transport while released captives are boarding.|Witness protected passenger custody|Audit the inherited claim
+2|153|The demobilization notice lists a future date|A clerical error keeps discharged crew subject to active military orders.|Verify their discharge records|Review the notice chronology
+2|154|The ceasefire watch is a subcontractor's subcontractor|No delegation admits employing the crew enforcing a sensitive inspection boundary.|Trace the actual command mandate|Record the inspected crews' testimony
+2|155|The peace hearing's recorder is leased to a fleet|A private equipment agreement gives one belligerent exclusive custody of the proceedings.|Seek neutral recording custody|Witness independent hearing copies
+2|156|The refugee clinic is billed for enemy housing|A relief provider classifies emergency medical accommodation as support for an opposing government.|Record protected clinical use|Review the billing classification
+2|157|The disarmament map mistakes a weather array for armor|A civilian sensor installation appears as a prohibited fortification in the inspection model.|Verify the installed equipment|Audit the model's source imagery
+2|158|The neutral convoy must choose a tax home|Two governments condition safe passage on accepting their permanent commercial jurisdiction.|Preserve both passage demands|Seek a temporary neutral guarantee
+2|159|The truce omits the disabled return vessels|An agreement allows returning crews to pass but excludes the recovery craft carrying them.|Verify protected recovery passage|Seek a witnessed transit amendment
+2|160|The evacuation authority moved during the crossing|Passengers departed under one receiving office and arrive after its mandate was reassigned.|Verify successor receiving responsibility|Preserve the original clearance
+3|41|The station rents its emergency voice|A communications concession claims ownership of all announcements made through public speakers.|Verify public safety rights|Audit the concession scope
+3|42|The orphaned council owns the docking software|A dissolved administration retains the only recognized licence for public berth controls.|Verify successor authority|Seek an independent public licence
+3|43|The public hearing has a private admission price|A venue contract charges residents to attend a legally required consultation.|Witness resident access rights|Review the venue agreement
+3|44|The citizenship exam uses an abandoned language|An arrival office tests applicants using a language absent from current civic life.|Record accessible identity testimony|Review the eligibility rule
+3|45|The water cooperative inherited a military fine|Residents' utility contributions are withheld against a debt imposed on a previous operator.|Verify the utility's ownership chain|Audit the inherited penalty
+3|46|The mayor's portrait owns its wall|An estate uses copyright in a civic image to control a public corridor.|Verify public passage rights|Review the image licence
+3|47|The ballot box is bonded freight|A courier contract prevents election officials opening the container holding returned votes.|Witness electoral receiving authority|Audit the custody contract
+3|48|The local currency expires during transit|A settlement's notes lose validity before visiting crews can complete a legal trade route.|Verify outstanding payment claims|Seek a witnessed conversion window
+3|49|The station's founding debt has no creditor|Residents keep paying an account whose beneficiary disappeared from the registry.|Audit the receiving account|Seek temporary public custody
+3|50|The shipyard charges for rejected safety reports|A service agreement treats workers' hazard notices as billable consultancy requests.|Preserve worker testimony|Review the reporting contract
+3|51|The civic archives are a family dowry|A hereditary custodian claims public records transferred into a private marriage settlement.|Verify public custody rights|Audit the transfer documents
+3|52|The residential deck is a tax loophole|A developer registers occupied homes as movable equipment to avoid civic obligations.|Record actual permanent occupancy|Review the equipment classification
+3|53|The transport fund excludes returning workers|A mobility grant pays arrivals but rejects residents who left temporarily for work.|Verify continuing residency|Audit the grant's definitions
+3|54|The free clinic is paying patent rent|A medical trust faces fees for a publicly funded treatment standard.|Verify the public grant terms|Review the claimed patent
+3|55|The dockworker's pension belongs to a berth|Retirement benefits were attached to equipment identifiers instead of workers' identities.|Record personal employment histories|Audit the pension ledger
+3|56|The station's name changed before its debts|Creditors pursue residents under a renamed corporate identity they never accepted.|Verify continuity of obligations|Review the renaming agreement
+3|57|The public park's light is privately rationed|A power concession limits access to a civic garden established by public charter.|Record the garden's access grant|Review the lighting concession
+3|58|The courier guild controls emergency translation|A professional licensing rule blocks volunteers from interpreting rescue calls.|Verify emergency volunteer authority|Audit the guild's service obligations
+3|59|The rent tribunal is employed by the landlord|Residents discover that the adjudicator's contract depends on the party it regulates.|Preserve the disputed rulings|Seek independent witness custody
+3|60|The fuel cooperative sells future ration days|A shortage programme auctions allocations already promised to resident crews.|Record existing ration rights|Audit the auction authority
+3|61|The school registry treats migrants as visitors|Children raised on the station remain outside public funding calculations.|Verify actual residency histories|Review the funding categories
+3|62|The utility meter measures a neighbour's home|A network merge assigned several households the wrong consumption identifiers.|Verify physical meter connections|Audit the identifier changes
+3|63|The public hospital is a ceremonial title|A council counts an honorary medical foundation as available clinical capacity.|Verify actual treatment resources|Review the civic designation
+3|64|The dock licence dies with its founder|A cooperative's operating permit contains no succession clause despite decades of public service.|Verify established operating rights|Seek witnessed permit renewal
+3|65|The council's quorum includes retired computers|A founding charter counts automated seats whose software no longer operates.|Review the original voting rule|Witness a resident governance proposal
+3|66|The loan fund owns its borrowers' diaries|A lender claims access to personal logs as security for emergency accommodation.|Record borrower consent limits|Audit the lending terms
+3|67|The station's rescue tax funds a mascot|A restricted public safety account pays expenses for a civic promotional vessel.|Preserve the spending ledger|Review the account's mandate
+3|68|The public library has a hereditary password|Residents' archive access depends on a founding family's retained credential.|Verify public reading rights|Seek witnessed credential transfer
+3|69|The work permit excludes remote limbs|A licensing rule treats assistive manipulators as separate unauthorized employees.|Record the worker's qualification|Review the equipment definition
+3|70|The recycling levy counts a shipment twice|Two councils charge the same recovered material at different points in a shared pipe.|Compare both levy records|Seek a witnessed accounting boundary
+3|71|The housing guarantee is a navigation forecast|A developer sold guaranteed daylight using an orbital prediction that carried no certification.|Record the original promises|Audit the forecasting contract
+3|72|The station's fire brigade is a private club|Residents outside a membership register receive no scheduled safety inspection.|Verify public safety entitlements|Review the brigade's charter
+3|73|The civic vote follows a cargo manifest|A population count imports transient freight crews as permanent electors.|Verify resident eligibility|Audit the census import
+3|74|The court's records use the sponsor's font licence|A contractor threatens to withdraw access to public judgments over a software fee.|Verify public document custody|Review the formatting agreement
+3|75|The customs appeal costs more than the cargo|A fixed dispute fee effectively blocks small independent couriers from challenging errors.|Record the affected claims|Review the appeal schedule
+3|76|The station's inheritance law excludes artificial bodies|A resident's continuity records are rejected after a medically necessary body replacement.|Witness continuity of identity|Review the succession standard
+3|77|The housing office rents empty orbital coordinates|Applicants pay deposits for modules that exist only on an abandoned expansion chart.|Verify actual housing capacity|Audit the development account
+3|78|The port union's vote was cast by old badges|Deactivated employee credentials still count in a contractor's governance poll.|Verify the current electorate|Preserve the credential audit
+3|79|The public bridge has a private sunset clause|A passage grant expires under a time definition no current resident uses.|Review historical access rights|Seek a witnessed renewal
+3|80|The food trust's trustee is a vanished vessel|Emergency stock belongs legally to a ship absent from the registry for generations.|Verify public custodianship|Audit the trustee succession
+3|81|The council pays rent on its own chamber|A historic lease survived the public purchase of the building that contains it.|Review the purchase record|Audit the continuing payments
+3|82|The rain collector is a border checkpoint|Two administrations claim control of water passing between their roofs.|Record existing water rights|Seek a shared receiving standard
+3|83|The cultural grant requires a founding surname|A public arts fund applies a hereditary rule omitted from its published criteria.|Record eligible artists' claims|Review the grant's founding terms
+3|84|The transit pass is a lifetime employment promise|A transport operator treats accepting public travel assistance as consent to future labour.|Verify informed passenger consent|Audit the assistance contract
+3|85|The building permit contains a silent veto|A former owner retained approval rights over emergency maintenance after selling the habitat.|Verify current safety authority|Review the retained covenant
+3|86|The station's medical debts are traded as votes|A civic lender assigns voting influence according to residents' unpaid treatment costs.|Preserve the debt assignments|Review the electoral charter
+3|87|The guild certifies its own competitors' faults|An industry association controls the evidence used to exclude independent workshops.|Witness an independent inspection|Audit certification authority
+3|88|The public grain reserve is an art collection|A foundation reclassified emergency stock as protected material that cannot be distributed.|Verify emergency-use obligations|Review the reclassification
+3|89|The retirement deck lost its jurisdiction|Two adjacent councils each deny responsibility for a module between their mapped boundaries.|Record residents' civic claims|Seek a shared service mandate
+3|90|The census assumes everyone sleeps at night|A housing register misses workers living on alternate watch cycles.|Verify round-the-clock occupancy|Audit the census schedule
+3|91|The public archive charges for correcting names|Residents must pay to fix transcription errors introduced during a registry migration.|Record original identity documents|Review correction entitlements
+3|92|The port's insurance excludes borrowed suits|Independent workers lose coverage when using collectively owned safety equipment.|Verify actual equipment certification|Review the coverage definition
+3|93|The school district follows the old orbit|Families become administratively ineligible after their habitat changes position.|Verify continuing education rights|Review the boundary rule
+3|94|The water vote belongs to empty tanks|A utility charter assigns representation according to registered storage rather than users.|Audit the current storage register|Seek a witnessed resident proposal
+3|95|The station's emergency fund is a private legacy|A donor's descendants claim a public reserve became personal property after the original emergency.|Verify the gift's conditions|Audit continuing reserve custody
+3|96|The appeal desk is outside the permitted zone|Residents cannot reach the office required to challenge their travel restrictions.|Record accessible appeal claims|Review the location requirement
+3|97|The cargo levy uses a medical classification|A billing system charges human passengers as climate-controlled biological freight.|Verify passenger status|Audit the tariff mapping
+3|98|The council's last signature belongs to a simulator|An administrative test credential authenticated several public contracts.|Preserve the signed agreements|Verify a lawful ratification process
+3|99|The housing queue was sold with a software company|A contractor transferred residents' priority records as commercial assets.|Record public custody claims|Review the transfer agreement
+3|100|The public park is collateral for another world|A regional lender accepted a civic space under a guarantee signed elsewhere.|Verify local consent|Audit the guarantee chain
+3|101|The maintenance council represents only original hulls|New inhabited modules receive services but no voting rights.|Record present occupancy|Review representation under the charter
+3|102|The rescue cooperative charges interest in labour|A mutual-aid contract converts emergency assistance into open-ended service obligations.|Witness informed crew consent|Review limits on the obligation
+3|103|The port licence defines independence as unemployment|Freelance crews cannot qualify under a rule requiring a permanent corporate employer.|Record professional qualifications|Review the licensing definitions
+3|104|The utility company owns the warning vocabulary|A language licence restricts public operators' use of standard alarm terms.|Verify emergency communication rights|Audit the language contract
+3|105|The election registrar is missing from the census|The official managing residents' votes cannot cast one because their own module was omitted.|Verify the official's residence|Review the missing module records
+3|106|The station's cleanup fund has duplicate beneficiaries|Two successor companies claim the same public maintenance income.|Preserve the assignment history|Seek independent fund custody
+3|107|The clinic trust requires a private witness|A sponsor's appointed representative must approve treatments funded by public donations.|Record patient consent|Review the trust's oversight terms
+3|108|The new flag cancels old pension receipts|A government change resets employment records without recognizing earlier contributions.|Preserve workers' original receipts|Review continuity of public obligations
+3|109|The shared kitchen is a customs warehouse|A storage reclassification subjects residents' ordinary meals to bonded-cargo controls.|Verify current residential use|Audit the reclassification order
+3|110|The station's name is inherited by two councils|Competing administrations both use the same historical identity to issue valid-looking permits.|Preserve both permit chains|Seek a shared identity register
+3|111|The public clock is charged by the tick|A timing concession applies per-message fees to civic emergency synchronization.|Verify public timing rights|Review the concession's emergency clause
+3|112|The fuel ration expires during quarantine|A crew loses its allocation while complying with a mandatory health restriction.|Verify protected ration continuity|Audit the expiry rule
+3|113|The school roof is a private landing concession|A commercial agreement assigns cargo handling directly over occupied classrooms.|Record existing educational use|Review the concession's safety terms
+3|114|The archive trustee refuses the current alphabet|A public registry rejects names written using a modern official script.|Preserve original identity records|Seek a witnessed transliteration standard
+3|115|The resident council has a corporate proxy|A lender has exercised dormant voting rights without informing the inhabitants.|Audit the proxy authority|Record current resident consent
+3|116|The hospital's water is commercially reserved|A utilities contract prioritizes a production line over clinical emergency use.|Verify medical supply obligations|Review the priority agreement
+3|117|The court fee is denominated in abolished money|A public appeals process has no valid mechanism for accepting payment.|Record timely appeal attempts|Review the conversion authority
+3|118|The dockworkers' cooperative owns no access cards|A management transfer left operating credentials with the previous contractor.|Verify current work authority|Seek witnessed access transfer
+3|119|The civic ledger charges visitors for birthdays|An imported billing calendar interprets identity anniversaries as annual accommodation renewals.|Preserve disputed invoices|Audit the calendar conversion
+3|120|The station's orphan fund is a shipping bond|Money donated for dependants remains locked under freight insurance rules.|Verify the donation purpose|Review the account classification
+3|121|The redevelopment council counts empty model homes|Promotional demonstration modules entered the civic housing capacity figures.|Verify occupied and usable homes|Audit the capacity report
+3|122|The public workshop has an inherited blacklist|A former private owner's commercial disputes still determine access to civic tools.|Record present access entitlements|Review the retained restrictions
+3|123|The ballot courier's certificate names a previous election|A valid transport qualification is rejected because its wording references an older contest.|Verify continuing qualification|Seek witnessed electoral endorsement
+3|124|The grain fund pays a vanished warehouse's rent|Emergency contributions continue flowing to a property demolished years ago.|Audit the payment chain|Verify current reserve capacity
+3|125|The transit concession excludes unplanned births|A family fare rule recognizes only passengers listed before a long voyage began.|Record actual household membership|Review the fare's eligibility terms
+3|126|The station's curator controls public ventilation|A museum lease reserves authority over climate equipment shared with residents.|Verify public health access|Review the shared equipment duties
+3|127|The disability allowance is stored as cargo mass|A registry migration converted personal support entitlements into shipping limits.|Preserve original allowance records|Audit the migration mapping
+3|128|The port tax applies to outgoing distress calls|A communications levy treats emergency requests as commercial exports.|Verify emergency exemptions|Review the tax classification
+3|129|The old mayor leased the sound of the bell|A private claimant charges the new council for every civic time signal.|Audit the sound licence|Verify public signalling rights
+3|130|The public repair manual is under embargo|A contractor invokes a regional trade restriction against routine safety documentation.|Verify public safety access|Seek independent technical custody
+3|131|The housing cooperative inherits an empty company|Its founding charter delegates authority to a dissolved developer.|Verify resident governance rights|Review successor authority
+3|132|The water court requires an impossible sample|Residents must produce sealed evidence from a pipe already removed by the utility.|Record substitute evidence|Review the evidentiary condition
+3|133|The civil register forgets adopted relatives|A family database accepts only a narrow biological relationship field.|Witness valid family records|Audit the relationship definitions
+3|134|The station's relief budget is pledged to its insurer|Public emergency spending requires permission from a company whose losses it may reveal.|Verify independent emergency authority|Review the insurer's veto
+3|135|The dock permit follows an obsolete engine number|A licensed vessel becomes unrecognized after a properly recorded propulsion replacement.|Verify continuity of hull identity|Audit the permit update
+3|136|The labour office rejects remote testimony|Workers serving distant shifts cannot participate in a required public hearing.|Record authenticated remote statements|Review the attendance requirement
+3|137|The public seed bank is a private naming trust|Access to civic seed reserves requires displaying a donor's hereditary title.|Verify the gift's public purpose|Review the naming condition
+3|138|The census treats shared sleep as one household|A register combines unrelated workers who use the same bunk on different watches.|Record independent residents|Audit the household model
+3|139|The public safety vote excludes small ships|A navigation council grants representation only above a commercial hull threshold.|Record affected crews' claims|Review the council's public mandate
+3|140|The housing guarantee names the wrong star|A copied contract promises light conditions from a different system.|Preserve the signed guarantee|Audit the contract's reference data
+3|141|The station's accounts have two fiscal years|Two merged councils apply overlapping tax periods to the same residents.|Compare the assessment calendars|Seek a witnessed common cutoff
+3|142|The clinic grant expires at an undefined sunset|A legal condition uses a natural day absent from the station's orbit.|Verify continuity of clinical funding|Review the timing clause
+3|143|The union library is financed by silence|A sponsor conditions public archive funding on removal of workers' recorded grievances.|Preserve the original testimony|Audit the funding condition
+3|144|The cargo registry owns a resident's name|An old shipping mark prevents a person with the same name from receiving civic documents.|Verify personal identity rights|Review the mark's legal scope
+3|145|The emergency taxi is a diplomatic concession|A transport monopoly refuses routine public oversight by claiming inherited diplomatic status.|Verify actual public service duties|Audit the claimed exemption
+3|146|The station's youngest residents have no calendar|A child-support rule cannot handle families using a different lawful birth-date convention.|Witness the original birth records|Seek a shared conversion standard
+3|147|The council charges for entering its waiting room|A private building contract obstructs access to essential public services.|Record denied service attempts|Review public access obligations
+3|148|The public heat reserve is a demonstration licence|Emergency equipment remains limited by a vendor's pre-sale software profile.|Verify the installed reserve|Audit the commissioning licence
+3|149|The port's tax appeal is a commercial arbitration|Residents discover their statutory complaints are routed into a privately controlled process.|Preserve the original claims|Review the receiving authority
+3|150|The local constitution is an unsigned translation|A settlement uses a translated charter whose source has a materially different voting clause.|Preserve both texts|Witness a joint interpretation
+3|151|The station's rainwater belongs to departing ships|A docking contract assigns collected water to vessels that left generations ago.|Audit the continuing allocations|Verify present public water rights
+3|152|The archive's correction key is privately inherited|A departed registrar's estate retains authority to fix civic records.|Verify successor public authority|Review the credential's custody
+3|153|The housing vote excludes people in quarantine|A public ballot requires attendance in a compartment some residents are legally forbidden to enter.|Record protected remote votes|Review the attendance rule
+3|154|The food guarantee was signed by a brand|A reserve contract names a marketing identity with no registered legal custodian.|Trace the actual guarantor|Verify the physical reserve
+3|155|The school utility meter belongs to a former sponsor|A commercial dispute threatens services already funded through public contributions.|Verify public service continuity|Audit the meter transfer
+3|156|The station's maintenance debt includes private gardens|Residents are billed for work outside the public contract's boundary.|Compare the service drawings|Preserve the disputed invoices
+3|157|The transit authority sells unused medical slots|An automated scheduler treats emergency availability as ordinary commercial stock.|Verify protected receiving capacity|Review the sales authority
+3|158|The civic calendar omits a whole shift|An imported workweek leaves alternate-watch residents without recognized public opening hours.|Record actual service needs|Seek a shared civic timetable
+3|159|The pension office rejects changed surnames|Workers cannot join old contribution records to their current legal identities.|Witness continuity of identity|Audit the matching rule
+3|160|The port's public map is tied to one manufacturer|Independent navigation equipment cannot access a chart financed by civic taxes.|Verify open public access rights|Review the technical concession
+4|41|The Chapel of the Unread Reply|A congregation preserves unopened messages addressed to its vanished founder.|Witness the sealed archive|Hear a claimant's request
+4|42|The Keepers of the Spare Horizon|Pilgrims carry painted horizons from worlds they have never visited.|Record the painting tradition|Compare the claimed source charts
+4|43|The Order of the Absent Pilot|A devotional vessel assigns its command chair to a presence that never answers.|Witness the crew's consent|Record the acting navigator's mandate
+4|44|The Feast of Reversed Names|Members exchange personal names during a rite and dispute which promises survive afterward.|Witness the exchange vows|Hear those withdrawing consent
+4|45|The Church of the Warm Dust|A shrine keeps heated mineral grains said to remember its founders' footsteps.|Record the custodial practice|Seek consented independent measurements
+4|46|The Monastery of the Unlit Signal|Monks maintain a beacon that must be operational but never transmit.|Witness the silent maintenance|Inspect a claimed transmission record
+4|47|The Pilgrims of the Borrowed Night|A community observes darkness according to another world's day cycle.|Record the inherited calendar|Hear workers seeking another schedule
+4|48|The Congregation of Tiny Departures|Worshippers record every released air molecule as a traveller leaving the station.|Witness the counting rite|Review the archive's privacy rules
+4|49|The Library of Forbidden Endings|A sect removes final sentences from sacred histories and preserves them in separate custody.|Witness both collections|Hear the excluded readers
+4|50|The Order of the Delayed Echo|Devotees accept only replies arriving after a prescribed silence.|Record the listening practice|Preserve an early disputed reply
+4|51|The Shrine of the Extra Footstep|A pilgrimage ends with a step beyond its mapped destination.|Witness the route tradition|Record a guide's independent account
+4|52|The Faith of the Empty Signature|An agreement becomes sacred only when one witness deliberately leaves their name blank.|Record the witnessing custom|Hear a disputed anonymous claimant
+4|53|The Chapel of the Last Maintenance Log|A repaired vessel's final service record has become a devotional text.|Witness the public reading|Compare the surviving workshop copies
+4|54|The Keepers of the Distant Kitchen|A diaspora cooks meals using a thermal schedule inherited from a lost station.|Record the meal calendar|Hear a departing household
+4|55|The Order of Unpaired Lamps|Worshippers believe paired lights trap returning souls and dispute a new civic lighting scheme.|Witness the lamp tradition|Record a consented compromise
+4|56|The Procession of Silent Cargo|Pilgrims carry empty crates whose routes are considered more important than their contents.|Record the route histories|Verify the custodians' consent
+4|57|The Congregation of the Fifth Direction|Members orient prayers toward a direction absent from ordinary navigation charts.|Record independent descriptions|Compare historical reference frames
+4|58|The Monastery of Shared Sleep|Keepers rotate a ritual dream watch and disagree over ownership of recorded dreams.|Witness recording consent|Hear a retiring keeper
+4|59|The Feast of Unfinished Repairs|A community leaves one harmless defect in each ceremonial vessel.|Record the chosen exceptions|Review visitor disclosure consent
+4|60|The Faith of the Sleeping Archive|A sect permits its books to be read only while their custodians are asleep.|Witness the access ritual|Hear readers seeking open custody
+4|61|The Shrine of the Discarded Compass|An obsolete navigation instrument is revered for directions it gave before calibration.|Record the ritual bearings|Compare the original service record
+4|62|The Order of Lightless Windows|A congregation covers its windows to avoid witnessing what it calls unconsented stars.|Witness the covering rite|Hear residents asking for daylight
+4|63|The Pilgrims of the Wrong Arrival|Devotees intentionally reach a different port from the one named at departure.|Record informed passenger consent|Compare the inherited route rules
+4|64|The Chapel of Undivided Water|A communal vessel holds water that custodians refuse to separate into samples.|Witness the shared custody|Seek a consented noninvasive reading
+4|65|The Church of the Missing Tool|Workers honor a tool that was never recovered from a founding accident.|Record the surviving testimony|Inspect a claimed recovered object
+4|66|The Order That Prays Through Translators|Members consider every translation a new revelation and dispute which version governs their vows.|Witness the competing readings|Preserve the earliest text
+4|67|The Feast of the Artificial Eclipse|A station community manufactures an eclipse marking a historical refuge.|Record the ceremony's timing|Hear residents excluded from it
+4|68|The Congregation of Empty Receipts|A sect treats unfulfilled delivery promises as memorial objects.|Witness archive consent|Hear a sender requesting return
+4|69|The Monastery of Returning Noise|Keepers play recordings of industrial noise from a demolished settlement.|Record the sound custody|Hear the former workers' claims
+4|70|The Shrine of the Last Common Word|A community preserves one word shared by languages that otherwise diverged.|Record independent pronunciations|Compare the surviving dictionaries
+4|71|The Faith of Transparent Graves|Families store memorial records in clear housings that reveal no personal names.|Witness the privacy custom|Hear a relative seeking identification
+4|72|The Order of the Spare Body|A devotional trust maintains unused assistive bodies for strangers it expects to arrive.|Record the trust's consent rules|Hear a claimant's request
+4|73|The Pilgrims Who Refuse Destinations|A travelling congregation registers its journeys as continuous departures.|Witness the travelling mandate|Hear members seeking settlement
+4|74|The Chapel of the Moving Door|A ritual room changes its entrance between gatherings.|Record the architectural tradition|Verify participants' access consent
+4|75|The Congregation of Old Weather|Worshippers reenact forecasts from their ancestors' last day on a lost world.|Record the forecast liturgy|Compare the historical observations
+4|76|The Shrine of the Unclaimed Helmet|A recovered helmet is revered by two communities claiming different missing founders.|Witness shared object custody|Compare the identity evidence
+4|77|The Monastery of the Second Hand|Keepers preserve the hand of an old clock separately from its mechanism.|Record the succession practice|Inspect a disputed restoration
+4|78|The Faith of Borrowed Silence|A community receives periods of quiet donated by nearby workers.|Witness voluntary participation|Hear those seeking withdrawal
+4|79|The Order of the Unopened Window|A viewport is kept closed until a descendant completes an inherited voyage.|Record the inherited vow|Hear the descendant's own wishes
+4|80|The Feast of the Forgotten Ingredient|Each household omits a different part of a traditional meal.|Witness household consent|Compare the oldest recipes
+4|81|The Chapel of the Third Landing|A congregation believes only every third arrival reaches its intended spiritual destination.|Record the arrival count|Hear a disputed passenger account
+4|82|The Keepers of the Hollow Bell|A sacred bell's internal shape is known only through inherited drawings.|Record the custodial chain|Seek consented internal measurements
+4|83|The Order of Rewritten Birthdays|Members periodically choose a new symbolic birth date.|Witness the symbolic calendar|Protect independent identity records
+4|84|The Shrine of the Last Open Frequency|A sect maintains a public channel in memory of unanswered historical distress calls.|Record the channel's custody|Hear a family requesting privacy
+4|85|The Pilgrims of the Cold Table|A travelling order shares meals at a table deliberately kept below ambient temperature.|Witness the meal consent|Compare the inherited thermal rule
+4|86|The Faith of the Unmeasured Distance|A community forbids assigning numerical distances to a sacred route.|Record the oral route|Hear independent navigation witnesses
+4|87|The Monastery of Gentle Errors|Copyists preserve harmless mistakes they believe reveal their predecessors' individuality.|Witness the copying practice|Review a disputed correction
+4|88|The Chapel of Unworn Clothes|Garments reserved for unknown arrivals have become the subject of inheritance claims.|Record shared custodianship|Hear the original donors' families
+4|89|The Congregation of the Stopped Storm|A devotional weather display repeats the instant before an ancestral disaster.|Witness the display archive|Compare the unedited source recording
+4|90|The Order of the Nameless Builder|Workers attribute a station's oldest structures to a deliberately anonymous figure.|Record the oral histories|Inspect the surviving construction ledger
+4|91|The Feast of Unanswered Questions|A sect publishes questions whose authors must never receive the official reply.|Witness publication consent|Hear an author requesting access
+4|92|The Shrine of the Spare Airlock|An unused pressure door is preserved as a promise of refuge.|Record its public obligations|Review a private custody claim
+4|93|The Faith of the Divided Mirror|Each believer holds a fragment of a mirror whose complete image is forbidden.|Witness voluntary shared custody|Hear someone seeking their fragment back
+4|94|The Order of Sunset Witnesses|A community appoints a witness for a sunset that its current orbit cannot provide.|Record the inherited appointment|Hear a proposed symbolic replacement
+4|95|The Chapel of the Returned Parcel|A package repeatedly refused by its intended recipient became a communal shrine.|Witness current custodial consent|Hear the recipient's own account
+4|96|The Monastery of Migrating Letters|Keepers rearrange the same written symbols during every change of watch.|Record the arrangement histories|Compare a claimed original sequence
+4|97|The Congregation of the Last Warm Wall|A housing community reveres the only wall that retained heat during its founding emergency.|Witness the custodial tradition|Review residents' renovation consent
+4|98|The Pilgrims of the Spare Minute|Devotees donate small intervals of personal time to a ceremonial clock.|Record the donation rule|Hear a withdrawal request
+4|99|The Faith of the Sleeping River|A diaspora maintains a sealed model of water that must never circulate.|Witness the model's custody|Inspect a disputed maintenance record
+4|100|The Shrine of the Unclaimed Lullaby|Several families recognize a sacred tune but disagree over who first recorded it.|Record the independent accounts|Compare the oldest audio copies
+4|101|The Chapel of Folded Maps|Pilgrims consider the folds of a chart to carry more meaning than its printed destinations.|Witness the folding tradition|Compare the conserved originals
+4|102|The Order of the Second Visitor|A sanctuary reserves its welcome for whoever arrives after the first caller.|Record informed visitor consent|Hear those repeatedly excluded
+4|103|The Monastery of Small Reversals|Keepers undo one minor everyday action as part of a shared ritual.|Witness voluntary observance|Review a disputed inherited obligation
+4|104|The Faith of the Empty Cradle|A congregation maintains a cradle for descendants of a lost generation.|Record the custodial agreement|Hear a family seeking ordinary use
+4|105|The Shrine of the Paused Song|A song is performed only up to a note associated with a vanished settlement.|Witness the performance consent|Preserve a claimed complete recording
+4|106|The Congregation of Borrowed Shadows|Members exchange recorded silhouettes during ceremonies.|Witness image consent|Hear a request to withdraw a likeness
+4|107|The Pilgrims of the Wrong Window|Visitors view a sacred star through a deliberately offset optical instrument.|Record the viewing practice|Compare the historical alignment
+4|108|The Chapel of the Quiet Valve|A small pressure valve is maintained as a memorial to a former rescue crew.|Witness the service tradition|Review the original rescue record
+4|109|The Order of Inherited Footprints|Pilgrims follow route marks attributed to people whose names were deliberately erased.|Record the route custody|Hear descendants seeking attribution
+4|110|The Faith of the Last Public Seat|A community keeps a free berth in memory of travellers refused entry.|Witness the public access promise|Review a restricted-use proposal
+4|111|The Monastery of Unsigned Paintings|A devotional collection removes artists' names with their consent.|Verify surviving consent records|Hear an artist seeking attribution
+4|112|The Shrine of the Distant Knock|A chamber periodically plays a sound believed to come from an unopened rescue hatch.|Witness the recording's custody|Inspect the original sound source
+4|113|The Chapel of the Spare Horizon Line|A diaspora shares a single painted line representing a world none of its current members saw.|Record independent family accounts|Compare the oldest surviving image
+4|114|The Congregation of Empty Titles|Members surrender ceremonial ranks that remain listed in an old civic registry.|Witness voluntary renunciation|Review the continuing public records
+4|115|The Order of the Sleeping Witness|A vow is considered valid only if its named witness hears it later in a dream report.|Record informed participant consent|Hear a disputed witness account
+4|116|The Pilgrims of Unfinished Journeys|A travelling sect treats interrupted routes as completed acts of devotion.|Record the journey histories|Review a disputed passage promise
+4|117|The Faith of the Returning Key|Custodians pass a key between households without revealing which door it originally opened.|Witness the custody chain|Inspect a claimed matching lock
+4|118|The Chapel of Slow Rain|A ceremonial chamber releases one drop of water per watch.|Record the maintenance tradition|Review a disputed reserve claim
+4|119|The Shrine of the Unwitnessed Arrival|A community honors a ship that reportedly arrived while every observer was looking elsewhere.|Record independent recollections|Compare surviving traffic logs
+4|120|The Monastery of Closed Dictionaries|Keepers preserve languages through spoken teaching while forbidding publication of their written vocabulary.|Witness teaching consent|Hear a publication request
+4|121|The Order of the Borrowed Funeral|Members perform memorials for strangers whose families never reached the station.|Record family consent where available|Review the custodial archive
+4|122|The Faith of the Fractured Calendar|A religious year is split among households whose clocks never agree on its beginning.|Record each calendar tradition|Compare the founding chronology
+4|123|The Chapel of the Unused Lifeboat|A rescue capsule is kept ready as a sacred promise but has never accepted a live assignment.|Witness the public rescue obligation|Review a proposed dispatch
+4|124|The Pilgrims of the Third Echo|Visitors wait for three independent replies before acknowledging a message.|Record the listening consent|Review a disputed response sequence
+4|125|The Shrine of the Missing Page Number|A book contains a deliberate gap in numbering regarded as a place for future testimony.|Witness the current archive|Hear a request to fill the gap
+4|126|The Monastery of Unbroken Thread|Successive custodians weave a continuous cloth from recovered shipboard fibres.|Record the succession agreements|Review a disputed material donation
+4|127|The Congregation of Distant Birthplaces|Members adopt symbolic birthplaces chosen from uninhabited catalogue worlds.|Witness symbolic identity consent|Protect original civic identity records
+4|128|The Faith of the Unheard Alarm|A sect preserves the model of a siren that failed during its founding disaster.|Record the memorial practice|Compare the surviving technical evidence
+4|129|The Chapel of Returning Chairs|A travelling congregation lends its ceremonial seats to strangers between gatherings.|Witness the lending consent|Hear a disputed return claim
+4|130|The Order of the Quiet Engine Room|Workers observe a pause in machinery noise as a remembrance rite.|Record voluntary observance|Review a disputed work agreement
+4|131|The Pilgrims Who Carry Empty Water|Visitors bring sealed vessels from which all water has evaporated during earlier voyages.|Record the vessel histories|Seek consented material inspection
+4|132|The Shrine of the Unwritten Name|A memorial deliberately leaves its central name blank for people absent from official records.|Witness the shared dedication|Hear a request for specific attribution
+4|133|The Monastery of Counted Stars|Keepers recite a fixed count that excludes every star discovered after the community's founding.|Record the oral tradition|Compare the historical catalogue
+4|134|The Faith of the Shared Last Word|Every speaker at a gathering must leave their sentence to be finished by another.|Witness the participation rules|Hear a disputed statement
+4|135|The Chapel of Borrowed Gravity|A devotional room reproduces the gravitational reference of a lost ancestral vessel.|Record the inherited reference|Compare surviving navigation records
+4|136|The Order of the Hidden Doorway|A sanctuary's true entrance is disclosed only after visitors choose whether to continue.|Witness informed visitor consent|Hear accounts from those who left
+4|137|The Congregation of Returning Receipts|A sect returns every gift with a record of the journey it funded.|Witness the donation terms|Review a disputed financial account
+4|138|The Shrine of the Unclaimed Signal|A repeating transmitter is revered because no group has successfully claimed its original message.|Record independent interpretations|Inspect the earliest received packet
+4|139|The Faith of the Slow Departure|Pilgrims schedule ceremonies around an engine's gradual loss of residual heat.|Witness the thermal rite|Review a disputed maintenance change
+4|140|The Monastery of Empty Shelves|An archive preserves spaces for books believed to have been lost before anyone could read them.|Record the custodial plan|Hear a request for public shelf use
+4|141|The Chapel of the Second Name|Members share a ceremonial name used only during return voyages.|Witness name-use consent|Review a mistaken civic registration
+4|142|The Pilgrims of the Last Common Meal|A diaspora recreates a meal recorded before its founding convoy separated.|Record the recipe lineages|Compare the surviving passenger accounts
+4|143|The Shrine of the Broken Counting Wheel|A damaged mechanical counter is revered for the number on which it stopped.|Witness its custody history|Inspect a claimed original reading
+4|144|The Order of the Listening Wall|A community leaves spoken memories inside a shared acoustic chamber.|Witness recording consent|Hear a withdrawal request
+4|145|The Faith of the Absent Reflection|A sanctuary uses dark glass that conceals visitors' faces during ceremonies.|Record informed ritual consent|Review a disputed image recording
+4|146|The Monastery of Repeated First Days|Keepers restart a ceremonial calendar whenever a new member freely joins.|Witness the admission rules|Hear a disputed membership account
+4|147|The Chapel of Returned Silence|A congregation ends each gathering by replaying the quiet interval before its founding broadcast.|Record the source custody|Compare the earliest sound copy
+4|148|The Pilgrims of the Unmarked Berth|A free landing place is maintained without a public name to protect vulnerable arrivals.|Witness the access mandate|Review a request for registry recognition
+4|149|The Shrine of the Borrowed Lamp|Successive communities lend a lamp whose owner is deliberately never named.|Record the custody chain|Hear a private ownership claim
+4|150|The Faith of the Open Ending|A devotional archive keeps all histories unfinished until someone directly affected requests closure.|Witness informed closure consent|Review a disputed historical account
+4|151|The Order of the Last Shared Air|A community preserves atmosphere from the cabin in which its founders first agreed to live together.|Witness shared custodial consent|Review an independent conservation request
+4|152|The Chapel of the Deliberate Detour|Pilgrims revisit an avoidable diversion said to have saved their ancestral convoy.|Record independent route memories|Compare the surviving navigation logs
+4|153|The Shrine of Repeated Goodbyes|A memorial requires a new farewell whenever a descendant leaves the system.|Witness voluntary participation|Hear a request to end the obligation
+4|154|The Monastery of Unborrowed Names|Custodians preserve names that members chose never to assign to their children.|Record the archive's consent rules|Review a family's naming claim
+4|155|The Faith of the Quiet Passenger|A ceremonial voyage reserves a role for a visitor who may decline every question.|Witness informed visitor consent|Hear an account of unwanted disclosure
+4|156|The Pilgrims of the Shared Threshold|Several congregations claim a doorway where their founding encounters reportedly occurred.|Witness shared access rights|Compare the earliest independent accounts
+4|157|The Chapel of the Returning Tide|A station reproduces a tidal rhythm inherited from a planet its residents cannot reach.|Record the inherited timing|Review a disputed calibration
+4|158|The Order of the Spare Promise|Members keep a public list of commitments they are free to adopt but never obliged to complete.|Witness the voluntary covenant|Hear a disputed enforcement claim
+4|159|The Shrine of the Unfinished Shelter|A community keeps one ceremonial wall incomplete as a promise to future arrivals.|Record the public dedication|Review a private completion proposal
+4|160|The Faith of the Unowned Memory|A shared remembrance rite forbids any single custodian claiming ownership of its recording.|Witness collective consent|Hear a disputed archive claim
+5|41|The moon's spectrum follows the cargo lights|A survey detects a mineral signature synchronized with nearby freight illumination.|Record a dark control|Compare independent orbital spectra
+5|42|The comet changes colour in storage|Collected dust differs spectrally after crossing the sample depot's transport scanner.|Preserve an untreated reference|Audit the transport exposure
+5|43|The eclipse monitor measures its own shutter|A small timing signal repeats at the same interval as the instrument's mechanical closure.|Record a fixed-shutter control|Review the detector timestamps
+5|44|The biosphere survey recognizes a shipping mark|A classifier identifies a distinctive packing pattern as an unknown organism.|Review the physical specimen|Audit the training reference set
+5|45|The star's radio pulse shares a billing period|An apparent stellar periodicity matches the observatory's commercial network cycle.|Record an isolated receiving interval|Audit the data routing
+5|46|The gravity survey assumes a missing tank|An orbital model includes ballast removed before the programme began.|Verify the current mass distribution|Review the model's source drawings
+5|47|The protein sample follows the courier's route|Laboratories report different results according to which cargo depot handled the material.|Compare sealed reference samples|Audit the depot conditions
+5|48|The dust detector counts local paint|A particle instrument registers fragments matching the survey ship's new coating.|Record an external control|Compare the coating sample
+5|49|The map of dark ice includes warm metal|A remote classifier treats polished equipment surfaces as exposed frozen terrain.|Compare raw thermal images|Review the surface-response model
+5|50|The observing window follows a forgotten timezone|A programme repeatedly measures a different stellar phase from the one its schedule specifies.|Verify a shared time reference|Audit the scheduling conversion
+5|51|The neutrino anomaly vanishes on holidays|A detector's unusual background disappears whenever the industrial district closes.|Record a matched quiet control|Compare the utility operating logs
+5|52|The sample jar is a weak lens|An optical experiment's apparent structure changes with the curvature of its container.|Repeat with a reference vessel|Audit the optical correction
+5|53|The atmospheric trace arrived in a cleaning bottle|A rare gas signature matches the laboratory's newly purchased cleaning materials.|Preserve untouched sampling blanks|Audit the cleaning supply chain
+5|54|The orbit fit counts a repair tug as a moon|A tracking programme includes a servicing vessel in the target's gravitational model.|Compare independent tracks|Review object classification
+5|55|The old telescope remembers a previous filter|A replacement element's software profile still applies the original transmission curve.|Record a shared reference exposure|Audit the filter history
+5|56|The magnetic pole moves with a borrowed battery|An instrument's direction shift follows the placement of its replacement power pack.|Repeat an isolated control|Measure the battery's field
+5|57|The artificial habitat became the control world|An automated survey mistakes a manufactured growing deck for a natural biosphere reference.|Verify the target identity|Review the survey selection rule
+5|58|The sample warms when its name is transmitted|A temperature change coincides with the radio packet carrying its identifier.|Record a silent control|Audit radio-frequency coupling
+5|59|The material's strength depends on the observer's software|Different readout versions report incompatible failure loads from the same raw test.|Compare the original load records|Audit the conversion profiles
+5|60|The spectrometer's missing line is a compression artifact|A narrow feature disappears only in exported low-bandwidth datasets.|Preserve the raw exposures|Review export compression
+5|61|The ring's edge tracks a camera crop|An apparent orbital boundary shifts whenever image framing changes.|Compare uncropped observations|Audit the coordinate mapping
+5|62|The geological age is a label date|A laboratory export substitutes the receiving date for a sample's measured chronology.|Review the primary measurement|Audit the metadata fields
+5|63|The pulse delay is a rounding boundary|A timing anomaly appears only when a shared clock crosses an integer limit.|Record higher-precision timestamps|Review numerical conversion
+5|64|The biological control contains borrowed nutrients|A supposedly empty culture medium was filled using equipment shared with an active experiment.|Preserve untouched blanks|Audit preparation custody
+5|65|The calibration mirror is slowly tarnishing|A long-term brightness trend matches changes in the reference surface.|Record an independent light standard|Review mirror maintenance
+5|66|The planet's mass includes a duplicated station|A catalogue merge counts an orbital structure twice.|Verify independent position records|Audit the merged identifiers
+5|67|The cold trap collects the technician's breath|A gas collector's unusual isotope result follows maintenance visits.|Record an unattended control|Audit the servicing conditions
+5|68|The starspot changes sides after every software update|Image orientation defaults alternate between processing versions.|Preserve raw image headers|Review the processing transforms
+5|69|The seismometer listens to the water pump|A settlement's supposed deep periodicity matches its utility cycle.|Record a quiet mechanical interval|Compare independent ground instruments
+5|70|The meteor count follows school tours|An observatory's detector triggers correlate with visitors walking on its support platform.|Record a closed-gallery control|Inspect vibration isolation
+5|71|The new mineral is a coating from the drill|A returned sample contains particles matching recently replaced drilling equipment.|Preserve an undrilled reference|Audit the drill materials
+5|72|The navigation experiment follows the wrong beacon|An automated tracker selected a nearer transmitter with a similar identifier.|Verify independent bearings|Audit target acquisition
+5|73|The organism's clock follows the storage lamp|A biological rhythm changes when samples move between otherwise identical cupboards.|Record a controlled light history|Review the storage conditions
+5|74|The thermal map ignores a reflective cloud|A surface model interprets reflected starlight as local heat.|Compare spectral observations|Review the radiative model
+5|75|The radiation counter changes when a door opens|An apparent exposure spike coincides with a pressure change in the detector housing.|Record a pressure control|Inspect the housing seal
+5|76|The stellar echo repeats a public time signal|A received pattern matches a delayed station synchronization packet.|Record a different receiving band|Audit the relay path
+5|77|The sample magnetizes during baggage screening|An unexplained field appears only in material that passed through one cargo checkpoint.|Compare unscreened references|Review screening exposure
+5|78|The polar map uses a local compass convention|Independent surveys disagree because their coordinate axes use different definitions.|Witness a shared reference transform|Preserve both original coordinate sets
+5|79|The programme's blank chart is a discovery claim|An unprocessed dataset was interpreted as evidence of an unusually empty region.|Verify the processing state|Review the claimed observing interval
+5|80|The isotope standard came from a demonstration kit|A training material entered the laboratory's reference inventory.|Compare certified standards|Audit the inventory transfer
+5|81|The dusty atmosphere is a dirty viewport|A remote extinction measurement changes after the survey window is cleaned.|Record an external reference|Review the viewport's transmission
+5|82|The experimental clock counts thawing intervals|A time standard's power reserve pauses during cold storage without recording the interruption.|Compare an independent chronology|Audit the reserve behavior
+5|83|The stellar cycle fits only selected years|A claimed periodicity excludes several archived observing seasons.|Restore the omitted observations|Review the selection criteria
+5|84|The wave tank remembers its launch acceleration|A persistent laboratory current began when the module was transferred between stations.|Record a settled control interval|Review the transfer's motion record
+5|85|The moon's chemistry follows its background stars|A spectral classifier changes its result as the target crosses a bright stellar field.|Record a matched sky background|Audit spectral subtraction
+5|86|The vacuum detector has a private calibration|A contractor supplies corrected results without releasing the underlying adjustment.|Request a raw control record|Seek independent calibration
+5|87|The sample's mirror symmetry was a naming error|Two differently prepared specimens were assigned one shared identity.|Preserve the separate custody chains|Review preparation records
+5|88|The cosmic ray signal travels through the handrail|A detector's pulses correlate with charge on a nearby structural conductor.|Record an isolated mounting control|Inspect the electrical connection
+5|89|The ice crystal's age follows the refrigerator|A chronology correction uses the cooling unit's service age instead of sample exposure.|Review raw measurement ratios|Audit the correction fields
+5|90|The telescope's focus is a temperature sensor|A processing routine substitutes a thermal readout for the actual lens setting.|Record a verified focus sequence|Review the instrument mapping
+5|91|The tide gauge is moving with its pier|A surface observation includes structural motion absent from the reference model.|Record an independent ground reference|Inspect the mounting survey
+5|92|The biosphere classifier recognizes a logo|A recurring commercial mark appears in the images used to train an organism detector.|Review unmarked samples|Audit the training images
+5|93|The laboratory's control group shares a drain|Separated growing chambers exchange material through an unrecorded service line.|Verify physical separation|Review the fluid diagram
+5|94|The ring particles have an impossible shared velocity|A conversion routine assigns one frame's motion to every measured fragment.|Preserve the raw tracking vectors|Review the velocity transform
+5|95|The reference lamp brightens under inspection|A service test changes its operating current before routine measurements resume.|Record an uninterrupted light history|Audit service-mode transitions
+5|96|The telescope discovers its own cooling plume|An apparent diffuse source changes position with the instrument's radiator orientation.|Record a second-vessel observation|Inspect the thermal plume model
+5|97|The mineral survey follows a freight manifest|An automated report imports a shipment's declared composition as an observation.|Verify independent spectral data|Audit the report generation
+5|98|The pulsar timing loses whole packets|A receiving link drops frames at regular intervals during heavy traffic.|Preserve the complete receiver buffer|Review transmission losses
+5|99|The biological sample was never truly dormant|Temperature records reveal activity before the programme's official awakening test.|Review the full storage history|Repeat a verified dormant control
+5|100|The crust thickness is a unit prefix|Two research desks differ by an unrecorded scale conversion.|Compare original measurement units|Review the shared model interface
+5|101|The magnetometer's silence is automatic clipping|A detector stops reporting signals above its configured export limit.|Preserve unbounded raw data|Audit the clipping threshold
+5|102|The star's colour changes with the ship's visor|An observing camera uses a protective film whose transmission changed during repairs.|Record a film-free reference|Review the optical maintenance
+5|103|The sediment sequence was loaded backward|An automated sampler reversed the order of stored geological layers.|Preserve original collector positions|Audit sample indexing
+5|104|The experiment's certainty grows during outages|Missing observations are entered as exact agreement with the model.|Recompute using observed data|Review missing-value handling
+5|105|The moon's transit follows a simulator|A live display retained a demonstration trajectory after its receiving link failed.|Verify live tracking custody|Audit display fallback behavior
+5|106|The microbial bloom is in the label adhesive|A culture's strongest response comes from material outside its sealed medium.|Record an adhesive-free control|Compare the packaging materials
+5|107|The gravity standard is a loaded freight rack|An instrument reference moved when a neighbouring cargo compartment was filled.|Record an unloaded control|Review local mass corrections
+5|108|The orbital decay ends at an account change|A tracking service switched catalogues when its subscription changed.|Preserve both tracking series|Audit the catalogue transition
+5|109|The atmospheric leak is a terrestrial reference gas|A collection instrument retains calibration material in its tubing.|Record a cleaned blank|Review calibration flushing records
+5|110|The solar flare prediction sees the future data|A model-validation export includes observations from after its forecast date.|Rebuild a time-separated test|Audit the dataset chronology
+5|111|The radiation shield includes an unmeasured gap|A laboratory's protection model assumes a continuous panel around a service opening.|Survey the installed geometry|Record an independent exposure map
+5|112|The water sample's salinity follows a pipette|A shared dispensing tool contaminates supposedly independent containers.|Record single-use preparation controls|Audit the dispensing sequence
+5|113|The asteroid density is a hollow-case assumption|A mass model applies a solid volume to a visibly fractured body.|Preserve independent shape measurements|Review the volume model
+5|114|The star's brightness is an automatic exposure ramp|A camera adjustment was omitted from the published light curve.|Recover exposure metadata|Repeat using a fixed reference
+5|115|The biological signal arrives through the supply feed|A sample intake responds to material from the station's shared nutrient system.|Verify an isolated intake control|Review the supply connections
+5|116|The clock's precision is a copied uncertainty|A processing script repeats a reference value instead of estimating each observation's scatter.|Recompute the actual residuals|Audit uncertainty propagation
+5|117|The seismic shadow matches a storage cavern|A supposedly deep anomaly follows an undocumented excavation near the sensor.|Verify the local ground survey|Compare independent observing positions
+5|118|The plasma trace is a navigation discharge|A detector records a survey vessel's own correction thrusters.|Record a quiet-thrust interval|Review propulsion event timestamps
+5|119|The sample's colour returns after every reboot|A display profile resets its material classification at startup.|Preserve the raw spectral record|Audit persistent calibration settings
+5|120|The lunar map combines two epochs|A terrain model merges positions measured before and after a reference-frame revision.|Compare epoch-specific surveys|Review the merge transform
+5|121|The observing network shares one faulty reference|Several apparently independent results trace back to the same untested standard.|Record an external reference|Audit the dependency chain
+5|122|The cold plasma is a warm electronics fault|A spectral line follows temperature in the detector's amplifier.|Record an independent receiver control|Review the amplifier history
+5|123|The growth medium's expiration date is symbolic|A supplier's local calendar was converted as a laboratory time standard.|Verify actual storage duration|Review the calendar conversion
+5|124|The distant source follows a reflected service light|A telescope's internal baffle sends a nearby lamp into the observing field.|Record a lights-off control|Inspect the baffle geometry
+5|125|The rock core belongs to another borehole|A routing change exchanged the sample identifiers from two excavation sites.|Preserve both custody chains|Compare physical core structures
+5|126|The pulse count includes rejected tests|A programme's discovery tally includes detector firings from its commissioning run.|Separate test and observing records|Review the event classification
+5|127|The orbital reference includes its own correction|A navigation model applies a published adjustment twice.|Recompute from the original ephemeris|Audit the correction sequence
+5|128|The warming signal follows a new landing pad|A climate instrument's environment changed after nearby construction.|Record a remote control site|Review local surface changes
+5|129|The microbe's migration is a camera pan|Automated tracking interprets framing changes as organism motion.|Preserve the uncropped sequence|Audit motion compensation
+5|130|The magnetic anomaly follows a transport container|An apparent sample property vanishes when the shipping case is removed.|Record a case-free control|Measure the container independently
+5|131|The star's spectrum is a blended catalogue entry|A lookup routine treats two nearby sources as one historical object.|Record resolved observations|Review the identity mapping
+5|132|The radiation cycle is a cleaning timetable|A detector responds to a material used during routine laboratory servicing.|Record an unattended control|Compare service-material spectra
+5|133|The calibration weight contains a loose component|A reference changes its effective center as the laboratory rotates.|Record a fixed-orientation comparison|Inspect the reference's construction
+5|134|The atmospheric plume is a survey artifact|An interpolation routine invents structure across an unobserved gap.|Publish the measurement coverage|Review the interpolation assumptions
+5|135|The biological control was fed by remote consent|An old automation rule replenishes a chamber that the team considers isolated.|Preserve controller event logs|Verify physical and logical isolation
+5|136|The orbital temperature model uses a heritage albedo|A planet's reflective properties were copied from an obsolete classification.|Record an independent brightness survey|Review the source material model
+5|137|The radio burst has a maintenance password|A repeating sequence matches the station's automatic equipment challenge.|Record an off-network receiving interval|Audit challenge propagation
+5|138|The sediment's missing decade is a storage gap|A long-term archive lacks records from a period when containers were transferred.|Reconstruct independent custody|Compare unaffected reference samples
+5|139|The instrument sees charge from its operator|A biological sensor's signal changes with the wearer's clothing and grounding.|Record a remotely operated control|Audit operator coupling
+5|140|The meteor trail is a departing fuel vent|A camera records a local release against a distant star field.|Compare independent viewing angles|Review the release log
+5|141|The sample's density is a software default|A missing field in the analysis export substitutes a standard reference material.|Recover the measured volume|Audit the fallback value
+5|142|The telescope's tracking depends on a leased clock|A timing service silently reduces precision after a contract boundary.|Record an independent time standard|Review service-level transitions
+5|143|The growth experiment counts dead fluorescence|A detector cannot distinguish persistent labels from active organisms.|Record a verified inactive control|Compare an independent activity measure
+5|144|The planet's fast rotation is a duplicated frame|An imaging sequence includes the same exposure under two timestamps.|Preserve original camera receipts|Audit frame deduplication
+5|145|The laboratory's background is another programme's signal|Shared equipment feeds a neighbouring experiment into a nominally blank channel.|Record an isolated channel control|Review the shared signal routing
+5|146|The dust's chemistry follows the collector heater|A sample changes during collection because the heater's actual setting differs from the recorded one.|Verify collection temperatures|Audit the heater's readout mapping
+5|147|The ring survey ignores the densest interval|An export filter removes observations classified as saturated without recording the exclusion.|Recover the rejected frames|Review the saturation model
+5|148|The navigation residual is a forgotten docking offset|A station's published reference point differs from the one used in receiving telemetry.|Record a common physical reference|Audit the offset conventions
+5|149|The stellar anomaly changes with the catalogue language|Two translated names point the analysis software at different objects.|Verify physical source identities|Review multilingual catalogue links
+5|150|The specimen's pressure history is a demonstration curve|A logger retained its factory test display after live recording failed.|Preserve actual sensor receipts|Audit the logger's operating mode
+5|151|The tidal experiment moves its own reference tank|A support adjustment changes the geometry assumed by a comparison measurement.|Record the current geometry|Review the support-change chronology
+5|152|The radio survey's empty region is a billing exclusion|A data provider omits uncontracted coordinates from otherwise continuous coverage.|Publish the actual coverage|Review the service exclusion map
+5|153|The reference culture is an undocumented descendant|A supposedly unchanged biological standard was repeatedly propagated without a lineage record.|Preserve current reference samples|Reconstruct the culture's custody
+5|154|The magnetic survey's poles are a display convention|A rendering profile reverses signs while the underlying measurements remain consistent.|Compare signed raw vectors|Audit display conventions
+5|155|The asteroid's surface age is a shipping label|A returned sample's custody metadata replaced its analytical result during import.|Recover the primary analysis|Review the import mapping
+5|156|The observing ship is part of its own background|A scattered-light model omits structures added during its last overhaul.|Record a second-vessel control|Survey the current optical geometry
+5|157|The laboratory's silent interval contains no power|A programme interprets missing instrument operation as an absence of physical events.|Verify the operating history|Review missing-data classification
+5|158|The programme's clock is an artistic installation|A borrowed timing display intentionally introduces small variations absent from its equipment label.|Record an independent reference|Audit the loan certificate
+5|159|The cold gas line comes from a warm archive|A spectral comparison uses a library measured under incompatible experimental conditions.|Record a matched laboratory reference|Review the library's temperature metadata
+5|160|The calibration moon is moving twice|A ranging survey has combined two clock standards and given its reference moon an impossible acceleration.|Repeat the ranging with a common time signal|Recover the original clock conversion tables

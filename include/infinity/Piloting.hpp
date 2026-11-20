@@ -5,6 +5,7 @@
 #include "FlightEnvironment.hpp"
 #include "OrbitalDebris.hpp"
 #include "ShipDynamics.hpp"
+#include "ShipShield.hpp"
 #include "SurfaceHazards.hpp"
 #include <cmath>
 
@@ -16,6 +17,15 @@ struct TargetingView;
 struct CombatAwarenessView;
 struct SurfaceWorld;
 struct SurfaceReconView;
+struct TrafficMotion;
+struct TrafficStrike {
+    ActivityId target;
+    glm::dvec3 away, leverage; // In the struck ship's home frame.
+    double closingSpeed, targetRadius;
+    ActivityKind kind=ActivityKind::Freighter;
+    glm::dvec3 shieldImpact{};
+    bool clearance=false;
+};
 struct HelmInput {
     double throttle = 0, strafe = 0, lift = 0, pitch = 0, yaw = 0, roll = 0;
     bool boost = false, precision = false, brake = false;
@@ -127,6 +137,11 @@ class Pilot {
         return instruments_;
     }
     void update(const HelmInput&, double dt, const std::shared_ptr<const Geometry>& visible = {});
+    void update(const HelmInput&, double dt, const std::shared_ptr<const Geometry>& visible,
+                std::span<const TrafficMotion> traffic);
+    const std::string& trafficContact() const {return trafficContact_;}
+    std::span<const TrafficStrike> trafficStrikes() const {return trafficStrikes_;}
+    ShieldReadout shield() const;
     void updateCrew(const Address& courseFrame, glm::dquat course, double quality, double dt,
                     const std::shared_ptr<const Geometry>& visible = {});
     void updateCrewMotion(const Address& frame, glm::dquat course, glm::dvec3 velocity, double quality,
@@ -144,6 +159,8 @@ class Pilot {
     void setCargoMass(double kg);
     void setSystemAuthority(double engines, double thrusters);
     void applyCombatDamage(double points);
+    void applyWeaponDamage(double points,glm::dvec3 incoming);
+    void setCombatFit(double shieldCapacity,double armour);
     void applyPortRepairs(uint64_t purchasedPoints);
     double cargoMass() const {
         return cargoMassKg_;
@@ -168,7 +185,11 @@ class Pilot {
     void trackWaypoint(const FlightWaypoint&);
     void navigateWaypoint(const FlightWaypoint&);
     void clearWaypoint();
+    void releaseWaypointControl();
+    void alignMovingClamp();
     bool dock();
+    bool dockManually(const FlightWaypoint&);
+    const ActivityId* clampedHarbour() const;
     bool land(bool acceptSurfaceRisk = false);
     bool landAt(const Address& planet, glm::dvec3 direction, bool acceptSurfaceRisk = false);
     bool landOnDebris(const ActivityBody&);
@@ -253,19 +274,27 @@ class Pilot {
     bool canEngageWarp();
     void dropWarp();
     std::optional<DockingBerth> dockingTarget() const;
+    void clampToBerth(const DockingBerth&, glm::dvec3 eye, bool newlyDocked, double dt);
     std::optional<DebrisPad> localDebrisPad(double seconds) const;
     void clampToDebris(const DebrisPad&);
     double speedLimit() const;
     double operatingClearance() const;
-    void step(const HelmInput&, double dt);
+    void step(const HelmInput&,double dt,std::span<const TrafficMotion>,double frameStart,double frameDuration);
     void instrument();
     void resize(double dt);
     bool fits(double logSize) const;
     bool continuumContact() const;
     void matterContact(const std::shared_ptr<const Geometry>&, glm::dvec3 previousEye);
     void contactFeedback(glm::dvec3 previousVelocity);
+    bool shieldDeployed() const;
     std::shared_ptr<const Geometry> collisionGeometry_;
     std::shared_ptr<const DiscoveryPage> discoveries_;
     std::shared_ptr<const SurfaceWorld> surfaceWorld_;
+    glm::dvec3 berthAcceleration_{},berthTurn_{};
+    double berthSampleSeconds_=0.;
+    std::string trafficContact_;
+    std::vector<TrafficStrike> trafficStrikes_;
+    ShieldCharge playerShield_;
+    double combatShieldCapacity_=playerShieldCapacity,combatArmour_=1.;
 };
 } // namespace infinity

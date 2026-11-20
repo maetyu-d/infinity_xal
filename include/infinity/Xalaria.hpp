@@ -13,6 +13,7 @@ struct XalariaWorld {
     bool life=false, freezing=false;
     unsigned communities=0, stations=0, mines=0;
     double cloudCover=0, ringInner=0, ringOuter=0;
+    std::optional<glm::dvec3> ringAxis;
 };
 struct XalariaStar {
     uint32_t seed=0;
@@ -21,6 +22,7 @@ struct XalariaStar {
     double radius=6.957e8, temperature=5772, disc=1e13;
     std::vector<uint32_t> wormholes;
     std::map<uint64_t,XalariaWorld> worlds;
+    std::shared_ptr<const StellarProcess> surveyStar;
 };
 enum class XalariaLook { CharredGlass, VerdantFog, TidalBlue, AcidEtch };
 struct XalariaRegion {
@@ -76,6 +78,7 @@ struct XalariaMapView {
     std::optional<XalariaWormholeMouth> wormhole;
     uint32_t destination=0;
     bool flying=false, paused=false, finalApproach=false, arrived=false, searchFocused=true;
+    bool observingStar=false;
     bool showLinks=false;
     double progress=0, range=0, eta=-1, seconds=0;
     glm::dvec2 ship{100,100};
@@ -90,7 +93,7 @@ struct XalariaMapRect {
 struct XalariaMapLayout {
     double width;
     XalariaMapRect chart, details, search, clearSearch, results, nearby, worlds;
-    XalariaMapRect galaxy, system, locate, fitRoute, fitGalaxy, links, economy, close;
+    XalariaMapRect galaxy, system, locate, fitRoute, fitGalaxy, links, dispatch, economy, close;
     XalariaMapRect fly, pause, cancel, wormhole;
     static constexpr unsigned worldRows=8, resultRows=5;
     static constexpr double worldStep=39, resultStep=43;

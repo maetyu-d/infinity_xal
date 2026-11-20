@@ -17,7 +17,9 @@ double atlasTextWidth(std::string_view label, double size) {
     return width;
 }
 void atlasText(CockpitOverlay& overlay, std::string_view label, double x, double y, double width,
-               double size, glm::vec3 colour) {
+               double size, glm::vec3 colour,float opacity) {
+    if (opacity<=0.f)
+        return;
     std::string fitted;
     if (atlasTextWidth(label, size) > width) {
         const double available = width - atlasTextWidth("...", size);
@@ -39,7 +41,7 @@ void atlasText(CockpitOverlay& overlay, std::string_view label, double x, double
         return;
     const float scale = float(size / atlasFontData::em);
     const float baseline = float(y + size * .79);
-    const auto tint = rgba(colour);
+    const auto tint = rgba(colour,opacity);
     overlay.textRuns.push_back({{x, y, atlasTextWidth(label, size), size}, 0, 0, 0, 0, std::string(label)});
     for (unsigned char c : label) {
         if (continuation(c))

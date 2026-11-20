@@ -3,7 +3,11 @@
 #include "AtlasFont.hpp"
 #include "infinity/Xalaria.hpp"
 #include "infinity/XalariaEconomy.hpp"
+#include "infinity/XalariaTraffic.hpp"
+#include "infinity/XalariaStories.hpp"
+#include "infinity/XalariaCombat.hpp"
 #include "infinity/XalariaNavigation.hpp"
+#include "infinity/StellarEvolution.hpp"
 #include "infinity/CrewMinimap.hpp"
 #include "infinity/MicroView.hpp"
 #include "infinity/CockpitContext.hpp"
@@ -20,6 +24,7 @@
 #include <cmath>
 #include <cstdio>
 #include <glm/gtc/matrix_transform.hpp>
+#include <initializer_list>
 #include <map>
 #include <numbers>
 
@@ -38,8 +43,10 @@ void rect(Mesh& m, double x, double y, double w, double h, glm::vec3 c, float al
     triangle(m, {x, y, 0}, {x + w, y, 0}, {x, y + h, 0}, c, alpha);
     triangle(m, {x + w, y, 0}, {x + w, y + h, 0}, {x, y + h, 0}, c, alpha);
 }
-void line(Mesh& m, double x, double y, double a, double b, glm::vec3 c) {
+void line(Mesh& m, double x, double y, double a, double b, glm::vec3 c, float alpha=1.f) {
     addLine(m, {x, y, 0}, {a, b, 0}, c);
+    if(alpha<1.f)
+        m.vertices[m.vertices.size()-2].color=m.vertices.back().color=rgba(c,alpha);
 }
 // Small native-resolution instrument type. No font library or atlas allocation.
 const std::map<char, std::string_view> glyphs{
@@ -207,6 +214,78 @@ bool CockpitRect::contains(glm::dvec2 p) const {
 }
 bool CockpitRect::overlaps(const CockpitRect& r) const {
     return x < r.x + r.w && x + w > r.x && y < r.y + r.h && y + h > r.y;
+}
+XalariaRadioLayout::XalariaRadioLayout(double aspect) {
+    const double w=900.*aspect;
+    const double width=std::min(610.,w-48.);
+    panel={(w-width)*.5,563,width,175};
+    close={panel.x+width-81,571,68,18};
+    const double slot=(width-24.)/5.;
+    for(size_t i=0;i<5;++i)
+        actions[i]={panel.x+12.+slot*i,690,slot-3.,20.};
+    actions[5]={panel.x+12.,713,slot-3.,20.};
+    actions[6]={panel.x+12.+slot,713,slot*1.45-3.,20.};
+    actions[7]={panel.x+12.+slot*2.45,713,slot*1.30-3.,20.};
+}
+
+void xalariaRadioOverlay(CockpitOverlay& h,const XalariaRadioView& radio,double aspect) {
+    const XalariaRadioLayout layout(aspect);
+    const auto p=layout.panel;
+    occlude(h,p);
+    card(h,p,mint);
+    rect(h.panels,p.x+2.,p.y+1.,p.w-2.,p.h-2.,ink);
+    const double x=p.x+13.,width=p.w-26.;
+    atlasText(h,"Traffic comms",x,572,width-78.,14.,mint);
+    atlasText(h,"Esc  Close",layout.close.x+3,573,layout.close.w-6,12.,pearl*.75f);
+    atlasText(h,radio.callsign,x,592,width*.27,18.,pearl);
+    atlasText(h,radio.activity,x+width*.29,595,width*.71,13.,mint);
+    std::string_view reply=radio.reply;
+    for(unsigned line=0;line<3&&!reply.empty();++line) {
+        size_t end=reply.size();
+        if(line<2) {
+            while(end>0&&atlasTextWidth(reply.substr(0,end),16.)>width) {
+                const auto space=reply.rfind(' ',end-1);
+                if(space==reply.npos||space==0)break;
+                end=space;
+            }
+        }
+        atlasText(h,reply.substr(0,end),x,614.+line*17.,width,16.,pearl);
+        reply.remove_prefix(std::min(reply.size(),end+1));
+    }
+    const bool shielded=radio.shield.capacity>0.;
+    const double shieldWidth=shielded?width*.34:0.;
+    atlasText(h,radio.rendezvous,x,668.,width-shieldWidth-(shielded?10.:0.),14.,mint);
+    if(shielded){
+        const auto label=!radio.shield.raised?"Shield lowered":radio.shield.fraction<=.001?"Shield depleted":
+            "Shield "+std::to_string(int(std::round(100.*radio.shield.fraction)))+"%";
+        atlasText(h,label,x+width-shieldWidth,668.,shieldWidth,14.,radio.shield.raised?shieldBlue:muted);
+    }
+    if(radio.selected) {
+        const auto& freight=radio.freight;
+        const std::string_view guide=freight?(freight->aboard?"6  Delivery page":"6  Pickup page"):"";
+        const std::array<std::string_view,8> names{"I  Hail","1  Flight plan","2  Advisory","3  Rendezvous",
+                                                   "4  Port market","5  Freight work",guide,"7  Request dock"};
+        for(size_t i=0;i<names.size();++i) {
+            if(names[i].empty())continue;
+            const auto r=layout.actions[i];
+            rect(h.panels,r.x,r.y,r.w,r.h,ice*.18f);
+            const double size=std::min(13.,(r.w-9.)/atlasTextWidth(names[i],1.));
+            atlasText(h,names[i],r.x+5,r.y+4,r.w-9.,size,pearl);
+        }
+    }
+}
+
+void xalariaShieldHud(CockpitOverlay& h,double aspect,const ShieldReadout& shield) {
+    if(shield.capacity<=0.)return;
+    const auto panel=CockpitLayout(aspect).systems;
+    const double room=panel.w-28.,meter=room*.34;
+    const auto label=!shield.raised?"SHIELD LOWERED":shield.fraction<=.001?"SHIELD DEPLETED":
+        "SHIELD "+std::to_string(int(std::round(shield.fraction*100)))+"%";
+    const auto colour=shield.raised?(shield.fraction<=.001?amber:shieldBlue):muted;
+    fitted(h,label,panel.x+14.,panel.y+90.,room-meter-8.,10.,colour);
+    rect(h.panels,panel.x+14.+room-meter,panel.y+94.,meter,3.,muted*.34f);
+    if(shield.raised&&shield.fraction>0.)
+        rect(h.panels,panel.x+14.+room-meter,panel.y+94.,meter*shield.fraction,3.,colour);
 }
 std::vector<std::pair<size_t,size_t>> cockpitTextConflicts(const CockpitOverlay& h) {
     std::vector<std::pair<size_t,size_t>> result;
@@ -438,6 +517,35 @@ CockpitTargetMarker cockpitTargetMarker(glm::dvec3 d, double aspect, double proj
         std::min(limitX / std::max(1e-12, std::abs(offset.x)), limitY / std::max(1e-12, std::abs(offset.y)));
     result.point = center + offset * distance;
     return result;
+}
+void FlightHudStability::update(double seconds,double turnRate,bool available) {
+    if (!available) {
+        quietSeconds_ = 0;
+        opacity_ = 0;
+        return;
+    }
+    // Hysteresis prevents the overlay from flickering around the turn-rate threshold.
+    const double limit = showMarkers() ? glm::radians(32.) : glm::radians(18.);
+    quietSeconds_ = turnRate<=limit ? std::min(.24,quietSeconds_+seconds) : 0.;
+    opacity_ = std::min(1.f,opacity_+float(seconds/.22));
+}
+void DeckHudLabel::update(std::string_view label,double seconds) {
+    if (shown_.empty())
+        shown_=label;
+    if (label!=candidate_) {
+        candidate_=label;
+        heldSeconds_=0.;
+    }
+    const double previousHeld=heldSeconds_;
+    heldSeconds_+=seconds;
+    if (label==shown_) {
+        opacity_=std::min(1.f,opacity_+float(seconds/.12));
+        return;
+    }
+    const double fade=std::max(0.,heldSeconds_-std::max(previousHeld,settleSeconds));
+    opacity_=std::max(0.f,opacity_-float(fade/.075));
+    if (fade>0. && opacity_==0.f)
+        shown_=candidate_;
 }
 CockpitRect cockpitContactsSummary(){return {24,144,274,120};}
 CockpitRect cockpitLifeBadge(double aspect,bool expanded){return expanded?CockpitRect{900*aspect-106,186,68,18}:CockpitRect{196,153,86,18};}
@@ -771,22 +879,28 @@ Mesh cockpitMesh(double aspect) {
 }
 
 namespace {
-enum class CabinMaterial { Painted, Polymer, Brushed, Bronze, Display };
+enum class CabinMaterial {
+    Painted, Polymer, Brushed, Bronze, Display, Textile, Tread, Ceramic,
+    AcousticPanel, Carpet, MineralComposite, EnamelPanel, CarbonComposite
+};
 struct CabinFinish {
     glm::vec3 colour;
     CabinMaterial material;
     float vertexAlpha(float emission) const {
-        // Five bits for emissive intensity and the high bits for the finish.
-        return (float(material)*32.f + std::round(std::clamp(emission,0.f,1.f)*31.f)) / 255.f;
+        // The high nibble selects a finish and the low nibble stores emission.
+        return (float(material)*16.f + std::round(std::clamp(emission,0.f,1.f)*15.f)) / 255.f;
     }
 };
 const glm::vec3 cabinLamp{.87f,.79f,.63f}, cabinSignal{.24f,.78f,.68f};
-const CabinFinish cabinFrame{{.15f,.177f,.192f},CabinMaterial::Painted},
-    cabinLiner{{.077f,.096f,.104f},CabinMaterial::Painted},
+const CabinFinish cabinFrame{{.113f,.152f,.178f},CabinMaterial::Painted},
+    cabinLiner{{.047f,.069f,.086f},CabinMaterial::Painted},
     cabinRubber{{.029f,.034f,.037f},CabinMaterial::Polymer},
     cabinTrim{{.32f,.36f,.38f},CabinMaterial::Brushed},
     cabinCopper{{.54f,.29f,.126f},CabinMaterial::Bronze},
+    cabinCeramic{{.43f,.45f,.41f},CabinMaterial::Ceramic},
+    cabinUpholstery{{.17f,.21f,.22f},CabinMaterial::Textile},
     cabinScreen{{.014f,.031f,.032f},CabinMaterial::Display},
+    cabinComposite{{.083f,.105f,.118f},CabinMaterial::CarbonComposite},
     cabinWarmLight{cabinLamp,CabinMaterial::Display},
     cabinStatusLight{cabinSignal,CabinMaterial::Display};
 
@@ -811,10 +925,39 @@ const CabinSurface driveScreen{{-.39,-.352,-1.25}, {.78,0,0}, {0,-.160,.179}};
 const CabinSurface portScreen{{-.907,-.322,-.27}, {0,0,-.53}, {.18,-.157,0}};
 const CabinSurface starboardScreen{{.907,-.322,-.80}, {0,0,.53}, {-.18,-.157,0}};
 const CabinSurface overheadScreen{{-.167,.472,.122}, {.334,0,0}, {0,0,-.35}};
+const CabinSurface navigationDeckScreen{{-.715,.547,1.998},{.113,0,-.551},{0,-.326,0}};
+const CabinSurface systemsDeckScreen{{1.533,.556,2.085},{0,0,.908},{0,-.535,0}};
+const CabinSurface cargoDeckScreen{{shipDeck::cargoScreenHalf,shipDeck::cargoScreenTop,shipDeck::cargoScreenZ},
+                                   {-2*shipDeck::cargoScreenHalf,0,0},{0,-shipDeck::cargoScreenHeight,0}};
+CabinSurface stationFreightScreen(const StationLayout& station) {
+    return {{station.freightBay().floor.left+.095,1.36,stationDeck::centre+.99},
+            {0,0,-1.98},{0,-1.10,0}};
+}
+CabinSurface stationSurveyScreen(const StationAnnex& annex) {
+    const auto& area=annex.room.floor;
+    const double x=(area.left+area.right)*.5;
+    return {{x+annex.side*.94,1.25,annex.outsideWall()-annex.side*.096},
+            {-annex.side*1.88,0,0},{0,-.95,0}};
+}
+constexpr double observationFore=5.09, observationAft=6.01;
+constexpr double observationSill=.31, observationHead=.96, observationCorner=.116;
+std::array<glm::dvec3,8> cargoWindow(double x,double margin) {
+    const double front=observationFore-margin, back=observationAft+margin;
+    const double low=observationSill-margin, high=observationHead+margin;
+    const double chamfer=observationCorner+margin*.55;
+    return {{{x,low,front+chamfer},{x,low,back-chamfer},
+             {x,low+chamfer,back},{x,high-chamfer,back},
+             {x,high,back-chamfer},{x,high,front+chamfer},
+             {x,high-chamfer,front},{x,low+chamfer,front}}};
+}
+const glm::vec3 berthLight{1.f,.60f,.31f}, engineeringLight{.34f,.85f,.94f}, cargoLight{1.f,.76f,.38f};
 const glm::dvec3 yokePivot{0,-.640,-.888};
 
 struct CabinBuilder {
     Mesh mesh;
+    static constexpr std::array<glm::dvec2,8> beamOutline{{
+        {-1,-.72},{-.72,-1},{.72,-1},{1,-.72},{1,.72},{.72,1},{-.72,1},{-1,.72}}};
+    using BeamSection = std::array<glm::dvec3,beamOutline.size()>;
 
     void face(glm::dvec3 a, glm::dvec3 b, glm::dvec3 c, glm::dvec3 d, const CabinFinish& finish,
               float emission = 0) {
@@ -829,20 +972,147 @@ struct CabinBuilder {
         const auto up = std::abs(axis.y) > .95 ? glm::dvec3(0,0,1) : glm::dvec3(0,1,0);
         const auto across = glm::normalize(glm::cross(axis, up)) * (width * .5);
         const auto vertical = glm::normalize(glm::cross(across, axis)) * (height * .5);
-        constexpr std::array<glm::dvec2,8> outline{{{-1,-.72},{-.72,-1},{.72,-1},{1,-.72},
-                                                  {1,.72},{.72,1},{-.72,1},{-1,.72}}};
-        std::array<glm::dvec3,outline.size()> corners;
-        for (size_t i = 0; i < corners.size(); ++i)
-            corners[i] = outline[i].x * across + outline[i].y * vertical;
-        for (size_t i = 0; i < corners.size(); ++i) {
-            const auto a = corners[i], b = corners[(i + 1) % corners.size()];
-            face(from + a, to + a, to + b, from + b, finish, emission);
-            triangle(mesh, from, from + a, from + b, finish.colour, finish.vertexAlpha(emission));
-            triangle(mesh, to, to + b, to + a, finish.colour, finish.vertexAlpha(emission));
+        const auto front = beamSection(from, across, vertical), back = beamSection(to, across, vertical);
+        beamSides(front, back, finish, emission);
+        beamCap(from, front, finish, emission, false);
+        beamCap(to, back, finish, emission, true);
+    }
+
+    void tube(glm::dvec3 from,glm::dvec3 to,double radius,const CabinFinish& finish) {
+        const auto axis=glm::normalize(to-from);
+        const auto reference=std::abs(axis.y)>.9?glm::dvec3(0,0,1):glm::dvec3(0,1,0);
+        const auto across=glm::normalize(glm::cross(axis,reference));
+        const auto vertical=glm::cross(axis,across);
+        const auto ring=[&](glm::dvec3 centre,unsigned sector){
+            const auto angle=sector*2*std::numbers::pi/32.;
+            return centre+(across*std::cos(angle)+vertical*std::sin(angle))*radius;
+        };
+        for(unsigned i=0;i<32;++i){
+            const auto j=(i+1)%32;
+            face(ring(from,i),ring(to,i),ring(to,j),ring(from,j),finish);
+            triangle(mesh,from,ring(from,j),ring(from,i),finish.colour,finish.vertexAlpha(0));
+            triangle(mesh,to,ring(to,i),ring(to,j),finish.colour,finish.vertexAlpha(0));
         }
     }
 
-    void instrument(const CabinSurface& surface) {
+    void fastener(glm::dvec3 centre, glm::dvec3 normal, double radius) {
+        normal=glm::normalize(normal);
+        const auto axis=std::abs(normal.y)<.9?glm::dvec3(0,1,0):glm::dvec3(1,0,0);
+        const auto right=glm::normalize(glm::cross(normal,axis)),up=glm::cross(normal,right);
+        const auto at=[&](unsigned i,double r,double depth){
+            const double a=i*2*std::numbers::pi/8.;
+            return centre+normal*depth+(right*std::cos(a)+up*std::sin(a))*r;
+        };
+        for(unsigned i=0;i<8;++i){
+            const auto j=(i+1)%8;
+            // A recessed black washer, bevel and inset face have separate depths.
+            face(at(i,radius*1.38,0),at(j,radius*1.38,0),at(j,radius,.0018),at(i,radius,.0018),cabinRubber);
+            face(at(i,radius,.0018),at(j,radius,.0018),at(j,radius*.71,.0039),at(i,radius*.71,.0039),cabinTrim);
+            triangle(mesh,centre+normal*.0039,at(i,radius*.71,.0039),at(j,radius*.71,.0039),
+                     cabinTrim.colour,cabinTrim.vertexAlpha(0));
+        }
+        const auto slot=centre+normal*.0042;
+        face(slot-right*radius*.53-up*radius*.12,slot+right*radius*.53-up*radius*.12,
+             slot+right*radius*.53+up*radius*.12,slot-right*radius*.53+up*radius*.12,cabinRubber);
+    }
+
+    void canopyRail(const std::array<glm::dvec3,4>& path, double side, glm::dvec2 offset,
+                    double width, double height, const CabinFinish& finish) {
+        const auto centre = [&](size_t i) { return cabinSide(path[i] + glm::dvec3(offset,0), side); };
+        const auto section = [&](size_t i) {
+            return beamSection(centre(i), {width * .5,0,0}, {0,height * .5,0});
+        };
+        auto previous = section(0);
+        beamCap(centre(0), previous, finish, 0, false);
+        for (size_t i = 1; i < path.size(); ++i) {
+            const auto current = section(i);
+            beamSides(previous, current, finish, 0);
+            previous = current;
+        }
+        beamCap(centre(path.size()-1), previous, finish, 0, true);
+    }
+
+    static BeamSection beamSection(glm::dvec3 centre, glm::dvec3 across, glm::dvec3 vertical) {
+        BeamSection section;
+        for (size_t i = 0; i < section.size(); ++i)
+            section[i] = centre + beamOutline[i].x * across + beamOutline[i].y * vertical;
+        return section;
+    }
+
+    void beamSides(const BeamSection& front, const BeamSection& back, const CabinFinish& finish, float emission) {
+        for (size_t i = 0; i < front.size(); ++i) {
+            const size_t j = (i + 1) % front.size();
+            face(front[i], back[i], back[j], front[j], finish, emission);
+        }
+    }
+
+    void beamCap(glm::dvec3 centre, const BeamSection& section, const CabinFinish& finish, float emission, bool back) {
+        for (size_t i = 0; i < section.size(); ++i) {
+            const auto a = section[i], b = section[(i + 1) % section.size()];
+            triangle(mesh, centre, back ? b : a, back ? a : b, finish.colour, finish.vertexAlpha(emission));
+        }
+    }
+
+    void panel(const CabinSurface& surface, double bevel, double depth, const CabinFinish& faceFinish,
+               const CabinFinish& edgeFinish) {
+        const double u=std::min(.24,bevel/glm::length(surface.right));
+        const double v=std::min(.24,bevel/glm::length(surface.down));
+        const glm::dvec3 offset=surface.normal()*depth;
+        const std::array<glm::dvec3,4> rim{surface.point(0,0),surface.point(1,0),
+                                            surface.point(1,1),surface.point(0,1)};
+        const std::array<glm::dvec3,4> top{surface.point(u,v)+offset,surface.point(1-u,v)+offset,
+                                           surface.point(1-u,1-v)+offset,surface.point(u,1-v)+offset};
+        face(top[0],top[1],top[2],top[3],faceFinish);
+        for (size_t i=0;i<rim.size();++i) {
+            const size_t next=(i+1)%rim.size();
+            face(rim[i],rim[next],top[next],top[i],edgeFinish);
+        }
+    }
+
+    // Turned fittings have a real recessed centre, chamfered lip and separate
+    // face depths. Every part shares the hull frame, including during boost.
+    void dial(const CabinSurface& surface, double u, double v, double radius, bool vent) {
+        const auto normal=surface.normal(), centre=surface.point(u,v)+normal*.009;
+        const auto right=glm::normalize(surface.right), down=glm::normalize(surface.down);
+        const auto at=[&](unsigned i,double r,double depth) {
+            const double angle=i*2*std::numbers::pi/48.;
+            return centre+(right*std::cos(angle)+down*std::sin(angle))*(radius*r)+normal*depth;
+        };
+        const std::array<glm::dvec2,5> profile{{{1.16,0},{1.08,.005},{1.02,.014},{.85,.020},{.77,.010}}};
+        for(unsigned i=0;i<48;++i){
+            const auto j=(i+1)%48;
+            for(size_t band=1;band<profile.size();++band){
+                const auto a=profile[band-1],b=profile[band];
+                face(at(i,a.x,a.y),at(j,a.x,a.y),at(j,b.x,b.y),at(i,b.x,b.y),
+                     band==1?cabinRubber:band==3?cabinCopper:cabinTrim);
+            }
+            triangle(mesh,centre+normal*.004,at(i,.77,.004),at(j,.77,.004),
+                     cabinRubber.colour,cabinRubber.vertexAlpha(0));
+            if(vent && i%3==0){
+                const auto a=at(i,.72,.010),b=at(i+2,.30,.014);
+                beam(a,b,radius*.075,.005,cabinTrim);
+            }else if(!vent){
+                face(at(i,.67,.012),at(j,.67,.012),at(j,.60,.027),at(i,.60,.027),
+                     i%3==0?cabinTrim:cabinComposite);
+                triangle(mesh,centre+normal*.027,at(i,.60,.027),at(j,.60,.027),
+                         cabinComposite.colour,cabinComposite.vertexAlpha(0));
+                if(i>=5 && i<=34)
+                    face(at(i,.91,.021),at(j,.91,.021),at(j,.94,.021),at(i,.94,.021),
+                         i<27?cabinStatusLight:cabinWarmLight,.40f);
+            }
+        }
+        if(vent){
+            for(unsigned i=0;i<48;++i){
+                const auto j=(i+1)%48;
+                face(at(i,.28,.012),at(j,.28,.012),at(j,.22,.018),at(i,.22,.018),cabinCopper);
+            }
+        }else{
+            beam(centre+normal*.029-down*radius*.17,centre+normal*.029-down*radius*.49,
+                 radius*.11,.003,cabinWarmLight,.35f);
+        }
+    }
+
+    void instrument(const CabinSurface& surface, bool deckTerminal = false) {
         const auto at = [&](double x, double y) { return surface.point(x, y); };
         const auto a=at(0,0), b=at(1,0), c=at(1,1), d=at(0,1);
         const auto rim = surface.normal() * .014;
@@ -852,10 +1122,23 @@ struct CabinBuilder {
         face(b,c,c-backing,b-backing,cabinFrame);
         face(c,d,d-backing,c-backing,cabinFrame);
         face(d,a,a-backing,d-backing,cabinFrame);
-        beam(a+rim,b+rim,.052,.036,cabinTrim);
-        beam(d+rim,c+rim,.061,.045,cabinFrame);
-        beam(a+rim,d+rim,.043,.041,cabinFrame);
-        beam(b+rim,c+rim,.043,.041,cabinFrame);
+        if (deckTerminal) {
+            const auto top = surface.down * -.037, bottom = -top;
+            const auto side = surface.right * .024;
+            beam(a+top+rim,b+top+rim,.032,.027,cabinTrim);
+            beam(d+bottom+rim,c+bottom+rim,.037,.033,cabinFrame);
+            beam(a+top-side+rim,d+bottom-side+rim,.040,.034,cabinFrame);
+            beam(b+top+side+rim,c+bottom+side+rim,.040,.034,cabinFrame);
+            for (double x : {.10,.16,.22})
+                beam(at(x,1.083),at(x+.021,1.083),.012,.010,cabinStatusLight,.64f);
+        } else {
+            beam(a+rim,b+rim,.052,.036,cabinTrim);
+            beam(d+rim,c+rim,.061,.045,cabinFrame);
+            beam(a+rim,d+rim,.043,.041,cabinFrame);
+            beam(b+rim,c+rim,.043,.041,cabinFrame);
+        }
+        for(double x:{0.,1.})for(double y:{0.,1.})
+            fastener(at(x,y)+rim+surface.normal()*.022,surface.normal(),deckTerminal?.006:.007);
     }
 };
 } // namespace
@@ -872,14 +1155,18 @@ Mesh xalariaCockpitMesh() {
             const auto c=cabinSide(ceiling[i],side), d=cabinSide(ceiling[i+1],side);
             cabin.face(a,b,point(.80,-.82,b.z),point(.80,-.82,a.z),cabinLiner);
             cabin.face(c,d,point(.49,.69,d.z),point(.49,.69,c.z),cabinLiner);
-            cabin.beam(a,b,.112,.12,cabinFrame);
-            cabin.beam(c,d,.106,.12,cabinFrame);
-            cabin.beam(a+point(-.046,.041,0),b+point(-.046,.041,0),.019,.015,cabinCopper);
-            cabin.beam(c+point(-.054,-.044,0),d+point(-.054,-.044,0),.014,.014,cabinTrim);
-            cabin.beam(a+point(-.020,.061,0),b+point(-.020,.061,0),.031,.022,cabinRubber);
-            cabin.beam(c+point(-.020,-.061,0),d+point(-.020,-.061,0),.027,.022,cabinRubber);
-            cabin.beam(a+point(-.14,-.41,0),b+point(-.14,-.41,0),.064,.075,cabinFrame);
         }
+        // Each run shares its cross-sections at the bends. The small metal
+        // inlays sit on the inside of the ceramic, clear of the glass gasket.
+        cabin.canopyRail(sill, side, {0,0}, .112,.120,cabinFrame);
+        cabin.canopyRail(ceiling, side, {0,0}, .106,.120,cabinFrame);
+        cabin.canopyRail(sill, side, {-.059,.037}, .036,.029,cabinCeramic);
+        cabin.canopyRail(ceiling, side, {-.055,-.035}, .034,.030,cabinCeramic);
+        cabin.canopyRail(sill, side, {-.080,.037}, .011,.010,cabinCopper);
+        cabin.canopyRail(ceiling, side, {-.075,-.035}, .010,.010,cabinTrim);
+        cabin.canopyRail(sill, side, {.017,.071}, .033,.031,cabinRubber);
+        cabin.canopyRail(ceiling, side, {.017,-.071}, .031,.031,cabinRubber);
+        cabin.canopyRail(sill, side, {-.14,-.41}, .064,.075,cabinFrame);
         for (size_t i : {0U,2U,3U})
             cabin.beam(cabinSide(sill[i],side),cabinSide(ceiling[i],side),.108,.117,cabinFrame);
         const auto a = point(1.05,-.32,-.045), b = point(1.01,.57,.12);
@@ -894,12 +1181,16 @@ Mesh xalariaCockpitMesh() {
 
         // Angled side consoles sit below the windows and wrap around the seat.
         cabin.face(point(.995,-.307,-1.06),point(.995,-.307,.49),point(.665,-.544,.47),
-                   point(.625,-.544,-.98),cabinFrame);
+                   point(.625,-.544,-.98),cabinComposite);
         cabin.face(point(.625,-.544,-.98),point(.665,-.544,.47),point(.74,-.70,.48),
                    point(.75,-.70,-.98),cabinLiner);
         cabin.beam(point(.625,-.542,-.99),point(.665,-.542,.48),.069,.065,cabinTrim);
         cabin.beam(point(.718,-.626,-.82),point(.714,-.626,.41),.033,.019,cabinRubber);
         cabin.beam(point(.696,-.603,-.24),point(.693,-.603,.26),.012,.013,cabinStatusLight,.48f);
+        for (double z : {-.72,-.48,.09,.31}) {
+            cabin.beam(point(.736,-.685,z-.068),point(.733,-.685,z+.068),.033,.019,cabinTrim);
+            cabin.beam(point(.715,-.688,z-.039),point(.715,-.688,z+.039),.011,.012,cabinCopper);
+        }
         for (double z : {-.875,-.605,-.335,.335})
             cabin.beam(point(.641,-.508,z-.008),point(.642,-.508,z+.008),.021,.015,cabinCopper);
         cabin.instrument(side < 0 ? portScreen : starboardScreen);
@@ -941,6 +1232,8 @@ Mesh xalariaCockpitMesh() {
             cabin.beam(point(.73,y,.786),point(.73,y,1.019),.02,.018,cabinRubber);
         }
         cabin.beam(point(.74,.19,.68),point(.74,.37,.70),.036,.042,cabinCopper);
+        cabin.panel({point(.727,.394,side<0 ? 1.038 : .786),{0,0,side*.252},{0,-.104,0}},.018,.018,
+                    cabinCeramic,cabinTrim);
         cabin.beam(point(.59,.587,-1.03),point(.59,.587,.73),.027,.022,cabinWarmLight,.65f);
     }
 
@@ -955,10 +1248,73 @@ Mesh xalariaCockpitMesh() {
     cabin.beam({-.92,-.355,-1.48},{.92,-.355,-1.48},.15,.113,cabinFrame);
     cabin.beam({-.83,.464,-1.417},{.83,.464,-1.417},.028,.026,cabinRubber);
     cabin.beam({-.90,-.294,-1.437},{.90,-.294,-1.437},.030,.024,cabinRubber);
+    // Machined windscreen flange and its captive pressure bolts. Kept on
+    // the opaque frame, with physical separation from the glazing gasket.
+    for(double side:{-1.,1.}){
+        cabin.beam({side*.78,.492,-1.365},{side*.78,-.316,-1.365},.026,.029,cabinTrim);
+        for(double y:{-.24,-.03,.18,.40})
+            cabin.fastener({side*.78,y,-1.346},{0,0,1},.009);
+        cabin.beam({side*.75,-.320,-1.38},{side*.43,-.320,-1.38},.018,.016,cabinCopper);
+        cabin.beam({side*.73,-.318,-1.361},{side*.49,-.318,-1.361},.004,.004,cabinStatusLight,.27f);
+    }
     for (double x : {-.66,-.44,.44,.66}) {
         cabin.beam({x,.531,-1.398},{x,.531,-1.388},.018,.018,cabinTrim);
         cabin.beam({x,-.355,-1.414},{x,-.355,-1.399},.018,.018,cabinTrim);
     }
+    // Segmented pressure collar: carbon inserts sit forward of the beam's
+    // front face. Gaps expose the structural alloy rather than coplanar decals.
+    for(int section=0;section<5;++section){
+        const double x=-.735+section*.298;
+        const CabinSurface plate{{x,.583,-1.354},{.278,0,0},{0,-.079,0}};
+        cabin.panel(plate,.010,.008,cabinComposite,cabinCopper);
+        for(double u:{.10,.90})
+            cabin.fastener(plate.point(u,.51)+glm::dvec3(0,0,.013),{0,0,1},.005);
+        for(int slot=0;slot<5;++slot){
+            const double a=x+.091+slot*.023;
+            cabin.beam({a,.551,-1.340},{a+.009,.526,-1.340},.006,.003,cabinRubber);
+        }
+    }
+    for(double side:{-1.,1.}){
+        cabin.beam({side*.29,.493,-1.351},{side*.72,.493,-1.351},.010,.009,cabinRubber);
+        cabin.beam({side*.31,.491,-1.341},{side*.70,.491,-1.341},.004,.004,cabinWarmLight,.49f);
+        // Split cuffs and polished pressure tubes reinforce the front corners.
+        for(double y:{-.247,.067,.382}){
+            cabin.panel({{side<0?-.809:.751,y+.034,-1.323},{.058,0,0},{0,-.068,0}},
+                        .009,.009,cabinComposite,cabinTrim);
+            cabin.fastener({side*.78,y,-1.308},{0,0,1},.006);
+        }
+        cabin.beam({side*.807,-.25,-1.321},{side*.807,.40,-1.321},.008,.009,cabinCopper);
+        for(int bay=0;bay<3;++bay){
+            const double z=-.51+bay*.53;
+            const CabinSurface roof{{side<0?-.48:.28,.670,z},{.20,0,0},{0,0,-.46}};
+            cabin.panel(roof,.016,.018,cabinComposite,cabinTrim);
+            for(int rib=0;rib<6;++rib){
+                const double line=z-.075-rib*.053;
+                cabin.beam({side*.307,.648,line},{side*.451,.648,line},.013,.008,cabinRubber);
+            }
+        }
+    }
+    // Sculpted pressure manifold and telescopic corner stays. These are
+    // rounded, opaque fittings with separated sleeves, collars and mounts.
+    // Their soft-shadow proxies use the same hull-local dimensions.
+    cabin.tube({-.72,.607,-1.285},{.72,.607,-1.285},.018,cabinCopper);
+    for(double x:{-.62,-.31,0.,.31,.62}){
+        cabin.tube({x-.014,.607,-1.285},{x+.014,.607,-1.285},.025,cabinTrim);
+        cabin.beam({x,.607,-1.327},{x,.607,-1.312},.067,.067,cabinComposite);
+    }
+    for(double side:{-1.,1.}){
+        const double x=side*.812;
+        cabin.tube({x,-.25,-1.285},{x,.40,-1.285},.0135,cabinTrim);
+        cabin.tube({x,-.25,-1.285},{x,.035,-1.285},.018,cabinRubber);
+        cabin.tube({side*.72,.607,-1.285},{x,.40,-1.285},.016,cabinCopper);
+        for(double y:{-.22,.08,.38}){
+            const CabinSurface mount{{x-.031,y+.042,-1.319},{.062,0,0},{0,-.084,0}};
+            cabin.panel(mount,.010,.017,cabinComposite,cabinCopper);
+            cabin.tube({x,y-.013,-1.285},{x,y+.013,-1.285},.026,cabinTrim);
+            cabin.fastener({x,y,-1.255},{0,0,1},.0045);
+        }
+    }
+
     cabin.beam({0,.607,-1.25},{0,.607,.75},.388,.135,cabinFrame);
     cabin.beam({0,.52,-.54},{0,.52,.31},.341,.071,cabinRubber);
     cabin.instrument(overheadScreen);
@@ -969,19 +1325,28 @@ Mesh xalariaCockpitMesh() {
     for (double x : {-.143,.143})
         for (double z : {-.44,.30})
             cabin.beam({x-.01,.482,z},{x+.01,.482,z},.021,.018,cabinCopper);
+    for (double x : {-.25,.25})
+        cabin.beam({x,.634,-1.22},{x,.634,.66},.031,.026,cabinCopper);
 
     // Central dashboard, recessed pedals, and the pilot's hand controls.
-    cabin.face({-.94,-.344,-1.48},{.94,-.344,-1.48},{.68,-.566,-.98},{-.68,-.566,-.98},cabinFrame);
+    cabin.face({-.94,-.344,-1.48},{.94,-.344,-1.48},{.68,-.566,-.98},{-.68,-.566,-.98},cabinComposite);
     cabin.face({-.67,-.565,-.98},{.67,-.565,-.98},{.55,-.72,-1.20},{-.55,-.72,-1.20},cabinLiner);
     cabin.face({-.92,-.36,-1.47},{.92,-.36,-1.47},{.8,-.82,-1.47},{-.8,-.82,-1.47},cabinLiner);
     cabin.beam({-.68,-.556,-.985},{.68,-.556,-.985},.062,.063,cabinTrim);
+    cabin.beam({-.59,-.568,-.952},{.59,-.568,-.952},.026,.018,cabinCeramic);
+    cabin.beam({-.32,-.588,-.943},{.32,-.588,-.943},.011,.009,cabinStatusLight,.53f);
     cabin.instrument(driveScreen);
     for (double side : {-1.,1.}) {
-        cabin.beam({side*.61,-.405,-1.29},{side*.52,-.523,-1.079},.176,.065,cabinRubber);
-        for (int i = 0; i < 4; ++i) {
-            const double z = -1.263 + i*.046;
-            cabin.beam({side*.52,-.367-i*.024,z},{side*.61,-.367-i*.024,z},.018,.013,
-                       i == 0 ? cabinCopper : cabinWarmLight,.45f);
+        const CabinSurface controls{{side<0?-.677:.457,-.346,-1.454},{.22,0,0},{0,-.128,.288}};
+        cabin.panel(controls,.014,.012,cabinComposite,cabinTrim);
+        cabin.dial(controls,.5,.66,.067,true);
+        cabin.dial(controls,.5,.205,.032,false);
+        for(double u:{.10,.90})for(double v:{.10,.90})
+            cabin.fastener(controls.point(u,v)+controls.normal()*.015,controls.normal(),.0045);
+        for (int i=0;i<4;++i){
+            const auto a=controls.point(.11+i*.21,.41)+controls.normal()*.016;
+            cabin.beam(a,a+controls.normal()*.004,.010,.007,
+                       i==3?cabinWarmLight:cabinStatusLight,.32f);
         }
         cabin.beam({side*.24,-.793,-1.36},{side*.24,-.755,-1.08},.18,.072,cabinFrame);
         for (int i = 0; i < 4; ++i) {
@@ -1009,8 +1374,8 @@ Mesh xalariaCockpitMesh() {
     cabin.beam({-.43,.603,hatch-.108},{.43,.603,hatch-.108},.014,.020,cabinWarmLight,.77f);
     // Pilot's seat and foot rails.
     cabin.beam({0,-.713,-.205},{0,-.713,.46},.576,.142,cabinFrame);
-    cabin.beam({0,-.611,-.232},{0,-.611,.431},.514,.104,cabinRubber);
-    cabin.beam({0,-.605,.424},{0,-.349,.55},.498,.125,cabinRubber);
+    cabin.beam({0,-.611,-.232},{0,-.611,.431},.514,.104,cabinUpholstery);
+    cabin.beam({0,-.605,.424},{0,-.349,.55},.498,.125,cabinUpholstery);
     for (double side : {-1.,1.}) {
         cabin.beam({side*.271,-.567,-.16},{side*.271,-.541,.365},.063,.101,cabinLiner);
         cabin.beam({side*.217,-.558,-.182},{side*.217,-.558,.412},.018,.014,cabinTrim);
@@ -1041,13 +1406,19 @@ Mesh xalariaCockpitHatch() {
 Mesh xalariaShipDeck() {
     using namespace shipDeck;
     CabinBuilder deck;
-    const CabinFinish deckPlate{{.091f,.125f,.145f},CabinMaterial::Polymer};
-    const CabinFinish bulkhead{{.145f,.21f,.25f},CabinMaterial::Painted};
-    const CabinFinish ceiling{{.20f,.25f,.27f},CabinMaterial::Painted};
+    const CabinFinish deckPlate{{.041f,.061f,.073f},CabinMaterial::Polymer};
+    const CabinFinish tread{{.072f,.100f,.117f},CabinMaterial::Tread};
+    const CabinFinish bulkhead{{.089f,.13f,.158f},CabinMaterial::Painted};
+    const CabinFinish ceiling{{.10f,.14f,.16f},CabinMaterial::Painted};
+    const CabinFinish bulkheadPanel{{.27f,.32f,.34f},CabinMaterial::Painted};
+    const CabinFinish frame{{.13f,.16f,.17f},CabinMaterial::Brushed};
+    const CabinFinish ivory{{.39f,.40f,.35f},CabinMaterial::Ceramic};
+    const CabinFinish safety{{.61f,.37f,.11f},CabinMaterial::Painted};
     const CabinFinish routeLamp{{.23f,.69f,.72f},CabinMaterial::Display};
-    const CabinFinish cargoPaint{{.43f,.23f,.094f},CabinMaterial::Painted};
-    const CabinFinish cloth{{.16f,.26f,.29f},CabinMaterial::Polymer};
-    const CabinFinish reactorLamp{{.38f,.75f,1.f},CabinMaterial::Display};
+    const CabinFinish cloth{{.20f,.30f,.28f},CabinMaterial::Textile};
+    const CabinFinish berthLamp{berthLight,CabinMaterial::Display};
+    const CabinFinish reactorLamp{engineeringLight,CabinMaterial::Display};
+    const CabinFinish loadingLamp{cargoLight,CabinMaterial::Display};
     const auto surface = [&](double left,double right,double start,double end,double y,const CabinFinish& finish) {
         deck.face({left,y,start},{right,y,start},{right,y,end},{left,y,end},finish);
     };
@@ -1062,6 +1433,23 @@ Mesh xalariaShipDeck() {
                   {(footprint.left+footprint.right)*.5,(base+top)*.5,footprint.back},
                   footprint.right-footprint.left,top-base,finish);
     };
+    const auto insetWall = [&](double x,double from,double to,double low,double high,
+                               const CabinFinish& finish) {
+        deck.beam({x,(low+high)*.5,from},{x,(low+high)*.5,to},.020,high-low,finish);
+    };
+    const auto floorPlates = [&](double from,double to,double halfWidth,unsigned count) {
+        const double spacing=(to-from)/count;
+        for (unsigned i=0;i<count;++i) {
+            const double z=from+i*spacing;
+            deck.panel({{-halfWidth,deckFloor+.003,z+.011},{2*halfWidth,0,0},{0,0,spacing-.022}},
+                       .017,.003,tread,frame);
+            for (double x : {-halfWidth+.055,halfWidth-.055}) {
+                surface(x-.023,x+.023,z+.043,z+.054,deckFloor+.007,frame);
+                surface(x-.023,x+.023,z+spacing-.054,z+spacing-.043,deckFloor+.007,frame);
+            }
+        }
+    };
+    floorPlates(1.72,cargoFront,.43,6);
 
     // Ramp from the bridge's raised floor to the passage.
     deck.face({-hatchHalf,bridgeFloor,hatch},{hatchHalf,bridgeFloor,hatch},
@@ -1074,73 +1462,205 @@ Mesh xalariaShipDeck() {
         side(sign*passageHalf,1.71,quartersDoorFront,deckFloor,passageRoof,bulkhead);
         side(sign*passageHalf,quartersDoorBack,cargoFront,deckFloor,passageRoof,bulkhead);
         side(sign*passageHalf,quartersDoorFront,quartersDoorBack,.82,passageRoof,cabinFrame);
+        const auto& roomLamp = sign<0 ? berthLamp : reactorLamp;
+        const double jamb=sign*passageHalf;
+        deck.beam({jamb,.847,quartersDoorFront},{jamb,.847,quartersDoorBack},.070,.056,frame);
+        deck.beam({jamb-sign*.038,.826,quartersDoorFront+.08},
+                  {jamb-sign*.038,.826,quartersDoorBack-.08},.016,.014,roomLamp,.72f);
+        for (double z : {quartersDoorFront+.065,quartersDoorBack-.065}) {
+            deck.beam({jamb-sign*.036,.46,z},{jamb-sign*.036,.76,z},.012,.016,roomLamp,.57f);
+            deck.beam({jamb-sign*.038,-.90,z},{jamb-sign*.038,-.69,z},.013,.018,roomLamp,.54f);
+        }
         for (double z : {1.79,quartersDoorFront,quartersDoorBack,3.49}) {
             deck.beam({sign*passageHalf,deckFloor,z},{sign*passageHalf,passageRoof,z},.069,.080,cabinFrame);
         }
         deck.beam({sign*.52,deckFloor+.028,1.72},{sign*.52,deckFloor+.028,cargoFront},.025,.017,routeLamp,.48f);
         deck.beam({sign*.49,passageRoof-.044,1.45},{sign*.49,passageRoof-.044,3.55},
                   .061,.035,cabinWarmLight,.78f);
+        for (const auto interval : {glm::dvec2{1.73,1.98},glm::dvec2{3.28,3.69}}) {
+            const double x=sign*(passageHalf-.015);
+            insetWall(x,interval.x,interval.y,-.47,.68,bulkheadPanel);
+            deck.panel({{x-sign*.013,.56,sign<0 ? interval.y-.027 : interval.x+.027},
+                        {0,0,sign*(interval.y-interval.x-.054)},{0,-.48,0}},
+                       .022,.015,frame,cabinTrim);
+            insetWall(x-sign*.024,interval.x+.044,interval.y-.044,.48,.53,ivory);
+            insetWall(x-sign*.013,interval.x+.021,interval.y-.021,-.42,-.12,cabinLiner);
+            for (double y : {-.34,-.28,-.22})
+                deck.beam({x-sign*.026,y,interval.x+.045},{x-sign*.026,y,interval.y-.045},
+                          .016,.013,frame);
+            deck.beam({x-sign*.025,-.040,interval.x+.027},{x-sign*.025,-.040,interval.y-.027},
+                      .014,.014,routeLamp,.56f);
+        }
+        for (double z : {quartersDoorFront+.12,quartersDoorBack-.12})
+            deck.beam({sign*(passageHalf-.014),.89,z},{sign*(passageHalf-.014),.89,z+.09},
+                      .025,.067,safety);
         const auto left=std::min(sign*passageHalf,sign*quartersWall);
         const auto right=std::max(sign*passageHalf,sign*quartersWall);
         surface(left,right,quartersFront,quartersBack,deckFloor,deckPlate);
         surface(left,right,quartersFront,quartersBack,passageRoof,ceiling);
-        wall(quartersFront,left,right,deckFloor,passageRoof,bulkhead);
-        wall(quartersBack,left,right,deckFloor,passageRoof,bulkhead);
+        const auto& roomWall = sign<0 ? ivory : bulkhead;
+        wall(quartersFront,left,right,deckFloor,passageRoof,roomWall);
+        wall(quartersBack,left,right,deckFloor,passageRoof,roomWall);
         side(sign*quartersWall,quartersFront,quartersBack,deckFloor,passageRoof,bulkhead);
-        deck.beam({sign*1.55,passageRoof-.050,2.05},{sign*1.55,passageRoof-.050,3.20},.066,.042,
-                  cabinWarmLight,.84f);
+        deck.beam({sign*1.55,passageRoof-.050,2.05},{sign*1.55,passageRoof-.050,3.20},.14,.055,frame);
+        deck.beam({sign*1.55,passageRoof-.085,2.13},{sign*1.55,passageRoof-.085,3.12},.072,.023,
+                  roomLamp,.81f);
+        deck.beam({jamb,deckFloor+.008,quartersDoorFront+.10},
+                  {jamb,deckFloor+.008,quartersDoorBack-.10},.085,.012,roomLamp,.42f);
     }
     deck.face({-.49,.69,hatch},{.49,.69,hatch},{passageHalf,passageRoof,1.71},
               {-passageHalf,passageRoof,1.71},ceiling);
-    for (int i=0;i<7;++i) {
-        const double z=1.82+i*.265;
-        deck.beam({-.38,deckFloor+.009,z},{.38,deckFloor+.009,z},.015,.013,cabinRubber);
+    for (double z : {1.86,2.33,2.80,3.27}) {
+        deck.beam({-.49,.947,z},{.49,.947,z},.050,.043,frame);
+        for (double x : {-.36,0.,.36})
+            deck.beam({x,.921,z-.07},{x,.921,z+.07},.069,.017,cabinLiner);
+    }
+    for (double x : {-.13,.13})
+        deck.beam({x,.937,1.72},{x,.937,3.64},.068,.044,cabinLiner);
+    deck.instrument(navigationDeckScreen,true);
+
+    // The bunk, its storage and the reading light share one recessed bay.
+    const CabinFinish blanket{{.38f,.13f,.075f},CabinMaterial::Textile};
+    const CabinFinish headboard{{.12f,.18f,.18f},CabinMaterial::Textile};
+    const CabinFinish stitch{{.50f,.31f,.18f},CabinMaterial::Textile};
+    box(bunk,deckFloor,-.67,frame);
+    box({-2.01,2.03,-1.57,3.19},-.68,-.50,cloth);
+    box({-1.99,2.09,-1.62,2.34},-.52,-.41,ivory);
+    box({-2.00,2.66,-1.58,3.15},-.51,-.454,blanket);
+    deck.beam({-1.59,-.46,2.74},{-1.99,-.46,2.74},.020,.018,ivory);
+    for (double x : {-1.97,-1.62})
+        deck.beam({x,-.452,2.76},{x,-.452,3.09},.010,.008,stitch);
+    insetWall(-2.068,2.05,3.18,-.43,.28,headboard);
+    for (double z : {2.23,2.60,2.98}) {
+        deck.panel({{-2.056,.19,z+.166},{0,0,-.332},{0,-.60,0}},.043,.026,cloth,headboard);
+        insetWall(-1.570,z-.155,z+.155,-.99,-.74,bulkheadPanel);
+        deck.beam({-1.554,-.80,z-.068},{-1.554,-.80,z+.068},.017,.023,frame);
+    }
+    deck.beam({-2.018,.32,2.05},{-2.018,.32,3.18},.15,.074,frame);
+    deck.beam({-1.978,.278,2.12},{-1.978,.278,3.11},.034,.018,berthLamp,.92f);
+    for (double z : {2.23,2.60,2.98}) {
+        insetWall(-2.04,z-.165,z+.165,.425,.818,ivory);
+        insetWall(-2.024,z-.144,z+.144,.461,.781,bulkheadPanel);
+        deck.beam({-2.008,.531,z-.052},{-2.008,.531,z+.052},.018,.022,cabinCopper);
     }
 
-    // Port berth, with mattress, folded blanket and a small reading lamp.
-    box(bunk,deckFloor,-.61,cabinFrame);
-    box({-1.86,2.03,-1.46,3.19},-.63,-.47,cloth);
-    box({-1.84,2.09,-1.48,2.33},-.47,-.39,cabinTrim);
-    box({-1.85,2.74,-1.47,3.15},-.47,-.431,cargoPaint);
-    deck.beam({-1.88,.30,2.04},{-1.88,.30,3.19},.12,.062,cabinTrim);
-    deck.beam({-1.83,.235,2.12},{-1.83,.235,2.53},.036,.043,cabinWarmLight,.95f);
     // Starboard systems alcove, with separate vertical cooling pipes.
     box(systems,deckFloor,.68,cabinFrame);
-    for (double z : {2.13,2.44,2.75,3.06}) {
-        deck.beam({1.449,-.79,z},{1.449,.38,z},.122,.107,cabinTrim);
-        deck.beam({1.384,-.66,z},{1.384,.28,z},.044,.041,reactorLamp,.70f);
+    insetWall(1.614,2.05,3.24,-.91,.67,frame);
+    deck.panel({{1.598,.63,2.07},{0,0,1.13},{0,-1.52,0}},.044,.026,cabinLiner,cabinTrim);
+    for (double z : {2.18,2.40,2.62,2.84,3.06}) {
+        deck.beam({1.601,-.83,z},{1.601,-.30,z},.092,.100,cabinTrim);
+        deck.beam({1.544,-.755,z},{1.544,-.367,z},.020,.037,reactorLamp,.82f);
+        for (double y : {-.80,-.70,-.43,-.34})
+            deck.beam({1.566,y,z-.054},{1.566,y,z+.054},.037,.022,frame);
+        deck.beam({1.578,-.87,z},{1.578,-.87,z+.085},.041,.015,cabinCopper);
     }
-    deck.beam({1.43,.44,2.07},{1.43,.44,3.14},.075,.105,cabinCopper);
+    deck.beam({1.557,-.24,2.07},{1.557,-.24,3.14},.070,.073,cabinCopper);
+    for (double z : {2.14,3.07})
+        deck.beam({1.56,-.22,z},{1.56,-.87,z},.065,.062,cabinCopper);
+    insetWall(1.567,3.06,3.23,-.16,.49,bulkheadPanel);
+    for (double y : {-.07,.055,.18,.305})
+        deck.beam({1.548,y,3.093},{1.548,y,3.151},.019,.021,reactorLamp,.62f);
+    for (int i=0;i<14;++i) {
+        const double z=2.12+i*.08;
+        deck.beam({1.565,.622,z},{1.565,.644,z},.025,.032,cabinTrim);
+    }
+    deck.instrument(systemsDeckScreen,true);
 
     // The cargo bay has one clear aisle and two banks of tied-down crates.
     surface(-cargoHalf,cargoHalf,cargoFront,cargoBack,deckFloor,deckPlate);
+    floorPlates(cargoFront+.12,cargoBack-.16,.48,8);
     surface(-cargoHalf,cargoHalf,cargoFront,cargoBack,cargoRoof,ceiling);
     wall(cargoFront,-cargoHalf,-cargoDoorHalf,deckFloor,cargoRoof,bulkhead);
     wall(cargoFront,cargoDoorHalf,cargoHalf,deckFloor,cargoRoof,bulkhead);
     wall(cargoFront,-cargoDoorHalf,cargoDoorHalf,.90,cargoRoof,cabinFrame);
     wall(cargoBack,-cargoHalf,cargoHalf,deckFloor,cargoRoof,bulkhead);
     for (double sign : {-1.,1.}) {
-        side(sign*cargoHalf,cargoFront,cargoBack,deckFloor,cargoRoof,bulkhead);
-        deck.beam({sign*.60,deckFloor,cargoFront},{sign*.60,.91,cargoFront},.071,.089,cabinTrim);
+        const double hull=sign*cargoHalf;
+        side(hull,cargoFront,observationFore,deckFloor,cargoRoof,bulkhead);
+        if (sign<0.) {
+            const double from=stationDeck::centre-stationDeck::doorHalf, to=stationDeck::centre+stationDeck::doorHalf;
+            side(hull,observationAft,from,deckFloor,cargoRoof,bulkhead);
+            side(hull,to,cargoBack,deckFloor,cargoRoof,bulkhead);
+            side(hull,from,to,stationDeck::doorTop,cargoRoof,cabinFrame);
+            for (double z : {from-.028,to+.028}) {
+                deck.beam({hull+.015,deckFloor,z},{hull+.015,stationDeck::doorTop,z},.092,.073,cabinTrim);
+                deck.beam({hull+.065,-.45,z},{hull+.065,.62,z},.018,.015,loadingLamp,.86f);
+            }
+        } else {
+            side(hull,observationAft,cargoBack,deckFloor,cargoRoof,bulkhead);
+        }
+        side(hull,observationFore,observationAft,deckFloor,observationSill,bulkhead);
+        side(hull,observationFore,observationAft,observationHead,cargoRoof,bulkhead);
+        const auto rim=cargoWindow(hull,.056);
+        const auto bevel=cargoWindow(hull-sign*.036,.012);
+        const auto glass=cargoWindow(hull-sign*.008,0);
+        for (size_t i=0;i<rim.size();++i) {
+            const size_t next=(i+1)%rim.size();
+            deck.face(rim[i],rim[next],bevel[next],bevel[i],frame);
+            deck.face(bevel[i],bevel[next],glass[next],glass[i],cabinTrim);
+        }
+        for (double z : {observationFore-.033,observationAft+.033}) {
+            deck.beam({hull-sign*.043,.45,z},{hull-sign*.043,.79,z},.026,.024,cabinRubber);
+            deck.beam({hull-sign*.059,.54,z},{hull-sign*.059,.69,z},.008,.010,reactorLamp,.68f);
+        }
+        deck.beam({hull-sign*.032,.244,observationFore+.14},{hull-sign*.032,.244,observationAft-.14},
+                  .023,.020,cabinCopper);
+        deck.beam({sign*cargoDoorHalf,deckFloor,cargoFront},{sign*cargoDoorHalf,.91,cargoFront},
+                  .071,.089,cabinTrim);
+        deck.beam({sign*.61,-.80,cargoFront-.035},{sign*.61,.74,cargoFront-.035},
+                  .022,.024,loadingLamp,.75f);
         deck.beam({sign*.54,deckFloor+.023,3.82},{sign*.54,deckFloor+.023,7.33},
                   .032,.020,routeLamp,.57f);
         for (double z : {3.95,4.97,6.13,7.26}) {
+            if (sign<0.&&z>7.) continue;
             deck.beam({sign*1.52,deckFloor,z},{sign*1.52,1.04,z},.15,.144,cabinFrame);
             deck.beam({sign*1.52,1.04,z},{sign*1.15,cargoRoof,z},.13,.114,cabinFrame);
         }
-        for (double z : {4.45,5.52,6.66}) {
-            deck.beam({sign*1.617,.76,z-.36},{sign*1.617,.76,z+.36},.034,.15,cabinLiner);
-            deck.beam({sign*1.594,.727,z-.30},{sign*1.594,.727,z+.30},.019,.027,cabinTrim);
-            for (double slot : {-2.,-1.,0.,1.,2.})
-                deck.beam({sign*1.59,.782,z+slot*.094},{sign*1.59,.829,z+slot*.094},.021,.017,cabinRubber);
+        insetWall(sign*1.628,3.90,sign<0.?6.28:7.26,-.26,.045,ivory);
+        for (const auto span : {glm::dvec2{4.03,4.88},glm::dvec2{5.06,6.05},glm::dvec2{6.22,7.17}}) {
+            if (sign<0.&&span.y>7.) continue;
+            deck.panel({{sign*1.633,.27,sign<0?span.y:span.x},{0,0,sign*(span.y-span.x)},{0,-.61,0}},
+                       .032,.019,bulkheadPanel,frame);
+        }
+        for (double z : {4.45,6.66}) {
+            if (sign<0.&&z>6.) continue;
+            insetWall(sign*1.612,z-.35,z+.35,.33,.92,bulkheadPanel);
+            insetWall(sign*1.591,z-.31,z+.31,.40,.66,frame);
+            for (double y : {.45,.50,.55,.60})
+                deck.beam({sign*1.576,y,z-.27},{sign*1.576,y,z+.27},.015,.022,cabinRubber);
+            deck.beam({sign*1.585,.73,z-.255},{sign*1.585,.73,z+.255},.022,.034,ivory);
+            deck.beam({sign*1.578,.83,z-.18},{sign*1.578,.83,z+.18},.022,.020,loadingLamp,.63f);
         }
         for (double z : {4.19,5.23,6.27}) {
             deck.beam({sign*.76,cargoRoof-.045,z},{sign*.76,cargoRoof-.045,z+.52},
-                      .132,.064,cabinWarmLight,.88f);
+                      .202,.069,frame);
+            deck.beam({sign*.76,cargoRoof-.084,z+.04},{sign*.76,cargoRoof-.084,z+.48},
+                      .103,.023,loadingLamp,.90f);
+        }
+        for (int i=0;i<8;++i) {
+            const double x=sign*(.66+i*.099);
+            deck.beam({x,deckFloor+.015,cargoFront+.16},{x+sign*.048,deckFloor+.015,cargoFront+.25},
+                      .028,.010,i%2?safety:cabinRubber);
         }
     }
+    deck.beam({-.52,.884,cargoFront-.043},{.52,.884,cargoFront-.043},.026,.022,loadingLamp,.76f);
+    for (double x : {-.26,.26})
+        deck.beam({x,1.145,3.84},{x,1.145,7.23},.088,.065,frame);
     deck.beam({0,-.072,7.393},{0,-.072,7.331},1.47,1.55,cabinFrame);
     deck.beam({0,-.083,7.32},{0,-.083,7.288},1.29,1.36,cabinLiner);
+    for (double side : {-1.,1.}) {
+        const double x=side*1.08;
+        deck.beam({x,-.19,7.403},{x,-.19,7.379},.57,1.58,frame);
+        deck.beam({x,-.19,7.378},{x,-.19,7.363},.46,1.40,bulkheadPanel);
+        for (int row=0;row<7;++row) {
+            const double y=-.69+row*.122;
+            deck.beam({x-.151,y,7.349},{x+.151,y,7.349},.018,.034,cabinLiner);
+        }
+        deck.beam({x-.14,.34,7.350},{x+.14,.34,7.350},.022,.022,loadingLamp,.71f);
+    }
+    deck.instrument(cargoDeckScreen,true);
+    deck.beam({-.57,.681,7.307},{.57,.681,7.307},.065,.145,cabinFrame);
     for (double x : {-.62,.62}) {
         deck.beam({x,-.65,7.275},{x,.48,7.275},.059,.053,cabinTrim);
         deck.beam({x,-.27,7.24},{x,.17,7.24},.022,.023,routeLamp,.48f);
@@ -1148,102 +1668,1034 @@ Mesh xalariaShipDeck() {
     for (size_t i=0;i<cargoCrates.size();++i) {
         const auto& crate=cargoCrates[i];
         const double top=(i%3==1)?-.105:(i==2)?.15:-.31;
-        box(crate,deckFloor+.055,top,cargoPaint);
+        const CabinFinish shell{i%2 ? glm::vec3{.32f,.38f,.37f} : glm::vec3{.55f,.35f,.16f},
+                                CabinMaterial::Painted};
+        box(crate,deckFloor+.055,top,shell);
+        box({crate.left+.023,crate.front+.024,crate.right-.023,crate.back-.024},top-.028,top+.012,frame);
         for (double x : {crate.left+.10,crate.right-.10}) {
             deck.beam({x,top+.022,crate.front+.02},{x,top+.022,crate.back-.02},.056,.047,cabinRubber);
             for (double z : {crate.front-.018,crate.back+.018})
                 deck.beam({x,deckFloor+.092,z},{x,top+.02,z},.056,.047,cabinRubber);
         }
-        const double inside=crate.left<0?crate.right+.019:crate.left-.019;
+        const double sign=crate.left<0?1.:-1.;
+        const double inside=(sign>0?crate.right:crate.left)+sign*.012;
+        insetWall(inside,crate.front+.08,crate.back-.08,top-.32,top-.085,frame);
+        insetWall(inside+sign*.015,crate.front+.23,crate.front+.47,top-.275,top-.145,ivory);
+        for (int stripe=0;stripe<5;++stripe) {
+            const double z=crate.front+.25+stripe*.023;
+            deck.beam({inside+sign*.027,top-.254,z},{inside+sign*.027,top-.169,z},.008,.011,cabinRubber);
+        }
         deck.beam({inside,top-.13,crate.front+.15},{inside,top-.13,crate.back-.15},
                   .027,.047,cabinCopper);
+        for (double z : {crate.front+.21,crate.back-.21})
+            deck.beam({inside,top-.21,z},{inside,top-.31,z},.041,.035,cabinFrame);
     }
     deck.beam({-.58,.57,7.30},{.58,.57,7.30},.10,.094,cabinFrame);
     deck.beam({-.44,.57,7.25},{.44,.57,7.25},.024,.030,routeLamp,.76f);
-    for (double z : {4.10,4.82,5.54,6.26,6.98})
-        deck.beam({-.47,deckFloor+.010,z},{.47,deckFloor+.010,z},.016,.019,cabinFrame);
 
     deck.mesh.compact();
     return std::move(deck.mesh);
 }
 
-ShipCrewMeshes xalariaShipCrewMeshes() {
-    ShipCrewMeshes crew;
-    // Rounded sections give the pressure suit a readable outline from
-    // any side. All positions are relative to a 1.78 metre standing figure.
-    struct Section { double y, halfWidth, halfDepth, z; };
-    const auto form = [](Mesh& mesh,glm::dvec3 offset,std::initializer_list<Section> sections,glm::vec3 colour) {
-        constexpr unsigned sides=16;
-        const auto first=uint32_t(mesh.vertices.size());
-        unsigned row=0;
-        for(const auto& s:sections) {
-            for(unsigned i=0;i<sides;++i) {
-                const double a=i*2*std::numbers::pi/sides;
-                const auto p=offset+glm::dvec3(s.halfWidth*std::cos(a),s.y,s.z+s.halfDepth*std::sin(a));
-                mesh.vertices.push_back({float(p.x),float(p.y),float(p.z),rgba(colour)});
-                if(row) {
-                    const auto before=first+(row-1)*sides+i;
-                    const auto next=first+(row-1)*sides+(i+1)%sides;
-                    mesh.indices.insert(mesh.indices.end(),{before,next,before+sides,
-                                                            before+sides,next,next+sides});
-                }
-            }
-            ++row;
-        }
-        for (unsigned i=1;i+1<sides;++i) {
-            const auto end=first+(row-1)*sides;
-            mesh.indices.insert(mesh.indices.end(),{first,first+i+1,first+i,end,end+i,end+i+1});
-        }
-    };
-    const glm::vec3 suit(.034f,.046f,.053f), reinforcement(.044f,.055f,.060f), visor(.017f,.026f,.030f);
-    form(crew.body,{},{{.77,.138,.10,.012},{.86,.169,.116,.013},{.97,.16,.110,.007},
-                      {1.10,.142,.096,-.006},{1.30,.184,.110,-.012},{1.42,.209,.122,0},
-                      {1.49,.171,.104,.007},{1.52,.102,.078,.012},{1.56,.071,.062,.013}},suit);
-    form(crew.body,{},{{1.055,.107,.055,.123},{1.10,.132,.067,.136},{1.37,.131,.067,.136},
-                      {1.43,.100,.049,.13}},reinforcement);
-    for (double side : {-1.,1.}) {
-        form(crew.body,{side*.091,0,0},
-             {{.09,.058,.062,.012},{.18,.060,.065,.015},{.39,.068,.074,.024},
-              {.52,.074,.070,-.009},{.66,.085,.086,.008},{.82,.093,.102,.016},{.89,.074,.076,.015}},suit);
-        form(crew.body,{side*.091,0,0},{{.005,.062,.114,-.041},{.039,.070,.125,-.042},
-                                       {.102,.067,.106,-.022},{.16,.055,.063,.018}},reinforcement);
+namespace {
+constexpr double annexStripInset=.31, annexStripDrop=.228, annexStripEnd=.23;
+
+struct StationTaskLamp {
+    glm::dvec3 position{};
+    double halfLength=-1.;
+};
+
+StationTaskLamp stationTaskLamp(const StationAnnex& annex) {
+    if (annex.panoramic() && annex.room.fixtures.size()>2) {
+        const auto& table=annex.room.fixtures[2];
+        return {{(table.left+table.right)*.5,-.224,(table.front+table.back)*.5},0.};
     }
-    form(crew.head,{},{{1.52,.063,.069,.013},{1.57,.098,.091,.003},{1.64,.106,.096,-.002},
-                       {1.72,.093,.084,.008},{1.775,.055,.049,.018},{1.79,.020,.020,.018}},reinforcement);
-    form(crew.head,{},{{1.574,.044,.022,-.075},{1.603,.077,.035,-.078},{1.672,.084,.039,-.079},
-                       {1.707,.056,.025,-.074}},visor);
-    form(crew.arm,{},{{-.55,.025,.026,-.118},{-.53,.040,.034,-.126},{-.475,.044,.038,-.133},
-                      {-.42,.041,.042,-.130},{-.33,.055,.054,-.090},{-.255,.053,.057,-.030},
-                      {-.18,.058,.061,-.003},{-.076,.069,.074,0},{.007,.069,.073,.006},
-                      {.045,.039,.043,.009}},suit);
-    for (auto* part : {&crew.body,&crew.head,&crew.arm})
-        part->compact();
-    return crew;
+    if (annex.room.kind==StationModuleKind::Analysis && !annex.room.fixtures.empty()) {
+        const auto& bench=annex.room.fixtures.front();
+        return {{(bench.left+bench.right)*.5+.12,.85,(bench.front+bench.back)*.5-.045},.54};
+    }
+    return {};
+}
 }
 
-Mesh xalariaShipSigns() {
-    Mesh signs;
-    const auto sign = [&](const CabinSurface& surface,std::string_view label,glm::vec3 colour) {
-        CockpitOverlay overlay;
-        constexpr double size=14;
-        text(overlay,label,4,2,size,colour);
-        const auto first=uint32_t(signs.vertices.size());
-        const double width=4+label.size()*size*6/7;
-        for (const auto& v : overlay.lettering.vertices) {
-            const auto p=surface.point(v.x/width,v.y/18);
-            signs.vertices.push_back({float(p.x),float(p.y),float(p.z),v.color});
-        }
-        for (auto index : overlay.lettering.indices)
-            signs.indices.push_back(first+index);
+StationAnnexLighting xalariaStationAnnexLighting(const StationLayout& layout) {
+    StationAnnexLighting lighting{};
+    const auto bounds=[](const DeckArea& area) {
+        return glm::vec4(area.left,area.front,area.right,area.back);
     };
-    sign({{.36,.565,1.039},{-.72,0,0},{0,-.072,0}},"MAIN DECK",cabinLamp);
-    sign({{-.34,.576,1.218},{.68,0,0},{0,-.075,0}},"COCKPIT",cabinSignal);
-    sign({{.48,1.10,3.662},{-.96,0,0},{0,-.092,0}},"CARGO BAY",cabinLamp);
-    sign({{.56,.41,7.263},{-1.12,0,0},{0,-.102,0}},"CARGO BAY",cabinSignal);
-    sign({{-.704,.918,2.99},{0,0,-.74},{0,-.079,0}},"CREW QUARTERS",cabinLamp);
-    sign({{.704,.918,2.25},{0,0,.74},{0,-.079,0}},"SYSTEMS",cabinLamp);
-    signs.compact();
+    constexpr size_t vectorsPerAnnex=6;
+    for (size_t i=0;i<std::min(layout.annexes.size(),lighting.size()/vectorsPerAnnex);++i) {
+        const auto& annex=layout.annexes[i];
+        const auto& room=annex.room;
+        const auto lamp=stationTaskLamp(annex);
+        const auto start=i*vectorsPerAnnex;
+        lighting[start]=bounds(room.floor);
+        lighting[start+1]={float(room.ceiling-annexStripDrop),float(annexStripInset),
+                           float(annexStripEnd),annex.panoramic()?1.f:0.f};
+        lighting[start+2]=glm::vec4(lamp.position,lamp.halfLength);
+        for (size_t j=0;j<std::min(size_t(3),room.fixtures.size());++j) {
+            auto footprint=room.fixtures[j];
+            if (annex.panoramic() && j==2) {
+                const double x=lamp.position.x,z=lamp.position.z;
+                footprint={x-.075,z-.075,x+.075,z+.075};
+            }
+            lighting[start+3+j]=bounds(footprint);
+        }
+    }
+    return lighting;
+}
+
+StationWindowLighting xalariaStationWindows(const StationLayout& layout) {
+    using namespace stationDeck;
+    StationWindowLighting windows{};
+    const auto bridge=std::find_if(layout.modules.rbegin(),layout.modules.rend(),[](const auto& room) {
+        return room.kind==StationModuleKind::Bridge;
+    });
+    if (bridge!=layout.modules.rend()) {
+        windows[0]={float(bridge->floor.left),float(bridgeDoor),float(centre),float(bridge->floor.back-centre)};
+        windows[2]={float(glassSill),float(glassShoulder),float(bridge->ceiling),float(bridgeRibWidth*.5)};
+    }
+    const auto panorama=std::find_if(layout.annexes.begin(),layout.annexes.end(),[](const auto& annex) {
+        return annex.panoramic();
+    });
+    if (panorama!=layout.annexes.end())
+        windows[1]={float(panorama->room.floor.left+panoramaInset),float(panorama->room.floor.right-panoramaInset),
+                    float(panorama->outsideWall()),float(panorama->insideWall())};
+    windows[3]={float(panoramaSill),float(panoramaHead),float(ribPitch),float(floor)};
+    return windows;
+}
+
+Mesh xalariaDockingDeck(const StationLayout& layout,XalariaLook look) {
+    using namespace stationDeck;
+    struct Finishes {
+        glm::vec3 liner, enamel, ceramic, alloy, fabric, marker, lamp;
+    };
+    constexpr std::array<Finishes,4> regionalFinishes{{
+        {{.108f,.046f,.032f},{.30f,.083f,.066f},{.57f,.35f,.22f},{.48f,.29f,.15f},
+         {.39f,.082f,.069f},{.95f,.40f,.14f},{1.f,.78f,.49f}},
+        {{.041f,.093f,.066f},{.095f,.265f,.163f},{.35f,.48f,.275f},{.39f,.36f,.18f},
+         {.21f,.29f,.115f},{.64f,.86f,.33f},{.94f,.91f,.62f}},
+        {{.027f,.071f,.128f},{.057f,.20f,.285f},{.29f,.47f,.51f},{.24f,.38f,.46f},
+         {.40f,.205f,.164f},{.21f,.81f,.89f},{.60f,.91f,1.f}},
+        {{.095f,.037f,.082f},{.28f,.078f,.184f},{.56f,.31f,.37f},{.48f,.32f,.22f},
+         {.43f,.117f,.272f},{1.f,.54f,.73f},{1.f,.88f,.46f}}
+    }};
+    const auto& colours=regionalFinishes.at(size_t(look));
+    const auto accent=glm::mix(colours.marker,stationAccent(layout.key.role),.19f);
+    const CabinFinish tread{colours.liner*.82f,CabinMaterial::Tread};
+    const CabinFinish floorPanel{glm::mix(colours.liner,colours.enamel,.48f)*1.35f,CabinMaterial::Tread};
+    const CabinFinish frame{colours.alloy,CabinMaterial::Brushed};
+    const CabinFinish bulkhead{colours.enamel,CabinMaterial::EnamelPanel};
+    const CabinFinish liner{colours.liner,CabinMaterial::EnamelPanel};
+    const CabinFinish wallPlate{colours.ceramic,CabinMaterial::Ceramic};
+    const CabinFinish worktop{glm::mix(colours.ceramic,colours.alloy,.34f),CabinMaterial::MineralComposite};
+    const CabinFinish painted{glm::mix(colours.enamel,accent,.39f),CabinMaterial::Painted};
+    const CabinFinish upholstery{colours.fabric,CabinMaterial::Textile};
+    const CabinFinish acoustics{glm::mix(colours.liner,colours.fabric,.49f)*1.12f,CabinMaterial::AcousticPanel};
+    const CabinFinish stitching{colours.fabric*.61f,CabinMaterial::Textile};
+    const CabinFinish fastener{colours.alloy*.62f,CabinMaterial::Brushed};
+    const CabinFinish workLight{glm::mix(colours.lamp,glm::vec3(1.f,.97f,.89f),.46f),CabinMaterial::Display};
+    const CabinFinish warmLight{colours.lamp,CabinMaterial::Display};
+    const CabinFinish readingLight{{1.f,.77f,.43f},CabinMaterial::Display};
+    const CabinFinish inspectionLight{{.76f,.90f,1.f},CabinMaterial::Display};
+    const CabinFinish railLight{accent,CabinMaterial::Display};
+    const CabinFinish bridgeFrame{glm::mix(glm::vec3(.089f,.119f,.139f),colours.alloy,.16f),CabinMaterial::Painted};
+    const CabinFinish bridgeEdge{glm::mix(glm::vec3(.32f,.36f,.37f),colours.alloy,.23f),CabinMaterial::Brushed};
+    const CabinFinish bridgeLiner{glm::mix(glm::vec3(.040f,.061f,.072f),colours.liner,.27f),CabinMaterial::EnamelPanel};
+    const CabinFinish bridgeWalk{glm::mix(glm::vec3(.127f,.145f,.15f),colours.liner,.23f),CabinMaterial::MineralComposite};
+    const CabinFinish bridgeLight{glm::mix(glm::vec3(1.f,.88f,.72f),colours.lamp,.23f),CabinMaterial::Display};
+    const CabinFinish safety{{1.f,.67f,.23f},CabinMaterial::Display};
+    const CabinFinish plants{{.19f,.45f,.25f},CabinMaterial::Polymer};
+    const CabinFinish leaves{{.32f,.58f,.21f},CabinMaterial::Polymer};
+    const Random detail{layout.key.seed};
+    CabinBuilder deck;
+    const auto endWall=[&](double x,double from,double to,double low,double high) {
+        if (to>from && high>low)
+            deck.face({x,low,from},{x,high,from},{x,high,to},{x,low,to},liner);
+    };
+    const auto sideWall=[&](double from,double to,double z,double low,double high,const CabinFinish& material) {
+        if (to>from && high>low)
+            deck.face({from,low,z},{to,low,z},{to,high,z},{from,high,z},material);
+    };
+    const auto bridgeRib=[&](const StationModule& module,double x,double width) {
+        const auto edges=bridgeGlassProfile(module,.002);
+        const auto inside=bridgeGlassProfile(module,-.036);
+        const double half=width*.5, inset=.009;
+        for (size_t n=1;n<inside.size();++n) {
+            const auto a=inside[n-1],b=inside[n];
+            deck.face({x-half+inset,a},{x+half-inset,a},{x+half-inset,b},{x-half+inset,b},bridgeFrame);
+            for (double side : {-1.,1.}) {
+                const double edge=x+side*half, flat=edge-side*inset;
+                deck.face({edge,edges[n-1]},{flat,a},{flat,b},{edge,edges[n]},bridgeEdge);
+            }
+        }
+        for (double side : {-1.,1.}) {
+            const double z=centre+side*(module.floor.back-centre-.026);
+            deck.beam({x,floor+.033,z},{x,glassSill,z},width+.018,.048,bridgeFrame);
+        }
+    };
+    const auto annexEntrance=[&](const StationAnnex& annex,double roof) {
+        const double z=annex.insideWall();
+        const double left=annex.doorwayLeft,right=annex.doorwayRight;
+        sideWall(left,right,z,annexDoorTop,roof,liner);
+        for (double x : {left,right}) {
+            deck.beam({x,floor,z},{x,annexDoorTop,z},.117,.10,frame);
+            for (double side : {-1.,1.})
+                deck.beam({x,-.62,z+side*.069},{x,.68,z+side*.069},.018,.023,railLight,.78f);
+        }
+        deck.beam({left,annexDoorTop,z},{right,annexDoorTop,z},.112,.092,frame);
+        for (double side : {-1.,1.}) {
+            const double mark=z+side*.18;
+            deck.beam({left+.08,floor+.015,mark},{right-.08,floor+.015,mark},.024,.016,railLight,.73f);
+        }
+    };
+    const auto portal=[&](double x,double half,double height) {
+        for (double z : {centre-half,centre+half}) {
+            deck.beam({x,floor,z},{x,height,z},.095,.105,frame);
+            deck.beam({x+.061,-.74,z},{x+.061,.60,z},.016,.022,railLight,.87f);
+        }
+        deck.beam({x,height,centre-half},{x,height,centre+half},.086,.094,frame);
+        deck.beam({x,height+.077,centre-half},{x,height+.077,centre+half},.104,.077,liner);
+        for (double z : {centre-half+.105,centre+half-.105}) {
+            deck.beam({x+.062,height+.083,z-.037},{x+.062,height+.083,z+.037},.018,.023,railLight,.73f);
+            deck.beam({x-.062,height+.083,z-.037},{x-.062,height+.083,z+.037},.018,.023,railLight,.73f);
+        }
+    };
+    const auto box=[&](const DeckArea& a,double base,double top,const CabinFinish& finish) {
+        const double z=(a.front+a.back)*.5;
+        deck.beam({a.left,(base+top)*.5,z},{a.right,(base+top)*.5,z},a.back-a.front,top-base,finish);
+    };
+    const auto planter=[&](double x,double y,double z) {
+        deck.beam({x,y,z},{x,y+.075,z},.232,.236,frame);
+        deck.beam({x,y+.07,z},{x,y+.23,z},.278,.282,wallPlate);
+        deck.beam({x,y+.217,z},{x,y+.249,z},.289,.290,painted);
+        deck.beam({x,y+.245,z},{x,y+.251,z},.232,.233,liner);
+        for (unsigned branch=0;branch<9;++branch) {
+            const double angle=branch*2.39996323;
+            const glm::dvec3 root(x,y+.244,z);
+            const glm::dvec3 along(std::cos(angle),0,std::sin(angle));
+            const glm::dvec3 across(along.z,0,-along.x);
+            const double height=.18+detail.unit(branch+125)*.20;
+            const auto tip=root+along*(.08+detail.unit(branch+146)*.15)+glm::dvec3(0,height,0);
+            const auto elbow=glm::mix(root,tip,.43)+glm::dvec3(0,.039,0);
+            deck.beam(root+along*.02,elbow,.011,.011,plants);
+            const auto ridge=glm::mix(elbow,tip,.56)+glm::dvec3(0,.025,0);
+            const auto leaf=across*(.028+detail.unit(branch+167)*.03);
+            deck.face(elbow,ridge+leaf,tip,ridge,leaves);
+            deck.face(elbow,ridge,tip,ridge-leaf,plants);
+        }
+    };
+    const auto outfit=[&](const StationModule& room) {
+        for (const auto& item : room.fixtures) {
+            if (item==layout.freightPad) {
+                box(item,floor,-.91,liner);
+                for (double z : {item.front+.027,item.back-.027}) {
+                    deck.beam({item.left+.07,-.903,z},{item.right-.07,-.903,z},.040,.027,frame);
+                    for (double x : {item.left+.18,item.right-.20})
+                        deck.beam({x-.11,-.884,z},{x+.11,-.884,z},.035,.015,safety,.85f);
+                }
+                for (double x : {item.left+.035,item.right-.035})
+                    deck.beam({x,-.902,item.front+.063},{x,-.902,item.back-.063},.044,.037,frame);
+                continue;
+            }
+            const double inner=item.front>centre?item.front:item.back;
+            const double middle=(item.front+item.back)*.5;
+            const double side=middle>centre?1.:-1.;
+            const double length=item.right-item.left;
+            switch (room.kind) {
+            case StationModuleKind::Habitat:
+                box(item,floor,-.55,bulkhead);
+                deck.beam({item.left,-.50,middle},{item.right,-.50,middle},.48,.095,liner);
+                deck.beam({item.left+.05,-.515,inner+side*.033},{item.right-.05,-.515,inner+side*.033},.045,.053,wallPlate);
+                for (unsigned i=0;i<unsigned(length/.29);++i) {
+                    const double x=item.left+.17+i*.29;
+                    const double rise=.52+detail.unit(60+i)*.30;
+                    deck.beam({x,-.53,middle},{x+.045,rise-.46,middle-side*.035},.026,.035,plants);
+                    for (double tilt : {-.13,.13})
+                        deck.face({x,-.28,middle},{x+tilt,rise-.62,middle+side*.15},
+                                  {x+tilt*.68,rise-.44,middle+side*.14},{x+.023,-.22,middle},
+                                  i%2?plants:leaves);
+                }
+                deck.beam({item.left+.15,1.18,middle},{item.right-.15,1.18,middle},.16,.065,frame);
+                deck.beam({item.left+.24,1.137,middle},{item.right-.24,1.137,middle},.061,.031,warmLight,.93f);
+                break;
+            case StationModuleKind::Concourse:
+                for (double x : {item.left+.13,item.right-.13})
+                    deck.beam({x,floor+.02,middle},{x,-.68,middle},.25,.066,frame);
+                deck.beam({item.left,-.665,middle},{item.right,-.665,middle},.49,.115,upholstery);
+                deck.beam({item.left,-.38,middle+side*.19},{item.right,-.38,middle+side*.19},.15,.38,painted);
+                for (double x=(item.left+item.right)*.5-.21;x<(item.left+item.right)*.5+.24;x+=.42)
+                    deck.beam({x,-.52,inner+.03*side},{x,-.52,middle+side*.17},.035,.035,frame);
+                break;
+            case StationModuleKind::Laboratory:
+                box(item,floor,-.42,liner);
+                box(item,-.42,-.35,worktop);
+                for (double x=item.left+.29;x<item.right-.26;x+=.68) {
+                    const double face=inner+side*.11;
+                    deck.beam({x,-.37,middle},{x,.20,middle},.31,.31,frame);
+                    const CabinSurface console{{x+side*.153,.21,face},{-side*.306,0,0},{0,-.257,0}};
+                    deck.panel(console,.024,.010,cabinScreen,frame);
+                    for (unsigned row=0;row<4;++row)
+                        deck.beam({x-.105,.165-row*.051,face-side*.017},
+                                  {x-.058+.025*double((row*3+unsigned(std::abs(x)))%5),.165-row*.051,face-side*.017},
+                                  .008,.009,railLight,.65f);
+                    deck.beam({x-.14,-.292,middle},{x+.14,-.292,middle},.18,.092,painted);
+                    deck.beam({x-.17,-.69,inner+side*.03},{x+.17,-.69,inner+side*.03},.028,.040,frame);
+                }
+                break;
+            default: {
+                const double top=room.kind==StationModuleKind::Freight?-.18:.44;
+                const unsigned sections=std::max(2u,unsigned(length/.58));
+                for (unsigned n=0;n<sections;++n) {
+                    const double a=std::lerp(item.left,item.right,double(n)/sections);
+                    const double b=std::lerp(item.left,item.right,double(n+1)/sections);
+                    box({a+.017,item.front,b-.017,item.back},floor,top,n%2?frame:bulkhead);
+                    deck.beam({a+.048,top-.065,middle},{b-.048,top-.065,middle},item.back-item.front-.085,.105,painted);
+                    const double z=inner+side*.011;
+                    for (double x : {a+.094,b-.094})
+                        deck.beam({x,floor+.13,z},{x,top-.11,z},.035,.042,cabinRubber);
+                    deck.beam({a+.124,top-.26,z},{b-.124,top-.26,z},.030,.040,liner);
+                    deck.beam({a+.13,top-.151,z},{a+.163,top-.151,z},.019,.019,railLight,.69f);
+                }
+                break;
+            }
+            }
+        }
+    };
+    for (size_t i=0;i<layout.modules.size();++i) {
+        const auto& room=layout.modules[i];
+        const auto [end,low,start,high]=room.floor;
+        const bool bridge=room.kind==StationModuleKind::Bridge;
+        const bool airlock=room.kind==StationModuleKind::Airlock;
+        const double roof=room.ceiling;
+        deck.face({end,floor,low},{end,floor,high},{start,floor,high},{start,floor,low},tread);
+        if (!bridge)
+            deck.face({start,roof,low},{start,roof,high},{end,roof,high},{end,roof,low},liner);
+        const double wallTop=bridge?glassSill:roof;
+        const std::array sideRooms{layout.annexAt(i,-1),layout.annexAt(i,1)};
+        for (size_t wall=0;wall<sideRooms.size();++wall) {
+            const double z=wall==0?low:high;
+            if (const auto* annex=sideRooms[wall]) {
+                sideWall(end,annex->doorwayLeft,z,floor,wallTop,bulkhead);
+                sideWall(annex->doorwayRight,start,z,floor,wallTop,bulkhead);
+                annexEntrance(*annex,roof);
+            } else {
+                sideWall(end,start,z,floor,wallTop,bridge?bridgeLiner:bulkhead);
+            }
+        }
+        if (bridge) {
+            bridgeRib(room,start,layout.modules[i-1].kind==StationModuleKind::Airlock?.085:bridgeRibWidth);
+            for (double side : {-1.,1.}) {
+                const double z=centre+side*(high-centre-.023);
+                deck.beam({end,glassSill-.022,z},{start,glassSill-.022,z},.087,.043,bridgeFrame);
+                deck.beam({end,glassSill,z},{start,glassSill,z},.050,.015,bridgeEdge);
+                const double lightZ=centre+side*(high-centre-.065);
+                deck.beam({end+.052,glassSill-.071,lightZ},{start-.052,glassSill-.071,lightZ},.012,.013,bridgeLight,.64f);
+            }
+        }
+        if (i>0) {
+            const auto& previous=layout.modules[i-1];
+            const double opening=std::min(high,previous.floor.back)-centre;
+            const double minimum=std::min(low,previous.floor.front), maximum=std::max(high,previous.floor.back);
+            const double header=previous.kind==StationModuleKind::Airlock?doorTop:std::min(roof,previous.ceiling);
+            const double top=std::max(roof,previous.ceiling);
+            endWall(start,minimum,centre-opening,floor,top);
+            endWall(start,centre+opening,maximum,floor,top);
+            if (previous.kind==StationModuleKind::Bridge && !bridge) {
+                const auto profile=bridgeGlassProfile(previous);
+                for (size_t n=2;n+1<profile.size();++n) {
+                    const auto a=profile[n-1],b=profile[n];
+                    deck.face({start,a},{start,top,a.y},{start,top,b.y},{start,b},bridgeLiner);
+                }
+                bridgeRib(previous,start,.093);
+            } else {
+                endWall(start,centre-opening,centre+opening,header,top);
+                if (previous.kind!=room.kind) portal(start,opening,header-.09);
+            }
+        }
+        if (airlock) {
+            deck.beam({end+.37,1.13,centre},{start-.38,1.13,centre},.22,.095,frame);
+            deck.beam({end+.45,1.077,centre},{start-.46,1.077,centre},.086,.025,warmLight,.83f);
+            for (double side : {-1.,1.}) {
+                const double z=centre+side*(doorHalf-.020);
+                const CabinSurface plate{{side<0?end+.33:start-.33,.47,z},
+                                         {-side*(start-end-.66),0,0},{0,-.80,0}};
+                deck.panel(plate,.046,.013,liner,frame);
+                deck.beam({end+.40,-.48,z},{start-.40,-.48,z},.035,.041,frame);
+                deck.beam({end+.48,-.47,z-side*.021},{start-.48,-.47,z-side*.021},.015,.017,safety,.57f);
+            }
+            continue;
+        }
+        for (double x=start-ribPitch*.5;x>end;x-=ribPitch) {
+            const double span=std::min({ribPitch*.5,x-end,start-x});
+            const double walkHalf=bridge?.48:.62;
+            deck.panel({{x-span+.040,floor+.006,centre-walkHalf},{2*span-.080,0,0},{0,0,2*walkHalf}},
+                       .022,.003,bridge?bridgeWalk:floorPanel,bridge?bridgeLiner:liner);
+            if (!bridge) {
+                deck.beam({x,roof-.10,low+.095},{x,roof-.10,high-.095},.121,.145,liner);
+                deck.beam({x,roof-.167,low+.26},{x,roof-.167,high-.26},.056,.052,frame);
+                for (double side : {-1.,1.}) {
+                    const double z=centre+side*(high-centre-.24);
+                    deck.beam({x+span,roof-.254,z},{x-span,roof-.254,z},.052,.057,frame);
+                    deck.beam({x+span,roof-.275,z-side*.084},{x-span,roof-.275,z-side*.084},.029,.037,painted);
+                }
+            }
+            for (double side : {-1.,1.}) {
+                const auto wall=centre+side*(high-centre-.047);
+                const auto lane=centre+side*(bridge?.56:.69);
+                const double panelStart=x+side*(span-.074), panelWidth=-side*(2*span-.148);
+                const auto* annex=sideRooms[side>0?1:0];
+                const bool atDoor=annex&&x+span>annex->doorwayLeft-.10&&x-span<annex->doorwayRight+.10;
+                if (!bridge) {
+                    if (!atDoor) {
+                        deck.beam({x+span-.028,floor,wall},{x+span-.028,roof-.12,wall},.122,.092,frame);
+                        const bool habitat=room.kind==StationModuleKind::Habitat||room.kind==StationModuleKind::Concourse;
+                        const bool service=room.kind==StationModuleKind::Workshop||room.kind==StationModuleKind::Vault;
+                        const CabinSurface panel{{panelStart,roof-.37,wall},{panelWidth,0,0},{0,-(roof-.55),0}};
+                        deck.panel(panel,.045,.017,service?bulkhead:habitat?acoustics:wallPlate,frame);
+                        const CabinSurface skirting{{panelStart,-.31,wall},{panelWidth,0,0},{0,-.68,0}};
+                        deck.panel(skirting,.031,.014,habitat?painted:liner,frame);
+                        deck.beam({x-span+.075,-.211,wall},{x+span-.074,-.211,wall},.033,.046,frame);
+                        deck.beam({x-span+.098,roof-.408,wall-side*.015},{x+span-.098,roof-.408,wall-side*.015},
+                                  .024,.045,painted);
+                        for (double slot : {-.52,-.36,.36,.52})
+                            deck.beam({x+slot,roof-.34,wall-side*.019},{x+slot,roof-.225,wall-side*.019},
+                                      .018,.026,liner);
+                    }
+                } else {
+                    const CabinSurface plate{{panelStart,glassSill-.078,wall+side*.028},
+                                             {panelWidth,0,0},{0,-.26,0}};
+                    deck.panel(plate,.026,.009,bridgeLiner,bridgeFrame);
+                    deck.beam({x-span+.081,glassSill-.066,wall},{x+span-.081,glassSill-.066,wall},
+                              .019,.018,bridgeFrame);
+                }
+                deck.beam({x+span-.09,floor+.018,lane},{x-span+.09,floor+.018,lane},.035,.021,liner);
+                deck.beam({x+span-.16,floor+.030,lane},{x-span+.16,floor+.030,lane},
+                          bridge?.010:.016,.011,bridge?bridgeLight:railLight,bridge?.42f:.80f);
+                if (!bridge) {
+                    const auto lamp=centre+side*std::min(1.20,high-centre-.37);
+                    const auto& light=room.kind==StationModuleKind::Freight||room.kind==StationModuleKind::Workshop
+                                      ?warmLight:workLight;
+                    deck.beam({x,roof-.209,lamp-.34},{x,roof-.209,lamp+.34},.119,.036,frame);
+                    deck.beam({x,roof-.234,lamp-.26},{x,roof-.234,lamp+.26},.072,.022,light,.91f);
+                }
+            }
+        }
+        outfit(room);
+    }
+    for (const auto& annex : layout.annexes) {
+        const auto& room=annex.room;
+        const auto [left,front,right,back]=room.floor;
+        const double z=annex.outsideWall(), attach=annex.insideWall(), side=annex.side;
+        const double roof=room.ceiling, width=right-left;
+        const bool observation=annex.panoramic();
+        const auto& lamp=observation?warmLight:workLight;
+        const auto taskLamp=stationTaskLamp(annex);
+        deck.face({left,floor,front},{left,floor,back},{right,floor,back},{right,floor,front},tread);
+        deck.face({left,roof,front},{right,roof,front},{right,roof,back},{left,roof,back},liner);
+        endWall(left,front,back,floor,roof);
+        endWall(right,front,back,floor,roof);
+        sideWall(left,right,attach,layout.modules[annex.parent].ceiling,roof,liner);
+        for (double end : {left,right}) {
+            const double towards=end==left?1.:-1.;
+            const double start=towards>0.?back-.19:front+.19;
+            const double span=(back-front-.38)*-towards;
+            const CabinSurface dado{{end+towards*.022,.18,start},{0,0,span},{0,-1.02,0}};
+            deck.panel(dado,.052,.029,bulkhead,frame);
+            const CabinSurface upper{{end+towards*.022,roof-.40,start},{0,0,span},{0,-(roof-.76),0}};
+            deck.panel(upper,.052,.024,observation?acoustics:wallPlate,frame);
+            deck.beam({end+towards*.056,.25,front+.23},{end+towards*.056,.25,back-.23},.049,.069,frame);
+            if (observation) {
+                deck.beam({end+towards*.09,.285,front+.32},{end+towards*.09,.285,back-.29},
+                          .012,.013,warmLight,.48f);
+                for (double z=front+.51;z<back-.43;z+=.31)
+                    deck.beam({end+towards*.049,.41,z},{end+towards*.049,roof-.48,z},
+                              .012,.008,stitching);
+            }
+        }
+        if (observation) {
+            const CabinFinish carpet{glm::mix(colours.liner,colours.fabric,.54f)*.81f,CabinMaterial::Carpet};
+            const double carpetLeft=left+.66,carpetRight=right-.66;
+            const double carpetFront=front+.45,carpetBack=back-.45;
+            const CabinSurface carpetFace{{carpetLeft,floor+.009,carpetFront},
+                                         {carpetRight-carpetLeft,0,0},{0,0,carpetBack-carpetFront}};
+            deck.panel(carpetFace,.065,.008,carpet,stitching);
+            for (double edge : {carpetLeft+.13,carpetRight-.13}) {
+                deck.beam({edge,floor+.020,carpetFront+.12},{edge,floor+.020,carpetBack-.12},
+                          .021,.008,upholstery);
+                deck.beam({edge,floor+.023,carpetFront+.14},{edge,floor+.023,carpetBack-.14},
+                          .008,.004,frame);
+            }
+            sideWall(left,right,z,floor,panoramaSill,bulkhead);
+            sideWall(left,right,z,panoramaHead,roof,bulkhead);
+            sideWall(left,left+panoramaInset,z,panoramaSill,panoramaHead,bulkhead);
+            sideWall(right-panoramaInset,right,z,panoramaSill,panoramaHead,bulkhead);
+            for (double y : {panoramaSill,panoramaHead}) {
+                deck.beam({left+.04,y,z-side*.028},{right-.04,y,z-side*.028},.105,.125,frame);
+                deck.beam({left+.18,y,z-side*.092},{right-.18,y,z-side*.092},.026,.021,warmLight,.58f);
+            }
+            for (double p : {0.,1./3,2./3,1.}) {
+                const double x=std::lerp(left+panoramaInset,right-panoramaInset,p);
+                deck.beam({x,panoramaSill,z-side*.041},{x,panoramaHead,z-side*.041},.074,.085,frame);
+                for (const double y : {panoramaSill+.16,panoramaHead-.16})
+                    deck.beam({x,y,z-side*.095},{x,y,z-side*.111},.033,.033,fastener);
+            }
+        } else {
+            sideWall(left,right,z,floor,roof,bulkhead);
+            const CabinSurface panel{{side>0?right-.21:left+.21,1.39,z-side*.032},
+                                     {-side*(width-.42),0,0},{0,-1.31,0}};
+            deck.panel(panel,.064,.046,painted,frame);
+            const double mount=z-side*.095;
+            deck.beam({left+.29,.24,mount},{right-.29,.24,mount},.056,.069,painted);
+            if (room.kind==StationModuleKind::Analysis) {
+                deck.instrument(stationSurveyScreen(annex),true);
+                for (double x : {left+.66,right-.66}) {
+                    const double rack=z-side*.071;
+                    deck.beam({x,.69,rack},{x,1.17,rack},.43,.064,liner);
+                    for (unsigned sample=0;sample<3;++sample) {
+                        const double at=x+(double(sample)-1.)*.127;
+                        const CabinFinish cartridge{glm::mix(wallPlate.colour,accent,.17f+sample*.20f),
+                                                    CabinMaterial::Ceramic};
+                        deck.beam({at,.73,rack},{at,1.11,rack},.089,.084,cartridge);
+                        deck.beam({at,.76,rack},{at,.80,rack},.094,.094,frame);
+                        deck.beam({at,1.05,rack},{at,1.12,rack},.097,.097,frame);
+                    }
+                }
+            } else if (room.kind==StationModuleKind::Engineering) {
+                for (double y : {.53,.76,1.00,1.21}) {
+                    const double pipe=z-side*.068;
+                    deck.beam({left+.37,y,pipe},{right-.37,y,pipe},.073,.083,cabinCopper);
+                    for (double x : {left+.53,(left+right)*.5,right-.53})
+                        deck.beam({x-.06,y,pipe},{x+.06,y,pipe},.102,.111,frame);
+                }
+            } else {
+                for (double x=left+.67;x<right-.40;x+=.69) {
+                    const auto face=z-side*.064;
+                    deck.beam({x,.44,face},{x,1.18,face},.56,.070,liner);
+                    for (double y : {.53,.75,.97}) {
+                        deck.beam({x-.245,y,face},{x+.245,y,face},.071,.165,bulkhead);
+                        deck.beam({x-.09,y+.008,face-side*.041},{x+.09,y+.008,face-side*.041},.025,.029,painted);
+                    }
+                }
+            }
+        }
+        for (double x : {left+annexStripInset,right-annexStripInset}) {
+            deck.beam({x,roof-.15,front+.11},{x,roof-.15,back-.11},.119,.14,frame);
+            deck.beam({x,roof-annexStripDrop,front+annexStripEnd},{x,roof-annexStripDrop,back-annexStripEnd},
+                      .057,.024,lamp,observation?.58f:.68f);
+        }
+        const double doorMid=(annex.doorwayLeft+annex.doorwayRight)*.5;
+        const double entry=attach+side*.18, end=observation?attach+side*.35:z-side*.40;
+        for (double x : {doorMid-.37,doorMid+.37}) {
+            deck.beam({x,floor+.015,entry},{x,floor+.015,end},.043,.021,liner);
+            deck.beam({x,floor+.028,entry+side*.038},{x,floor+.028,end-side*.038},.018,.014,railLight,.71f);
+        }
+        for (size_t i=0;i<room.fixtures.size();++i) {
+            const auto& item=room.fixtures[i];
+            const double x=(item.left+item.right)*.5,zMid=(item.front+item.back)*.5;
+            if (observation && i==0) {
+                box(item,floor,-.71,liner);
+                box(item,-.71,-.64,worktop);
+                const double near=side>0?item.front:item.back;
+                const double far=side>0?item.back:item.front;
+                planter(x,-.64,near+side*.36);
+                const double pivot=far-side*.42;
+                deck.beam({x,-.63,pivot},{x,-.31,pivot},.218,.204,frame);
+                deck.beam({x-.16,-.295,pivot},{x+.16,-.295,pivot},.14,.15,painted);
+                const glm::dvec3 backEnd(x,-.28,pivot-side*.32),frontEnd(x,-.088,pivot+side*.32);
+                const auto axis=glm::normalize(frontEnd-backEnd);
+                deck.beam(backEnd,frontEnd,.206,.212,frame);
+                deck.beam(backEnd+axis*.13,frontEnd-axis*.072,.224,.23,painted);
+                deck.beam(frontEnd-axis*.082,frontEnd,.258,.260,liner);
+                deck.beam(frontEnd-axis*.020,frontEnd+axis*.003,.216,.219,cabinScreen);
+                deck.beam(backEnd-axis*.042,backEnd+axis*.08,.130,.139,liner);
+                deck.beam(backEnd-axis*.082,backEnd-axis*.039,.156,.153,cabinRubber);
+                deck.beam({x+.079,-.38,pivot-.048},{x+.079,-.38,pivot+.045},.013,.021,railLight,.58f);
+                continue;
+            }
+            if (observation && i==1) {
+                const double towards=x<doorMid?1.:-1.;
+                const double backX=x-towards*.238;
+                const double frontX=x+towards*.312;
+                box(item,floor,-.77,liner);
+                deck.beam({frontX,-.78,item.front+.065},{frontX,-.78,item.back-.065},.028,.061,frame);
+                const unsigned seats=3+unsigned(item.back-item.front>2.63);
+                for (unsigned seat=0;seat<seats;++seat) {
+                    const double a=std::lerp(item.front+.045,item.back-.045,double(seat)/seats);
+                    const double b=std::lerp(item.front+.045,item.back-.045,double(seat+1)/seats);
+                    deck.beam({x,-.68,a+.016},{x,-.68,b-.016},.582,.178,upholstery);
+                    deck.beam({backX,-.383,a+.016},{backX,-.383,b-.016},.191,.486,upholstery);
+                    deck.beam({frontX-.044*towards,-.603,a+.061},{frontX-.044*towards,-.603,b-.061},
+                              .013,.010,stitching);
+                }
+                for (double arm : {item.front+.056,item.back-.056})
+                    deck.beam({backX,-.485,arm},{frontX,-.485,arm},.099,.176,frame);
+                continue;
+            }
+            if (observation) {
+                deck.beam({x,floor+.08,zMid},{x,-.51,zMid},.132,.127,frame);
+                box(item,-.54,-.46,worktop);
+                deck.beam({x,-.456,zMid},{x,-.42,zMid},.147,.154,frame);
+                deck.beam({x,-.42,zMid},{x,-.21,zMid},.036,.037,frame);
+                const auto bulb=taskLamp.position;
+                deck.beam(bulb+glm::dvec3(0,-.011,0),bulb+glm::dvec3(0,.058,0),.152,.151,readingLight,.82f);
+                deck.beam(bulb+glm::dvec3(0,.059,0),bulb+glm::dvec3(0,.086,0),.188,.192,painted);
+                const DeckArea book{x-.095,zMid-.264,x+.063,zMid-.116};
+                box(book,-.46,-.432,wallPlate);
+                box({book.left-.004,book.front-.004,book.right+.004,book.back+.004},-.435,-.426,upholstery);
+                const double cupX=x+.093,cupZ=zMid+.196;
+                deck.beam({cupX,-.46,cupZ},{cupX,-.359,cupZ},.069,.069,wallPlate);
+                deck.beam({cupX,-.359,cupZ},{cupX,-.346,cupZ},.076,.075,frame);
+                deck.beam({cupX,-.345,cupZ},{cupX,-.343,cupZ},.053,.054,liner);
+                continue;
+            }
+            const bool cabinet=room.kind==StationModuleKind::Engineering||room.kind==StationModuleKind::Archive;
+            const double top=cabinet?.51:-.37;
+            box(item,floor,top,cabinet?frame:liner);
+            const double face=i==0?item.right-.018:item.left+.018;
+            if (cabinet) {
+                for (double shelf : {-.81,-.43,-.05,.32}) {
+                    deck.beam({face,shelf,item.front+.086},{face,shelf,item.back-.086},.044,.11,bulkhead);
+                    deck.beam({face,shelf+.06,zMid-.13},{face,shelf+.06,zMid+.13},.030,.026,painted);
+                }
+            } else {
+                box(item,top,top+.066,worktop);
+                if (room.kind==StationModuleKind::Analysis && i==0) {
+                    const double workZ=zMid+.21, trayZ=zMid-.42;
+                    const auto light=taskLamp.position;
+                    const auto span=glm::dvec3(0,0,taskLamp.halfLength);
+                    const auto housing=glm::dvec3(0,.023,0);
+                    deck.beam(light-span+housing,light+span+housing,.137,.051,frame);
+                    deck.beam(light-span*.94,light+span*.94,.091,.020,inspectionLight,.83f);
+                    for (const double offset : {-taskLamp.halfLength*.80,taskLamp.halfLength*.80})
+                        deck.beam({left+.067,light.y+.047,light.z+offset},
+                                  {light.x,light.y+.047,light.z+offset},.035,.041,frame);
+                    deck.beam({x,top+.094,workZ-.25},{x,top+.094,workZ+.26},.51,.076,frame);
+                    deck.beam({x-.116,-.24,workZ},{x-.116,.255,workZ},.089,.091,painted);
+                    deck.beam({x-.116,.247,workZ},{x+.127,.247,workZ},.134,.115,frame);
+                    deck.beam({x+.096,.253,workZ},{x+.096,-.12,workZ},.115,.12,liner);
+                    deck.beam({x+.096,-.125,workZ},{x+.096,-.154,workZ},.078,.078,railLight,.45f);
+                    deck.beam({x+.096,-.213,workZ-.17},{x+.096,-.213,workZ+.17},.218,.046,wallPlate);
+                    deck.beam({x,-.247,trayZ-.16},{x,-.247,trayZ+.16},.284,.069,painted);
+                    for (double dx : {-.09,0.,.09}) {
+                        deck.beam({x+dx,-.224,trayZ},{x+dx,-.036,trayZ},.052,.054,wallPlate);
+                        deck.beam({x+dx,-.062,trayZ},{x+dx,-.024,trayZ},.063,.064,frame);
+                    }
+                    continue;
+                }
+                const double displayX=x+(i==0?.032:-.032);
+                const CabinSurface console{{displayX,.265,zMid+(i==0?.33:-.33)},
+                                           {0,0,i==0?-.66:.66},{0,-.40,0}};
+                deck.instrument(console,true);
+                for (unsigned row=0;row<4;++row) {
+                    const double y=.185-row*.063;
+                    deck.beam({displayX+(i==0?.018:-.018),y,zMid-.20},
+                              {displayX+(i==0?.018:-.018),y,zMid+.17-double(row%2)*.13},
+                              .010,.012,railLight,.59f);
+                }
+            }
+        }
+    }
+    const auto& bay=layout.freightBay();
+    endWall(bay.floor.left,bay.floor.front,bay.floor.back,floor,bay.ceiling);
+    const auto dispatch=stationFreightScreen(layout);
+    deck.instrument(dispatch,true);
+    const double x=bay.floor.left+.084;
+    deck.beam({x,1.63,centre-1.09},{x,1.63,centre+1.09},.121,.21,frame);
+    deck.beam({x+.068,1.62,centre-.88},{x+.068,1.62,centre+.88},.012,.035,warmLight,.74f);
+    for (double side : {-1.,1.}) {
+        const double z=centre+side*1.12;
+        deck.beam({x,floor,z},{x,1.73,z},.146,.135,liner);
+        deck.beam({x+.074,.34,z},{x+.074,1.30,z},.019,.019,railLight,.74f);
+        const auto pad=layout.freightPad;
+        const double track=centre+side*.81;
+        deck.beam({pad.left,bay.ceiling-.30,track},{pad.right+1.22,bay.ceiling-.30,track},.078,.12,frame);
+        deck.beam({pad.left+.08,bay.ceiling-.369,track},{pad.right+1.13,bay.ceiling-.369,track},
+                  .025,.024,railLight,.64f);
+    }
+    const double hoist=layout.freightPad.left+.57;
+    deck.beam({hoist,bay.ceiling-.39,centre-.84},{hoist,bay.ceiling-.39,centre+.84},.136,.084,liner);
+    deck.beam({hoist,bay.ceiling-.45,centre-.27},{hoist,bay.ceiling-.45,centre+.27},.15,.056,frame);
+    for (double side : {-1.,1.})
+        deck.beam({hoist,bay.ceiling-.46,centre+side*.16},{hoist,bay.ceiling-.62,centre+side*.21},.034,.036,safety,.44f);
+    deck.mesh.compact();
+    return std::move(deck.mesh);
+}
+
+Mesh xalariaAirlockDoor() {
+    using namespace stationDeck;
+    const CabinFinish shell{{.34f,.38f,.38f},CabinMaterial::Brushed};
+    const CabinFinish inset{{.11f,.17f,.18f},CabinMaterial::Painted};
+    const CabinFinish hazard{{1.f,.68f,.26f},CabinMaterial::Display};
+    CabinBuilder door;
+    door.beam({0,(shipDeck::deckFloor+doorTop)*.5,centre-doorHalf+.008},
+              {0,(shipDeck::deckFloor+doorTop)*.5,centre+doorHalf-.008},
+              .13,doorTop-shipDeck::deckFloor,shell);
+    for (double side : {-1.,1.}) {
+        const double x=side*.069;
+        door.beam({x,-.12,centre-.35},{x,-.12,centre+.35},.040,1.61,inset);
+        door.beam({x+side*.023,.46,centre-.31},{x+side*.023,.46,centre+.31},.021,.039,hazard,.85f);
+        for (double z : {centre-.29,centre+.29})
+            door.beam({x+side*.019,-.77,z},{x+side*.019,.30,z},.036,.031,cabinTrim);
+    }
+    door.mesh.compact();
+    return std::move(door.mesh);
+}
+
+Mesh xalariaAirlockSill() {
+    using namespace stationDeck;
+    CabinBuilder sill;
+    sill.beam({0,floor+.015,centre-doorHalf},{0,floor+.015,centre+doorHalf},.27,.027,cabinTrim);
+    for (double x : {-.088,.088})
+        sill.beam({x,floor+.027,centre-doorHalf+.018},{x,floor+.027,centre+doorHalf-.018},
+                  .018,.007,cabinRubber);
+    sill.mesh.compact();
+    return std::move(sill.mesh);
+}
+
+Mesh xalariaAirlockIndicators() {
+    using namespace stationDeck;
+    const CabinFinish diffuser{{.69f,.73f,.70f},CabinMaterial::Display};
+    CabinBuilder lights;
+    lights.beam({0,doorTop+.063,centre-.13},{0,doorTop+.063,centre+.13},.219,.024,diffuser,.65f);
+    lights.beam({0,floor+.031,centre-.31},{0,floor+.031,centre+.31},.027,.006,diffuser,.52f);
+    for (double z : {centre-doorHalf+.065,centre+doorHalf-.065})
+        lights.beam({0,.38,z},{0,.55,z},.254,.034,diffuser,.73f);
+    lights.mesh.compact();
+    return std::move(lights.mesh);
+}
+
+Mesh xalariaCharterCrate(const StationLayout& layout) {
+    using namespace stationDeck;
+    const auto& freightPad=layout.freightPad;
+    CabinBuilder cargo;
+    const CabinFinish casework{{.58f,.44f,.23f},CabinMaterial::Painted};
+    const CabinFinish lock{{.29f,1.f,.68f},CabinMaterial::Display};
+    cargo.beam({freightPad.left+.09,-.35,centre},{freightPad.right-.10,-.35,centre},.83,1.07,casework);
+    for (double z : {centre-.29,centre+.29}) {
+        cargo.beam({freightPad.left+.10,.188,z},{freightPad.right-.10,.188,z},.089,.044,cabinTrim);
+        cargo.beam({freightPad.right-.087,-.74,z},{freightPad.right-.087,.189,z},.074,.041,cabinFrame);
+    }
+    const double face=freightPad.right-.082;
+    cargo.beam({face,-.291,centre-.208},{face,-.291,centre+.208},.058,.37,cabinFrame);
+    cargo.beam({face+.032,-.20,centre-.141},{face+.032,-.20,centre+.141},.017,.095,cabinScreen);
+    for (double z : {-.102,-.047,.008,.063})
+        cargo.beam({face+.042,-.20,centre+z},{face+.042,-.20,centre+z+.020},.012,.025,lock,.77f);
+    cargo.beam({face+.037,-.401,centre-.12},{face+.037,-.401,centre+.12},.041,.039,cabinTrim);
+    for (double z : {-.334,.334})
+        cargo.beam({face,-.713,centre+z-.046},{face,-.713,centre+z+.046},.035,.081,cabinCopper);
+    cargo.mesh.compact();
+    return std::move(cargo.mesh);
+}
+
+namespace {
+constexpr double terminalWidth = 360, terminalInset = 18, terminalRight = terminalWidth-terminalInset;
+constexpr glm::vec3 terminalMuted{.61f,.74f,.74f}, terminalRule{.12f,.25f,.25f};
+
+CabinDisplay cabinDisplay(const CabinSurface& face, bool background = true) {
+    const auto scale = glm::length(face.right)/terminalWidth;
+    CabinDisplay display;
+    display.size = {terminalWidth,glm::length(face.down)/scale};
+    display.model = {glm::vec4(face.right/terminalWidth,0),
+                     glm::vec4(face.down/display.size.y,0),glm::vec4(face.normal(),0),
+                     glm::vec4(face.origin+face.normal()*.005,1)};
+    if (background)
+        rect(display.content.panels,0,0,terminalWidth,display.size.y,{.022,.044,.050});
+    return display;
+}
+
+CabinDisplay deckDisplay(const CabinSurface& face, std::string_view title, glm::vec3 accent) {
+    auto display = cabinDisplay(face);
+    auto& screen = display.content;
+    rect(screen.panels,0,0,terminalWidth,3,accent*.65f);
+    rect(screen.panels,terminalInset,43,terminalRight-terminalInset,1,terminalRule);
+    atlasText(screen,title,terminalInset,13,211,22,accent);
+    return display;
+}
+
+void terminalText(CockpitOverlay& screen, std::string_view label, double x, double y, double width,
+                  double size, glm::vec3 colour, bool rightAligned = false) {
+    const double advance = atlasTextWidth(label,size);
+    if (advance > width)
+        size = std::max(15.,size*width/advance);
+    if (rightAligned) {
+        const double spare = std::max(0.,width-atlasTextWidth(label,size));
+        x += spare;
+        width -= spare;
+    }
+    atlasText(screen,label,x,y,width+.001,size,colour);
+}
+
+void terminalBar(CockpitOverlay& screen, double y, double fraction, glm::vec3 accent) {
+    constexpr int segments = 12;
+    constexpr double pitch = (terminalRight-terminalInset)/segments, gap = 3;
+    for (int i=0;i<segments;++i) {
+        const double x = terminalInset+i*pitch;
+        const double fill = std::clamp(fraction*segments-i,0.,1.);
+        rect(screen.panels,x,y,pitch-gap,8,terminalRule);
+        if (fill > 0)
+            rect(screen.panels,x,y,(pitch-gap)*fill,8,accent);
+    }
+}
+} // namespace
+
+namespace {
+enum class SignArrow { None, Ahead, Left, Right };
+struct SignLegend {
+    std::string_view text;
+    glm::vec3 accent;
+    SignArrow arrow=SignArrow::None;
+};
+
+void signPlate(Mesh& mesh,double x,double y,double w,double h,double cut,double z,glm::vec3 colour) {
+    const std::array<glm::dvec3,8> edge{{{x+cut,y,z},{x+w-cut,y,z},{x+w,y+cut,z},{x+w,y+h-cut,z},
+        {x+w-cut,y+h,z},{x+cut,y+h,z},{x,y+h-cut,z},{x,y+cut,z}}};
+    for (size_t n=1;n+1<edge.size();++n)
+        triangle(mesh,edge[0],edge[n],edge[n+1],colour);
+}
+
+void signArrow(Mesh& mesh,double x,double y,double size,SignArrow arrow,glm::vec3 colour) {
+    const glm::dvec2 axis=arrow==SignArrow::Ahead ? glm::dvec2(0,-1) :
+                          glm::dvec2(arrow==SignArrow::Left?-1:1,0);
+    const glm::dvec2 across(-axis.y,axis.x);
+    const auto point=[&](double along,double side) {
+        return glm::dvec3(glm::dvec2(x,y)+size*(along*axis+side*across),-.001);
+    };
+    const auto a=point(-.46,-.11),b=point(.11,-.11),c=point(.11,.11),d=point(-.46,.11);
+    triangle(mesh,a,b,c,colour);
+    triangle(mesh,a,c,d,colour);
+    triangle(mesh,point(.02,-.34),point(.49,0),point(.02,.34),colour);
+}
+
+CabinDisplay wayfindingSign(const CabinSurface& face,std::initializer_list<SignLegend> legends) {
+    auto sign=cabinDisplay(face,false);
+    sign.model[3]+=sign.model[2]*.009f;
+    const double w=sign.size.x,h=sign.size.y;
+    const double rim=h*.055, cut=h*.14, tile=h*.69;
+    auto& mesh=sign.content.panels;
+    signPlate(mesh,0,0,w,h,cut,-.008,{.18f,.23f,.25f});
+    signPlate(mesh,rim,h*.07,w-2*rim,h*.86,cut-rim,-.006,{.025f,.041f,.048f});
+    const double segment=(w-2*rim)/double(legends.size());
+    const double pad=h*.145, band=h*.073;
+    double size=h*.76;
+    for (const auto& legend : legends) {
+        const double iconWidth=legend.arrow==SignArrow::None?0.:tile+pad;
+        size=std::min(size,(segment-2*pad-iconWidth)/atlasTextWidth(legend.text,1.));
+    }
+    double x=rim;
+    for (const auto& legend : legends) {
+        const bool icon=legend.arrow!=SignArrow::None, trailing=legend.arrow==SignArrow::Right;
+        const double iconX=trailing?x+segment-pad-tile:x+pad;
+        const double left=x+pad+(icon&&!trailing?tile+pad:0.);
+        const double right=x+segment-pad-(icon&&trailing?tile+pad:0.);
+        signPlate(mesh,x+h*.20,h*.075,segment-h*.40,band,band*.30,-.004,legend.accent*.83f);
+        if (icon) {
+            signPlate(mesh,iconX,(h-tile)*.5,tile,tile,tile*.14,-.003,legend.accent*.21f);
+            signArrow(mesh,iconX+tile*.5,h*.5,tile*.78,legend.arrow,legend.accent);
+        }
+        const double advance=atlasTextWidth(legend.text,size);
+        atlasText(sign.content,legend.text,left+(right-left-advance)*.5,(h-size)*.5,
+                  advance+.01,size,{.94f,.97f,.98f});
+        x+=segment;
+    }
+    return sign;
+}
+
+CabinDisplay stationLabel(double x,double z,double top,double width,double direction,SignLegend legend) {
+    return wayfindingSign({{x,top,z+direction*width*.5},{0,0,-direction*width},{0,-.164,0}},{legend});
+}
+}
+
+const std::array<CabinDisplay,9>& xalariaShipSigns() {
+    using namespace shipDeck;
+    using enum SignArrow;
+    static const std::array signs{
+        wayfindingSign({{.40,.627,1.025},{-.80,0,0},{0,-.105,0}},{{"Main deck",cabinLamp,Ahead}}),
+        wayfindingSign({{-.40,.697,1.239},{.80,0,0},{0,-.119,0}},{{"Cockpit",cabinSignal,Ahead}}),
+        wayfindingSign({{.54,.904,cargoFront-.059},{-1.08,0,0},{0,-.112,0}},{{"Cargo bay",cargoLight,Ahead}}),
+        wayfindingSign({{-.55,1.101,cargoFront+.033},{1.10,0,0},{0,-.151,0}},{{"Main passage",cabinSignal,Ahead}}),
+        wayfindingSign({{.69,.765,cargoScreenZ+.020},{-1.38,0,0},{0,-.148,0}},
+                       {{"Cargo terminal",cargoLight,Ahead},{"Airlock",cabinSignal,Right}}),
+        wayfindingSign({{-passageHalf+.065,.950,3.138},{0,0,-1.018},{0,-.116,0}},{{"Crew quarters",berthLight}}),
+        wayfindingSign({{passageHalf-.065,.950,2.12},{0,0,1.018},{0,-.116,0}},{{"Systems alcove",engineeringLight}}),
+        wayfindingSign({{.65,.904,quartersDoorFront+.24},{-1.30,0,0},{0,-.128,0}},
+                       {{"Systems alcove",engineeringLight,Left},{"Crew quarters",berthLight,Right}}),
+        wayfindingSign({{-.65,.904,quartersDoorBack-.22},{1.30,0,0},{0,-.128,0}},
+                       {{"Crew quarters",berthLight,Left},{"Systems alcove",engineeringLight,Right}})
+    };
     return signs;
+}
+
+const std::array<CabinDisplay,3>& xalariaAirlockSigns() {
+    using namespace stationDeck;
+    static const std::array signs{
+        stationLabel(shipDoor+.048,centre,1.147,.96,1.,{"Airlock",cabinSignal,SignArrow::Ahead}),
+        stationLabel(bridgeDoor+.075,centre,1.152,1.03,1.,{"Docking bridge",cabinSignal,SignArrow::Ahead}),
+        stationLabel(bridgeDoor-.078,centre,1.107,.82,-1.,{"Return to ship",cabinSignal,SignArrow::Ahead})
+    };
+    return signs;
+}
+
+std::vector<CabinDisplay> xalariaStationSigns(const StationLayout& layout) {
+    std::vector<CabinDisplay> signs;
+    const auto colour=stationAccent(layout.key.role);
+    for (size_t i=2;i<layout.modules.size();++i) {
+        const auto& room=layout.modules[i];
+        const auto& previous=layout.modules[i-1];
+        if (room.kind==previous.kind) continue;
+        const double head=std::min(room.ceiling,previous.ceiling);
+        const double width=std::min(1.48,std::min(room.floor.back,previous.floor.back)-stationDeck::centre+.68);
+        const bool arched=previous.kind==StationModuleKind::Bridge;
+        const double entryTop=arched?head-.223:head-.018;
+        const double returnTop=arched?head+.225:entryTop;
+        const bool freight=room.kind==StationModuleKind::Freight;
+        const auto name=freight?(layout.key.vessel?"Transfer bay":"Loading bay"):stationModuleName(room.kind);
+        signs.push_back(stationLabel(room.floor.right+.082,stationDeck::centre,entryTop,arched?.96:width,1.,
+                                     {name,freight?cargoLight:colour,SignArrow::Ahead}));
+        signs.push_back(stationLabel(room.floor.right-(arched?.018:.082),stationDeck::centre,returnTop,width,-1.,
+                                     {"Ship airlock",cabinSignal,SignArrow::Ahead}));
+    }
+    for (const auto& annex : layout.annexes) {
+        const double width=annex.doorwayRight-annex.doorwayLeft;
+        const double x=(annex.doorwayRight+annex.doorwayLeft)*.5;
+        const double y=stationDeck::annexDoorTop+.255;
+        const double span=annex.side*width;
+        const double offset=annex.side*.065;
+        const double wall=annex.insideWall();
+        const auto name=stationModuleName(annex.room.kind);
+        signs.push_back(wayfindingSign({{x+span*.5,y,wall-offset},{-span,0,0},{0,-.164,0}},{{name,colour}}));
+        signs.push_back(wayfindingSign({{x-span*.5,stationDeck::annexDoorTop+.050,wall+offset},
+                                       {span,0,0},{0,-.152,0}},
+                                      {{"Main corridor",cabinSignal,SignArrow::Ahead}}));
+        // Flags extend into the corridor above each annex entrance. The view
+        // along the aisle determines which way to turn through the doorway.
+        constexpr double flagWidth=1.06;
+        for (double direction : {-1.,1.}) {
+            const auto turn=direction*annex.side>0.?SignArrow::Left:SignArrow::Right;
+            signs.push_back(stationLabel(x+direction*.003,wall-annex.side*flagWidth*.5,y+.25,flagWidth,direction,
+                                         {name,colour,turn}));
+        }
+    }
+    return signs;
+}
+
+CabinDisplay xalariaLoadingBayDisplay(const StationLayout& layout,const XalariaEconomy& economy,const XContract& charter,
+                                      bool claimed,std::string_view sender) {
+    const auto signal=stationAccent(layout.key.role);
+    auto display=deckDisplay(stationFreightScreen(layout),layout.key.vessel?"Courier transfer":"Freight dispatch",signal);
+    auto& screen=display.content;
+    terminalText(screen,sender.empty()?economy.placeName(charter.origin):std::string(sender),18,55,324,21,pearl);
+    rect(screen.panels,18,88,324,1,terminalRule);
+    if (charter.units) {
+        terminalText(screen,claimed?"Today's freight collected":"Sealed freight ready",18,102,324,24,signal);
+        terminalText(screen,economy.placeName(charter.destination),18,139,324,22,pearl);
+        terminalText(screen,std::to_string(charter.units)+" units  /  "+xMoney(charter.reward),18,168,324,17,terminalMuted);
+    } else {
+        terminalText(screen,"No charter available today",18,110,324,20,terminalMuted);
+    }
+    return display;
+}
+
+CabinDisplay xalariaStationSurveyDisplay(const StationAnnex& annex,const XalariaMapView& map) {
+    const auto signal=stationAccent(StationRole::Research);
+    auto display=deckDisplay(stationSurveyScreen(annex),"System survey",signal);
+    auto& screen=display.content;
+    const auto& system=map.catalog->star(map.current);
+    terminalText(screen,system.name,18,55,177,31,pearl);
+    terminalText(screen,xalariaLookName(map.catalog->region(map.current).look),204,63,138,16,signal,true);
+    rect(screen.panels,18,99,324,1,terminalRule);
+    terminalText(screen,"Catalogued bodies",18,111,206,19,terminalMuted);
+    terminalText(screen,std::to_string(system.worlds.size()),233,108,109,24,pearl,true);
+    terminalText(screen,"Wormhole connections",18,147,206,19,terminalMuted);
+    terminalText(screen,std::to_string(system.wormholes.size()),233,144,109,24,pearl,true);
+    return display;
+}
+
+void xalariaStationLocation(CockpitOverlay& hud,std::string_view room,std::string_view station,StationRole role,float roomOpacity) {
+    constexpr double x=26,y=23,width=359,height=67;
+    const auto accent=stationAccent(role);
+    rect(hud.panels,x,y,width,height,ink,.91f);
+    rect(hud.panels,x,y,3,height,accent);
+    atlasText(hud,room,x+14,y+8,width-28,25,pearl,roomOpacity);
+    atlasText(hud,station,x+14,y+40,width-28,16,glm::mix(accent,pearl,.52f));
+}
+
+std::array<CabinDisplay,3> xalariaDeckDisplays(const FlightInstruments& instruments,const XalariaMapView& map,
+                                               const XalariaEconomy& economy) {
+    const glm::vec3 navigationAccent{.42f,.85f,.99f}, cargoAccent{1.f,.75f,.41f};
+    auto nav = deckDisplay(navigationDeckScreen,"Navigation",navigationAccent);
+    auto& course = nav.content;
+    const bool routed = !map.activeRoute.empty();
+    const auto mode = map.paused ? "Paused" : map.arrived ? "Arrived" :
+                      map.flying ? "Underway" : "Manual";
+    terminalText(course,mode,236,15,106,18,map.paused ? cargoAccent : navigationAccent,true);
+    const auto starName = [&](uint32_t seed) -> std::string_view {
+        return map.catalog ? std::string_view(map.catalog->star(seed).name) : "Unavailable";
+    };
+    terminalText(course,routed ? "Destination" : "Current system",18,55,324,17,terminalMuted);
+    terminalText(course,starName(routed ? map.destination : map.current),18,78,324,39,pearl);
+    rect(course.panels,18,130,324,1,terminalRule);
+    if (routed) {
+        const auto hops = map.activeRoute.size()-1;
+        const auto leg = hops ? "Leg "+std::to_string(std::min(map.activeLeg+1,hops))+
+                                    " / "+std::to_string(hops) : "Local course";
+        terminalText(course,map.finalApproach ? "Final approach" : leg,18,142,157,18,terminalMuted);
+        terminalText(course,map.arrived ? "Complete" : flightQuantity(map.range),185,141,157,22,pearl,true);
+        terminalBar(course,178,map.progress,map.paused ? cargoAccent : navigationAccent);
+    } else {
+        terminalText(course,map.wormhole ? "Wormhole to" : "Course",18,142,125,17,terminalMuted);
+        terminalText(course,map.wormhole ? starName(map.wormhole->destination) : "No route plotted",
+                     147,140,195,22,pearl,true);
+    }
+
+    auto systems = deckDisplay(systemsDeckScreen,"Ship systems",cabinSignal);
+    auto& health = systems.content;
+    const double hull = std::clamp(instruments.hull/100.,0.,1.);
+    const double fuel = economy.fuelCapacity() > 0 ? economy.fuel()/economy.fuelCapacity() : 0.;
+    const auto hullAccent = hull <= .30 ? danger : cabinSignal;
+    const auto fuelAccent = fuel <= .10 ? danger : navigationAccent;
+    const bool warning = hull <= .30 || fuel <= .10;
+    terminalText(health,warning ? "Attention" : "Online",236,15,106,18,
+                 warning ? cargoAccent : cabinSignal,true);
+    terminalText(health,"Hull integrity",18,55,166,21,pearl);
+    terminalText(health,std::to_string(int(std::round(hull*100)))+"%",188,51,154,28,hullAccent,true);
+    terminalBar(health,88,hull,hullAccent);
+    rect(health.panels,18,111,324,1,terminalRule);
+    terminalText(health,"Fuel reserve",18,125,166,21,pearl);
+    char fuelReadout[32];
+    std::snprintf(fuelReadout,sizeof(fuelReadout),"%.1f / %.0f",economy.fuel(),economy.fuelCapacity());
+    terminalText(health,fuelReadout,188,121,154,28,fuelAccent,true);
+    terminalBar(health,158,fuel,fuelAccent);
+    terminalText(health,std::to_string(int(std::round(fuel*100)))+"% of tank capacity",
+                 18,177,324,16,terminalMuted);
+
+    auto cargo = deckDisplay(cargoDeckScreen,"Cargo terminal",cargoAccent);
+    auto& manifest = cargo.content;
+    const auto used = economy.cargoUnits();
+    const auto free = int64_t(economy.holdCapacity())-used;
+    terminalText(manifest,!used ? "Empty" : !free ? "Full" : "Loaded",236,15,106,18,cargoAccent,true);
+    terminalText(manifest,"Units loaded",18,55,156,17,terminalMuted);
+    terminalText(manifest,"Units free",197,55,145,17,terminalMuted,true);
+    terminalText(manifest,std::to_string(used)+" / "+std::to_string(economy.holdCapacity()),
+                 18,76,180,37,pearl);
+    terminalText(manifest,std::to_string(free),207,76,135,37,cargoAccent,true);
+    terminalBar(manifest,118,double(used)/economy.holdCapacity(),cargoAccent);
+    rect(manifest.panels,18,137,324,1,terminalRule);
+    const auto& stock = economy.cargo();
+    const auto largest = std::max_element(stock.begin(),stock.end());
+    if (*largest > 0) {
+        const auto good = XGood(std::distance(stock.begin(),largest));
+        terminalText(manifest,xGoodInfo(good).name,18,145,231,18,pearl);
+        terminalText(manifest,std::to_string(*largest)+" units",255,145,87,17,cargoAccent,true);
+    } else {
+        terminalText(manifest,used ? "Art or sealed freight" : "No freight on board",
+                     18,145,324,18,terminalMuted);
+    }
+    rect(manifest.panels,18,170,324,1,terminalRule);
+    const bool connected = economy.dockedPlace().has_value();
+    terminalText(manifest,connected ? "E Market / B Case files" : "B Case files / Dock to trade",
+                 18,179,324,17,connected?cabinSignal:terminalMuted);
+    return {std::move(nav),std::move(systems),std::move(cargo)};
 }
 
 Mesh xalariaCockpitGlazing() {
@@ -1252,12 +2704,24 @@ Mesh xalariaCockpitGlazing() {
         triangle(glass,a,b,c,tint);
         triangle(glass,a,c,d,tint);
     };
-    pane(cabinSide(cabinSill.front(),-1),cabinSill.front(),cabinCeiling.front(),
-         cabinSide(cabinCeiling.front(),-1),{.49,.67,.73});
+    const auto glassCorner = [](glm::dvec3 corner, double side, size_t index) {
+        corner.x += .017;
+        if (index == 0)
+            corner.z -= .018;
+        return cabinSide(corner, side);
+    };
+    pane(glassCorner(cabinSill.front(),-1,0),glassCorner(cabinSill.front(),1,0),
+         glassCorner(cabinCeiling.front(),1,0),glassCorner(cabinCeiling.front(),-1,0),{.49,.67,.73});
     for (double side : {-1.,1.})
         for (size_t i = 0; i+1 < cabinSill.size(); ++i)
-            pane(cabinSide(cabinSill[i],side),cabinSide(cabinSill[i+1],side),
-                 cabinSide(cabinCeiling[i+1],side),cabinSide(cabinCeiling[i],side),{.43,.60,.64});
+            pane(glassCorner(cabinSill[i],side,i),glassCorner(cabinSill[i+1],side,i+1),
+                 glassCorner(cabinCeiling[i+1],side,i+1),glassCorner(cabinCeiling[i],side,i),{.43,.60,.64});
+    for (double side : {-1.,1.}) {
+        const auto vertices=cargoWindow(side*(shipDeck::cargoHalf-.008),0);
+        const glm::dvec3 centre=glm::mix(vertices[0],vertices[4],.5);
+        for (size_t i=0;i<vertices.size();++i)
+            triangle(glass,centre,vertices[i],vertices[(i+1)%vertices.size()],{.35,.58,.71});
+    }
     glass.compact();
     return glass;
 }
@@ -1307,94 +2771,84 @@ CockpitControlPoses xalariaCockpitControlPoses(const FlightInstruments& instrume
     };
 }
 
-Mesh xalariaCockpitDisplays(const FlightInstruments& instruments, double fuel, double fuelCapacity) {
-    Mesh displays;
-    const auto addScreen = [&](const CabinSurface& surface, const CockpitOverlay& screen, double height = 128.) {
-        const auto offset = surface.normal() * .003;
-        for (const auto* layer : {&screen.panels, &screen.lettering}) {
-            const auto first = uint32_t(displays.vertices.size());
-            for (const auto& vertex : layer->vertices) {
-                const auto p = surface.point(vertex.x / 320., vertex.y / height) + offset;
-                displays.vertices.push_back({float(p.x),float(p.y),float(p.z),vertex.color});
-            }
-            for (auto index : layer->indices)
-                displays.indices.push_back(first + index);
-        }
-    };
-    const glm::vec3 grid{.11,.36,.34};
+std::array<CabinDisplay,4> xalariaCockpitDisplays(const FlightInstruments& instruments,
+                                                  double fuel, double fuelCapacity) {
+    const glm::vec3 grid = terminalRule;
     const auto divider = [grid](CockpitOverlay& screen, double y) {
-        rect(screen.panels,27,y,266,1.5,grid);
-    };
-    const auto gauge = [](CockpitOverlay& screen, double y, double fraction, glm::vec3 colour) {
-        for (int i = 0; i < 16; ++i) {
-            const double x = 27 + i*16.8;
-            const double fill = std::clamp(fraction*16-i,0.,1.);
-            if (fill > 0)
-                rect(screen.panels,x,y,13*fill,7,colour);
-            if (fill < 1)
-                rect(screen.panels,x+13*fill,y,13*(1-fill),7,{.075,.16,.16});
-        }
+        rect(screen.panels,terminalInset,y,terminalRight-terminalInset,1,grid);
     };
     const auto quantity = [](CockpitOverlay& screen, double value, double x, double y, double width,
                              double size, glm::vec3 colour, bool speed = false) {
-        const auto label = flightQuantity(value,speed);
-        text(screen,label,x,y,std::min(size,width*7/(6*label.size())),colour,label.size(),true);
+        terminalText(screen,flightQuantity(value,speed),x,y,width,size,colour);
     };
 
-    CockpitOverlay drive;
-    text(drive,"VELOCITY",27,21,13,cabinSignal);
+    auto driveDisplay = cabinDisplay(driveScreen);
+    auto& drive = driveDisplay.content;
     const bool aboveSurface = instruments.altitude >= 0;
-    text(drive,aboveSurface ? "ALTITUDE" : "STOP DIST",202,21,11,cabinSignal);
-    divider(drive,42);
-    quantity(drive,instruments.speed,27,56,153,19,cabinLamp,true);
-    quantity(drive,aboveSurface ? instruments.altitude : instruments.stoppingDistance,202,58,92,13,cabinLamp);
-    rect(drive.panels,188,50,1.5,34,grid);
-    fitted(drive,instruments.drive,27,93,168,12,cabinSignal);
+    const auto& docking = instruments.docking;
+    const bool dockDisplay = docking.active && docking.phase != DockingPhase::Departure;
+    const bool linedUp = docking.phase == DockingPhase::ManualCapture || manualClampReady(docking);
+    atlasText(drive,dockDisplay ? (docking.closing < -.005 ? "Opening speed" : "Closing speed") : "Velocity",
+              18,12,174,18,cabinSignal);
+    atlasText(drive,dockDisplay ? "Berth range" : aboveSurface ? "Altitude" : "Stop distance",
+              210,12,132,18,cabinSignal);
+    divider(drive,34);
+    quantity(drive,dockDisplay ? std::abs(docking.closing) : instruments.speed,18,41,172,27,cabinLamp,true);
+    quantity(drive,dockDisplay ? docking.range : aboveSurface ? instruments.altitude : instruments.stoppingDistance,
+             210,41,132,23,cabinLamp);
+    rect(drive.panels,197,10,1,86,grid);
+    terminalText(drive,dockDisplay ? docking.docked ? "Clamps secure" : linedUp ? "Hold steady" :
+                 manualDocking(docking.phase) ? "Manual approach" : "Auto docking" : instruments.drive,
+                 18,78,172,17,cabinSignal);
     const auto bank = xalariaBankAngle(instruments.localUp);
-    char bankLabel[18] = "BANK --";
+    char bankLabel[18] = "Bank --";
     if (bank) {
         const int degrees = int(std::round(glm::degrees(*bank)));
-        if (degrees == 0) std::snprintf(bankLabel,sizeof(bankLabel),"BANK 0");
-        else std::snprintf(bankLabel,sizeof(bankLabel),"BANK %c%d",degrees > 0 ? 'L' : 'R',std::abs(degrees));
+        if (degrees == 0) std::snprintf(bankLabel,sizeof(bankLabel),"Bank 0");
+        else std::snprintf(bankLabel,sizeof(bankLabel),"Bank %c%d",degrees > 0 ? 'L' : 'R',std::abs(degrees));
     }
-    fitted(drive,bankLabel,202,93,92,11,cabinSignal);
-    addScreen(driveScreen, drive);
+    if (dockDisplay)
+        std::snprintf(bankLabel,sizeof(bankLabel),"Align %.1f deg",glm::degrees(docking.heading));
+    terminalText(drive,bankLabel,210,78,132,17,cabinSignal);
 
-    CockpitOverlay port;
-    text(port,"THROTTLE",27,21,13,cabinSignal);
-    text(port,std::to_string(int(std::round(instruments.throttle*100)))+"%",214,19,16,cabinLamp);
-    gauge(port,42,instruments.throttle,amber);
-    divider(port,61);
+    auto portDisplay = cabinDisplay(portScreen);
+    auto& port = portDisplay.content;
+    terminalText(port,"Throttle",18,21,163,23,pearl);
+    terminalText(port,std::to_string(int(std::round(instruments.throttle*100)))+"%",
+                 198,17,144,29,amber,true);
+    terminalBar(port,58,instruments.throttle,amber);
+    divider(port,81);
     const double fuelFraction = fuelCapacity > 0 ? fuel / fuelCapacity : 0.;
     const auto fuelColour = fuelFraction <= .10 ? danger : cabinSignal;
     char fuelReadout[32];
     std::snprintf(fuelReadout,sizeof(fuelReadout),"%.1f / %.0f",fuel,fuelCapacity);
-    text(port,"FUEL",27,75,13,fuelColour);
-    fitted(port,fuelReadout,172,74,121,14,cabinLamp);
-    gauge(port,97,fuelFraction,fuelColour);
-    addScreen(portScreen, port);
+    terminalText(port,"Fuel reserve",18,101,163,23,pearl);
+    terminalText(port,fuelReadout,191,98,151,27,fuelColour,true);
+    terminalBar(port,138,fuelFraction,fuelColour);
 
-    CockpitOverlay starboard;
+    auto starboardDisplay = cabinDisplay(starboardScreen);
+    auto& starboard = starboardDisplay.content;
     const std::string_view name = instruments.targetLabel.empty() ? instruments.destination : instruments.targetLabel;
     const bool hasTarget = instruments.targetVisible && glm::length(instruments.localTarget) > 1e-30;
     const bool aft = hasTarget && instruments.localTarget.z > 0;
     constexpr std::string_view wormholePrefix = "WORMHOLE TO ";
     const bool wormhole = hasTarget && name.starts_with(wormholePrefix);
-    text(starboard,wormhole ? "WORMHOLE" : "NAVIGATION",27,21,12,cabinSignal);
-    rect(starboard.panels,27,40,155,1.5,grid);
+    terminalText(starboard,wormhole ? "Wormhole" : "Navigation",18,15,176,20,cabinSignal);
+    rect(starboard.panels,18,41,176,1,grid);
+    rect(starboard.panels,205,16,1,129,grid);
     const auto target = wormhole ? name.substr(wormholePrefix.size()) : name.substr(0,name.find(" / "));
-    fitted(starboard,hasTarget ? target : "NO TARGET",27,51,154,12,cabinLamp);
+    terminalText(starboard,hasTarget ? target : "No target",18,50,176,25,cabinLamp);
     if (hasTarget) {
-        quantity(starboard,instruments.range,27,69,114,11,cabinSignal);
+        quantity(starboard,instruments.range,18,85,127,18,cabinSignal);
         if (aft)
-            text(starboard,"AFT",148,69,11,amber);
+            atlasText(starboard,"Aft",155,85,39,18,amber);
     }
-    text(starboard,"HULL "+std::to_string(int(std::round(instruments.hull)))+"%",27,94,13,
-         instruments.hull > 30 ? cabinSignal : danger);
+    terminalText(starboard,"Hull "+std::to_string(int(std::round(instruments.hull)))+"%",
+                 18,124,176,20,instruments.hull > 30 ? cabinSignal : danger);
 
     // The scope is in ship axes, so looking around the cabin leaves the bearing fixed.
-    const glm::dvec2 centre{244,64};
-    for (double radius : {17.,39.}) {
+    const glm::dvec2 centre{274,81};
+    for (double radius : {22.,52.}) {
         for (int tick = 0; tick < 28; ++tick) {
             const double angle = tick * (2*std::numbers::pi / 28);
             const double next = (tick+1) * (2*std::numbers::pi / 28);
@@ -1405,39 +2859,37 @@ Mesh xalariaCockpitDisplays(const FlightInstruments& instruments, double fuel, d
             triangle(starboard.panels,u,q,v,grid);
         }
     }
-    rect(starboard.panels,centre.x-40,centre.y-.55,80,1.1,grid);
-    rect(starboard.panels,centre.x-.55,centre.y-40,1.1,80,grid);
+    rect(starboard.panels,centre.x-53,centre.y-.55,106,1.1,grid);
+    rect(starboard.panels,centre.x-.55,centre.y-53,1.1,106,grid);
     if (hasTarget) {
         const auto direction = glm::normalize(instruments.localTarget);
         const glm::dvec2 bearing(direction.x,-direction.y);
         const auto heading = glm::length(bearing) > 1e-8 ? glm::normalize(bearing) : glm::dvec2(0,1);
         const double polar = std::acos(std::clamp(-direction.z,-1.,1.));
-        const auto p = centre + heading*(34*polar/std::numbers::pi);
+        const auto p = centre + heading*(45*polar/std::numbers::pi);
         const auto colour = aft ? amber : cabinLamp;
         const glm::dvec3 top(p.x,p.y-5,0), bottom(p.x,p.y+5,0);
-        triangle(starboard.lettering,top,{p.x-5,p.y,0},bottom,colour);
-        triangle(starboard.lettering,top,bottom,{p.x+5,p.y,0},colour);
+        triangle(starboard.panels,top,{p.x-5,p.y,0},bottom,colour);
+        triangle(starboard.panels,top,bottom,{p.x+5,p.y,0},colour);
     }
-    addScreen(starboardScreen, starboard);
 
-    CockpitOverlay overhead;
+    auto overheadDisplay = cabinDisplay(overheadScreen);
+    auto& overhead = overheadDisplay.content;
     const auto lamp = [&](int row, std::string_view label, std::string_view value, glm::vec3 colour) {
-        const double y = 44 + row*80;
-        rect(overhead.panels,34,y,252,59,{.04,.11,.11});
-        rect(overhead.panels,29,y,5,59,colour);
-        text(overhead,label,47,y+20,19,cabinLamp);
-        fitted(overhead,value,169,y+19,110,21,colour);
+        const double y = 39 + row*104;
+        rect(overhead.panels,18,y,324,90,{.04,.11,.11});
+        rect(overhead.panels,18,y,5,90,colour);
+        atlasText(overhead,label,34,y+30,122,26,cabinLamp);
+        terminalText(overhead,value,164,y+30,165,26,colour,true);
     };
-    lamp(0,"GEAR",instruments.gear ? "DOWN" : "UP",instruments.gear ? cabinSignal : muted);
-    lamp(1,"ASSIST",instruments.assist ? "ON" : "OFF",instruments.assist ? cabinSignal : amber);
+    lamp(0,"Gear",instruments.gear ? "Down" : "Up",instruments.gear ? cabinSignal : terminalMuted);
+    lamp(1,"Assist",instruments.assist ? "On" : "Off",instruments.assist ? cabinSignal : amber);
     const bool departing = instruments.docking.phase == DockingPhase::Departure;
-    lamp(2,"DOCK",instruments.docking.docked ? "LOCKED" : departing ? "DEPART" :
-         instruments.docking.active ? "APPR" : "FREE",instruments.docking.docked ? cabinSignal :
-         instruments.docking.active || departing ? amber : muted);
-    addScreen(overheadScreen, overhead,320.);
-
-    displays.compact();
-    return displays;
+    lamp(2,"Dock",instruments.docking.docked ? "Locked" : departing ? "Departing" :
+         docking.phase==DockingPhase::ManualCapture ? "Arming" : instruments.docking.active ? "Approach" : "Free",
+         instruments.docking.docked || docking.phase==DockingPhase::ManualCapture ? cabinSignal :
+         instruments.docking.active || departing ? amber : terminalMuted);
+    return {std::move(driveDisplay),std::move(portDisplay),std::move(starboardDisplay),std::move(overheadDisplay)};
 }
 
 CockpitOverlay cockpitOverlay(const FlightInstruments& t,double aspect,std::string_view mode,std::string_view notice,
@@ -1448,7 +2900,8 @@ CockpitOverlay cockpitOverlay(const FlightInstruments& t,double aspect,std::stri
 CockpitOverlay cockpitOverlay(const FlightInstruments& t, double aspect, std::string_view mode,
                               std::string_view notice, std::span<const CelestialContact> contacts,
                               std::span<const ActivityContact> activity, bool help, double projectionScale,
-                              const MarketView* market, glm::dquat headInShip, const CrewView* crew,const ExpeditionPlan* planner,const MicroView* micro) {
+                              const MarketView* market, glm::dquat headInShip, const CrewView* crew,
+                              const ExpeditionPlan* planner,const MicroView* micro,bool showFlightMarkers) {
     CockpitOverlay h;
     std::optional<CockpitRect> economicPanel;
     std::optional<CockpitRect> crewCommandPanel;
@@ -1461,11 +2914,11 @@ CockpitOverlay cockpitOverlay(const FlightInstruments& t, double aspect, std::st
         rect(h.panels,12,12,w-24,876,{.025,.04,.065});
         text(h,"INFINITY / XALARIA",40,48,25,pearl);
         text(h,"FLIGHT AND EXPLORATION",40,103,16,mint);
-        const std::array<std::pair<const char*,const char*>,18> rows{{
+        const std::array<std::pair<const char*,const char*>,27> rows{{
             {"F2","OPEN OR CLOSE THE WORMHOLE ATLAS"},
             {"ATLAS","TYPE TO SEARCH / TAB NEXT RESULT / CLICK STAR OR WORLD"},
             {"ENTER","FLY THE SELECTED WORMHOLE ROUTE OR LOCAL WORLD"},
-            {"F3 / SPACE","GALAXY-SYSTEM / PAUSE OR RESUME JOURNEY"},
+            {"F3 / ATLAS SPACE","GALAXY-SYSTEM / PAUSE OR RESUME JOURNEY"},
             {"W A S D","FORWARD / LEFT / BACK / RIGHT THRUST"},
             {"Q / E","DOWN / UP THRUST"},
             {"ARROWS","PITCH AND YAW"},
@@ -1474,17 +2927,26 @@ CockpitOverlay cockpitOverlay(const FlightInstruments& t, double aspect, std::st
             {"C","CAPTURE OR RELEASE MOUSE STEERING"},
             {"HOLD SHIFT + MOUSE","LOOK AROUND THE COCKPIT / RELEASE TO CENTRE"},
             {"F5 / E","LEAVE THE SEAT / SIT DOWN BESIDE THE HELM"},
+            {"E AT CARGO TERMINAL","OPEN THE STATION MARKET WHILE DOCKED"},
             {"LEFT OPTION / CTRL","BOOST / PRECISE THRUST"},
             {"B / X","BRAKE AND CANCEL COURSE / TOGGLE CRUISE"},
             {"Y / J","NEXT PLANET / FLY TO SELECTED PLANET"},
             {"G / L","LANDING GEAR / AUTOMATIC LANDING"},
+            {"F4 THEN M / D","MANUAL OR AUTOMATIC DOCKING AT THE SELECTED STATION"},
             {"CTRL-TAB","SHOW OR HIDE CONTACTS"},
+            {"K / SHIFT-K / I","NEXT CREW / PREVIOUS CREW / HAIL"},
+            {"F8","SHIP FIT / PIRACY / PATROL VOUCHERS / REPAIRS"},
+            {"F9","CONVOYS / ESCORTS / PIRATE PRIZES / REPORTS"},
+            {"F10","FLEET / CAPTAINS / INTELLIGENCE / CAMPAIGNS"},
+            {"M / HOLD SPACE","ARM OR SAFE WEAPONS / FIRE IN MANUAL FLIGHT"},
+            {"T / 1 2 3","NEXT SHIP TARGET / PULSE, ION, TORPEDO"},
+            {"N / F7","SCAN / DISCOVERED DISPATCH LEADS"},
             {"F1 / ESC","CLOSE THIS HELP / RELEASE MOUSE OR EXIT"}
         }};
         double y=158;for(const auto& [key,action]:rows){
-            fitted(h,key,40,y,230,12,ice);fitted(h,action,290,y,w-330,12,pearl);y+=35;
+            fitted(h,key,40,y,230,12,ice);fitted(h,action,290,y,w-330,12,pearl);y+=26;
         }
-        fitted(h,"PUBLIC CATALOGUE SNAPSHOT / INFINITY REAL-TIME FLIGHT",40,790,w-80,12,muted);
+        fitted(h,"PUBLIC CATALOGUE SNAPSHOT / INFINITY REAL-TIME FLIGHT",40,866,w-80,12,muted);
         return h;
     }
 
@@ -1551,7 +3013,7 @@ CockpitOverlay cockpitOverlay(const FlightInstruments& t, double aspect, std::st
     const auto headerHint=focus.mode==CockpitMode::Combat&&!t.crewFire.empty()?t.crewFire.substr(0,t.crewFire.find(" / "))+" / 6 7 8":t.contactsExpanded?"CTRL-TAB CLOSE CONTACTS":"CTRL-TAB CONTACTS";
     fitted(h,headerHint,w-264,20,240,8.5,muted);
     line(h.strokes,24,45,w-24,45,muted*.3f);
-    const bool changingScale=t.shrinking||std::abs(t.scaleRate)>.02;
+    const bool changingScale=t.shrinking||(!hybrid&&std::abs(t.scaleRate)>.02);
     const CockpitRect scale{24,64,274,changingScale?76.:58.};card(h,scale,ice);
     fitted(h,specimen?"SPECIMEN / SHIP PARKED":t.shrinking?"SHRINK FIELD":"SHIP / FULL SIZE",38,75,246,9,muted);
     quantity(flightQuantity(t.hullMetres),38,94,246,21,pearl);
@@ -1584,10 +3046,12 @@ CockpitOverlay cockpitOverlay(const FlightInstruments& t, double aspect, std::st
     const double nameSize=destination.size()*18*6/7.<=nav.w-28?18.:13.;
     const auto destinationLines=wrapped(destination,nav.w-28,nameSize,2);
     for(size_t i=0;i<destinationLines.size();++i)fitted(h,destinationLines[i],nav.x+14,nav.y+34+i*17,nav.w-28,nameSize,pearl);
-    const auto range=microActive?"FIELD "+flightQuantity(micro->fieldMetres):t.targetVisible||t.navigating?flightQuantity(t.range):std::string("SELECT WITH Y / K");
-    const auto eta=!microActive&&t.etaSeconds>=0&&t.etaSeconds<10000?" / ETA "+std::to_string(int(std::ceil(t.etaSeconds)))+"S":"";
+    const auto range=microActive?"FIELD "+flightQuantity(micro->fieldMetres):
+        docking?flightQuantity(t.docking.range):t.targetVisible||t.navigating?flightQuantity(t.range):std::string("SELECT WITH Y / K");
+    const auto eta=!docking&&!microActive&&t.etaSeconds>=0&&t.etaSeconds<10000?" / ETA "+std::to_string(int(std::ceil(t.etaSeconds)))+"S":"";
     quantity(range+eta,nav.x+14,nav.y+73,nav.w-28,12,ice);
-    const auto action=hybrid?(t.destination.starts_with("WORMHOLE TO ")?"W / FLY THROUGH THE RING":"J FLY TO WORLD / F2 ATLAS"):focus.nextAction;
+    const auto action=hybrid&&!docking?(t.destination.starts_with("WORMHOLE TO ")?"W / FLY THROUGH THE RING":"J FLY TO WORLD / F2 ATLAS"):
+                      manualDocking(t.docking.phase)?"CTRL FINE THRUST / R LEVEL":focus.nextAction;
     fitted(h,action,nav.x+14,nav.y+105,nav.w-28,10.5,ice);
 
     const bool warp=focus.warp;
@@ -1624,11 +3088,22 @@ CockpitOverlay cockpitOverlay(const FlightInstruments& t, double aspect, std::st
         for(const auto& site:micro->cellSites)diamond(h.strokes,projectCell(site.position),2.5,elementColor(site.element));
         fitted(h,micro->atomic?(micro->atomsKnown?std::to_string(micro->atoms)+" ATOMS / "+std::to_string(micro->bonds)+" LINKS":"LOCAL ATOMS LOADING"):
             "CELL "+flightQuantity(micro->cellMetres),scope.x+14,scope.y+105,scope.w-28,9,ice);
-    }else if(dockingDirector){const auto& d=t.docking;const bool aligned=d.heading<.045&&std::abs(d.roll)<.06;
-        diamond(h.strokes,{radarX+std::clamp(d.offset.x/std::max(1.,d.width),-1.,1.)*radarRadius*.78,radarY-std::clamp(d.offset.y/std::max(1.,d.width*.52),-1.,1.)*21},5,aligned?mint:ice);
+    }else if(dockingDirector){const auto& d=t.docking;const bool manual=manualDocking(d.phase);
+        const bool aligned=d.heading<glm::radians(4.)&&std::abs(d.roll)<glm::radians(6.);
+        const double lateral=glm::length(glm::dvec2(d.offset));
+        const double scale=manual?std::clamp(std::abs(d.offset.z)*.18,1.3,d.width):d.width;
+        diamond(h.strokes,{radarX-std::clamp(d.offset.x/scale,-1.,1.)*radarRadius*.78,radarY+std::clamp(d.offset.y/scale,-1.,1.)*21},5,lateral<.85?mint:amber);
         const double angle=std::clamp(d.roll,-1.4,1.4);line(h.strokes,radarX-19*std::cos(angle),radarY+19*std::sin(angle),radarX+19*std::cos(angle),radarY-19*std::sin(angle),ice);
-        fitted(h,d.docked?"CLAMPS SECURE":dockingPhaseName(d.phase),scope.x+14,scope.y+32,scope.w-28,11,mint);
-        quantity("LATERAL "+flightQuantity(glm::length(glm::dvec2(d.offset)))+" / "+flightQuantity(d.closing,true),scope.x+14,scope.y+105,scope.w-28,9.5,ice);
+        if (manual && d.phase != DockingPhase::ManualCapture) {
+            std::snprintf(value,sizeof(value),"AIM %.1f DEG / ROLL %.1f DEG",glm::degrees(d.heading),glm::degrees(d.roll));
+            fitted(h,value,scope.x+14,scope.y+32,scope.w-28,11,aligned?mint:amber);
+        } else {
+            fitted(h,d.docked?"CLAMPS SECURE":dockingPhaseName(d.phase),scope.x+14,scope.y+32,scope.w-28,11,mint);
+        }
+        quantity(std::string(d.closing<-.005?"OPEN ":"CLOSE ")+flightQuantity(std::abs(d.closing),true)+
+                 " / OFFSET "+flightQuantity(lateral),scope.x+14,scope.y+105,scope.w-28,9.5,ice);
+        if(d.phase==DockingPhase::ManualCapture)
+            bar(h.panels,scope.x+14,scope.y+96,scope.w-28,d.capture,mint);
     }else if(landingDirector){
         const double shift=std::clamp(t.pitch*38,-18.,18.);const bool aligned=t.safe&&(!t.landing.body||glm::length(t.landing.localOffset)<6*ratio);
         for(int side:{-1,1}){const double a=side*12.,b=side*radarRadius*.8;line(h.strokes,radarX+a*std::cos(t.roll),radarY+shift-a*.28*std::sin(t.roll),radarX+b*std::cos(t.roll),radarY+shift-b*.28*std::sin(t.roll),aligned?mint:ice);}
@@ -1658,7 +3133,8 @@ CockpitOverlay cockpitOverlay(const FlightInstruments& t, double aspect, std::st
     }
     if(market)quantity(std::to_string(market->credits/100)+" CR / "+std::to_string(market->cargoKg)+" KG",systems.x+14,systems.y+90,systems.w-28,9.5,muted);
     const auto systemHint=focus.mode==CockpitMode::Landing||focus.mode==CockpitMode::Surface?(t.gear?"G GEAR DOWN":"G GEAR UP"):"F9 CREW / F8 DECK";
-    fitted(h,hybrid?"B BRAKE / X CRUISE":systemHint,systems.x+14,systems.y+108,systems.w-28,9.5,ice);
+    fitted(h,hybrid?(t.docking.docked?"ENTER UNDOCK":manualDocking(t.docking.phase)?"J AUTO DOCK / B ABORT":"B BRAKE / X CRUISE"):systemHint,
+           systems.x+14,systems.y+108,systems.w-28,9.5,ice);
     rect(h.panels,0,884,w,16,ink);h.hitRegions.push_back({0,884,w,16});
     fitted(h,"F1 HELP",26,888,90,8.5,muted);
     fitted(h,hybrid?"F2 ATLAS / Y NEXT WORLD / J NAVIGATE":"F2 TRADE / F3 PLAN / F5 MAP / F9 CREW",std::max(130.,center-220),888,std::max(100.,w-440),8,muted);
@@ -1875,7 +3351,7 @@ CockpitOverlay cockpitOverlay(const FlightInstruments& t, double aspect, std::st
                p.w - 36, 8.3, muted);
         return finish(std::move(h));
     }
-    const bool weaponUseful=focus.mode==CockpitMode::Combat||docking||(focus.mode==CockpitMode::Surface&&t.explorationActive)||!t.stationStatus.empty()||!t.recoveryStatus.empty();
+    const bool weaponUseful=focus.mode==CockpitMode::Combat||(docking&&!hybrid)||(focus.mode==CockpitMode::Surface&&t.explorationActive)||!t.stationStatus.empty()||!t.recoveryStatus.empty();
     if (!t.weapon.empty()&&!modal&&!reconOpen&&weaponUseful) {
         if (!t.stationStatus.empty()) {
             const auto station = weaponStationCard(aspect, flightCommands);
@@ -2463,6 +3939,22 @@ CockpitOverlay cockpitOverlay(const FlightInstruments& t, double aspect, std::st
         }
         return false;
     };
+    if(hybrid && showFlightMarkers && !docking && !modal && !reconOpen) {
+        const auto contact=std::find_if(activity.begin(),activity.end(),[](const auto& c) {
+            return c.selected&&!c.occluded&&isXalariaTraffic(c.body.id);
+        });
+        if(contact!=activity.end()) {
+            const auto marker=cockpitTargetMarker(contact->localDirection,aspect,projectionScale);
+            const auto p=marker.point;
+            const CockpitRect area{p.x-12.,p.y-12.,24.,24.};
+            if(!aim.overlaps(area)&&std::none_of(h.hitRegions.begin(),h.hitRegions.end(),[&](const auto& panel) {
+                return panel.overlaps(area);
+            })) {
+                diamond(h.strokes,p,marker.offscreen?5.:9.,mint);
+                h.worldLabels.push_back(area);
+            }
+        }
+    }
     if(t.targeting&&t.targeting->target&&!modal&&!help&&!reconOpen&&
        t.targeting->state!=TargetLock::Disabled&&glm::length(t.targeting->direction)>1e-9){
         const auto& v=*t.targeting;const auto color=targetingColor(v);
@@ -2522,7 +4014,9 @@ CockpitOverlay cockpitOverlay(const FlightInstruments& t, double aspect, std::st
             if(marked==1&&!selected)worldLabel(p,cue.name+" / "+(cue.phase==ThreatPhase::Locking?"LOCKING":cue.phase==ThreatPhase::Missile?"MISSILE":cue.phase==ThreatPhase::Hit?"HIT":"FIRING"),"",tint);
         }
     }
-    if (t.targetVisible && !(t.targeting&&t.targeting->target&&t.targetLabel==t.targeting->name)) {
+    const float targetOpacity=hybrid&&t.docking.active?float(smoothstep(1.5,18.,t.docking.range)):1.f;
+    if (showFlightMarkers && t.targetVisible && targetOpacity>0.f &&
+        !(t.targeting&&t.targeting->target&&t.targetLabel==t.targeting->name)) {
         const auto marker = cockpitTargetMarker(eyeFromShip * (t.warpDestination ? t.localWarpDestination : t.localTarget),
                                                  aspect, projectionScale);
         const auto p = marker.point;
@@ -2530,16 +4024,16 @@ CockpitOverlay cockpitOverlay(const FlightInstruments& t, double aspect, std::st
         const auto tint = footprint ? mint : ice;
         if (marker.offscreen) {
             const auto d = marker.direction, across = glm::dvec2(-d.y, d.x);
-            line(h.strokes, p.x, p.y, p.x - d.x * 12 + across.x * 6, p.y - d.y * 12 + across.y * 6, tint);
-            line(h.strokes, p.x, p.y, p.x - d.x * 12 - across.x * 6, p.y - d.y * 12 - across.y * 6, tint);
+            line(h.strokes, p.x, p.y, p.x - d.x * 12 + across.x * 6, p.y - d.y * 12 + across.y * 6, tint,targetOpacity);
+            line(h.strokes, p.x, p.y, p.x - d.x * 12 - across.x * 6, p.y - d.y * 12 - across.y * 6, tint,targetOpacity);
         } else {
             for (int side : {-1, 1}) {
-                line(h.strokes, p.x + side * 10, p.y - 12, p.x + side * 17, p.y - 12, tint);
-                line(h.strokes, p.x + side * 17, p.y - 12, p.x + side * 17, p.y + 12, tint);
-                line(h.strokes, p.x + side * 17, p.y + 12, p.x + side * 10, p.y + 12, tint);
+                line(h.strokes, p.x + side * 10, p.y - 12, p.x + side * 17, p.y - 12, tint,targetOpacity);
+                line(h.strokes, p.x + side * 17, p.y - 12, p.x + side * 17, p.y + 12, tint,targetOpacity);
+                line(h.strokes, p.x + side * 17, p.y + 12, p.x + side * 10, p.y + 12, tint,targetOpacity);
             }
         }
-        if (!footprint) {
+        if (!footprint && !hybrid) {
             const auto lifeTarget = std::find_if(contacts.begin(), contacts.end(),
                                                  [](const auto& c) { return c.selected && hasSurfaceLife(c); });
             worldLabel(p,
@@ -2594,7 +4088,7 @@ CockpitOverlay cockpitOverlay(const FlightInstruments& t, double aspect, std::st
         }
     }
     size_t secondary = 0;
-    if (catalogues && t.phase != "CAVERN EXPLORATION") {
+    if (!hybrid && catalogues && t.phase != "CAVERN EXPLORATION") {
         auto marker = [&](glm::dvec3 d, std::string_view name, double range, glm::vec3 color) {
             if (d.z >= -.01 || secondary >= 3)
                 return;
@@ -2690,7 +4184,7 @@ void liveMarker(CockpitOverlay& h,MapRect r,glm::dvec2 p){
     triangle(h.panels,{a,0},{b,0},{c,0},mint);
     mapCircle(h,r,p,12,mint*.6f);
 }
-const glm::vec3 atlasBg{.036,.052,.075}, chartBg{.018,.030,.049}, atlasSurface{.065,.090,.121},
+const glm::vec3 atlasBg{.028,.041,.063}, chartBg{.014,.026,.043}, atlasSurface{.061,.088,.127},
     atlasBorder{.16,.21,.28}, atlasTextColour{.91,.94,.98}, atlasSecondary{.65,.72,.81},
     atlasShip{.57,.91,.78}, atlasSelection{1,.75,.41}, atlasRoute{.40,.77,1.};
 
@@ -2741,7 +4235,8 @@ glm::vec3 atlasWorldColour(const XalariaWorld& world, const AtlasPalette& palett
 }
 void atlasButton(CockpitOverlay& h, MapRect r, std::string_view name,
                  bool selected=false, bool enabled=true, bool primary=false) {
-    atlasPanel(h,r,primary && enabled ? atlasSelection : selected ? glm::vec3(.14,.22,.31) : atlasSurface);
+    const auto fill=primary && enabled ? atlasSelection : selected ? glm::vec3(.14,.22,.31) : atlasSurface;
+    atlasGradient(h,r,fill*1.10f,fill*.79f);
     const auto colour = !enabled ? atlasSecondary*.68f : primary ? atlasBg : atlasTextColour;
     const double textWidth = atlasTextWidth(name,17);
     atlasText(h,name,r.x+std::max(9.,(r.w-textWidth)/2),r.y+(r.h-17)/2,r.w-18,17,colour);
@@ -2822,8 +4317,8 @@ void atlasRegions(CockpitOverlay& h, const XalariaMapView& v, MapRect chart, dou
                 continue;
             const auto& palette=atlasPalette(catalog.region(y*side*catalog.grid+x*side).look);
             const bool focused=x==selected.x&&y==selected.y;
-            const auto low=glm::mix(chartBg,palette.colour,focused?.23f:.13f);
-            const auto high=glm::mix(low,palette.highlight,focused?.125f:.080f);
+                const auto low=glm::mix(chartBg,palette.colour,focused?.25f:.143f);
+                const auto high=glm::mix(low,palette.highlight,focused?.15f:.093f);
             const auto cell=xalariaMapPoint(v,{(x+.5)*side-.5,(y+.5)*side-.5},aspect);
             // Split a region at the wrapped projection's edge, just as its
             // stars are wrapped individually around the chart centre.
@@ -2903,11 +4398,11 @@ void systemChart(CockpitOverlay& h,const XalariaMapView& v,double aspect,const A
     const auto orbitFocus = selected ? selected : arrival;
     const auto selectedPrimary = orbitFocus && star.worlds.at(*orbitFocus).primary>=0
         ? std::optional<uint64_t>(uint64_t(star.worlds.at(*orbitFocus).primary)) : orbitFocus;
-    const auto sky=glm::mix(chartBg,palette.colour,.105f);
-    atlasPanel(h,r,sky);
-    atlasDisc(h,centre,std::min(r.w,r.h)*.48,glm::mix(sky,palette.colour,.30f),sky,64);
-    atlasDisc(h,centre,32,palette.highlight*.58f,glm::mix(sky,palette.colour,.26f),32);
-    atlasDisc(h,centre,9,glm::mix(palette.highlight,atlasTextColour,.63f),palette.highlight,24);
+    const auto sky=glm::mix(chartBg,palette.colour,.079f);
+    atlasGradient(h,r,sky,chartBg);
+    atlasDisc(h,centre,std::min(r.w,r.h)*.48,glm::mix(sky,palette.colour,.37f),sky,64);
+    atlasDisc(h,centre,43,palette.highlight*.55f,glm::mix(sky,palette.colour,.22f),40);
+    atlasDisc(h,centre,10,glm::mix(palette.highlight,atlasTextColour,.67f),palette.highlight,24);
     for (const auto& [id,world] : star.worlds) {
         if (!xalariaSystemShowsWorld(v,id))
             continue;
@@ -2980,11 +4475,14 @@ CockpitOverlay xalariaMapOverlay(const XalariaMapView& v,double aspect) {
         atlasText(h,value,x,y,w,size,colour);
     };
 
-    atlasPanel(h,{0,0,l.width,900},atlasBg);
+    atlasGradient(h,{0,0,l.width,900},atlasBg*1.24f,atlasBg*.67f);
     atlasPanel(h,r,chartBg);
-    atlasPanel(h,l.details,glm::mix(glm::vec3(.049,.070,.096),palette.colour,.066f));
+    const auto details=glm::mix(atlasSurface,palette.colour,.079f);
+    atlasGradient(h,l.details,details,atlasBg*.96f);
+    atlasPanel(h,{l.details.x,l.details.y,2,l.details.h},palette.colour*.45f);
     atlasText(h,"Navigation",24,24,180,32,atlasTextColour);
-    atlasText(h,"Ship in "+c.star(v.current).name,218,34,l.economy.x-236,19,atlasSecondary);
+    atlasText(h,"Ship in "+c.star(v.current).name,218,34,l.dispatch.x-236,19,atlasSecondary);
+    atlasButton(h,l.dispatch,"Dispatch  F7");
     atlasButton(h,l.economy,"Trade");
     atlasButton(h,l.close,"Back to flight");
     atlasButton(h,l.galaxy,"Galaxy",galaxy);
@@ -3002,7 +4500,7 @@ CockpitOverlay xalariaMapOverlay(const XalariaMapView& v,double aspect) {
                 !v.activeRoute.empty()&&v.destination==v.selected);
 
     atlasPanel(h,l.search,v.searchFocused?glm::vec3(.10,.15,.21):atlasSurface);
-    atlasText(h,v.query.empty()?"Search stars or worlds":v.query,x+12,l.search.y+12,
+    atlasText(h,v.query.empty()?"Search stars, types or worlds":v.query,x+12,l.search.y+12,
               w-24-(v.query.empty()?0:l.clearSearch.w),18,v.query.empty()?atlasSecondary:atlasTextColour);
     if (!v.query.empty()) {
         atlasButton(h,l.clearSearch,"Clear");
@@ -3015,7 +4513,9 @@ CockpitOverlay xalariaMapOverlay(const XalariaMapView& v,double aspect) {
                 atlasPanel(h,{x,y,w,l.resultStep-4},selectedRow);
             const auto& result=c.star(v.matches[i]);
             const auto world=c.searchWorld(v.matches[i],v.query);
-            atlasText(h,world?result.worlds.at(*world).name+" / "+result.name:result.name,x+10,y+10,w-20,19,
+            std::string name=world?result.worlds.at(*world).name+" / "+result.name:result.name;
+            if(!world&&result.surveyStar)name+=" / "+std::string(stellarKindName(result.surveyStar->kind));
+            atlasText(h,name,x+10,y+10,w-20,19,
                       i==v.matchIndex?atlasSelection:atlasTextColour);
         }
         if (!v.matches.empty())
@@ -3024,7 +4524,8 @@ CockpitOverlay xalariaMapOverlay(const XalariaMapView& v,double aspect) {
     } else {
         add(star.name,181,30,atlasTextColour);
         atlasPanel(h,{x,229,8,8},palette.colour);
-        atlasText(h,std::string(palette.name)+"  /  "+std::to_string(star.worlds.size())+" worlds",
+        const auto descriptor=star.surveyStar?stellarKindName(star.surveyStar->kind):palette.name;
+        atlasText(h,std::string(descriptor)+"  /  "+std::to_string(star.worlds.size())+(star.worlds.size()==1?" world":" worlds"),
                   x+15,224,w-15,17,glm::mix(atlasTextColour,palette.colour,.37f));
         add(v.current==v.selected?"Current system":v.route.empty()?"No wormhole route":
             std::to_string(v.route.size()-1)+(v.route.size()==2?" wormhole hop":" wormhole hops"),251,17,
@@ -3114,6 +4615,281 @@ CockpitOverlay xalariaMapOverlay(const XalariaMapView& v,double aspect) {
     h.hitRegions.push_back({0,0,l.width,900});
     return h;
 }
+XalariaStoryLayout::XalariaStoryLayout(double aspect):width(900*aspect) {
+    const double split=width*.38;
+    const double tab=(width-48)/6;
+    nearby={24,109,tab-8,40};
+    news={24+tab,109,tab-8,40};
+    feed={24+tab*2,109,tab-8,40};
+    followUps={24+tab*3,109,tab-8,40};
+    journal={24+tab*4,109,tab-8,40};
+    archive={24+tab*5,109,tab-8,40};
+    close={width-161,24,137,42};
+    list={24,173,split-36,6*rowHeight};
+    detail={split,173,width-split-24,624};
+    const double x=detail.x+22,w=detail.w-44,half=(w-10)*.5;
+    track={x,694,half,40};
+    route={x+half+10,694,half,40};
+    primary={x,746,half,40};
+    secondary={x+half+10,746,half,40};
+    previous={width-233,826,96,38};
+    next={width-120,826,96,38};
+}
+
+std::optional<size_t> XalariaStoryLayout::pickRow(glm::dvec2 point,size_t count) const {
+    if(!list.contains(point))return {};
+    const auto index=size_t((point.y-list.y)/rowHeight);
+    return index<count?std::optional{index}:std::nullopt;
+}
+
+XalariaCombatLayout::XalariaCombatLayout(double aspect):width(900*aspect){
+    close={width-161,24,137,42};
+    const double third=(width-64)/3,half=(width-58)/2,quarter=(width-72)/4;
+    civilian={24,125,third,44};corsair={32+third,125,third,44};gunship={40+2*third,125,third,44};
+    arm={24,464,quarter,44};pulse={32+quarter,464,quarter,44};ion={40+2*quarter,464,quarter,44};torpedo={48+3*quarter,464,quarter,44};
+    demand={24,535,half,50};seize={34+half,535,half,50};
+    claim={24,602,half,50};service={34+half,602,half,50};board={24,674,width-48,46};
+}
+CockpitOverlay xalariaCombatOverlay(const XalariaCombat& combat,const XalariaEconomy& economy,double aspect){
+    CockpitOverlay hud;const XalariaCombatLayout l(aspect);
+    atlasGradient(hud,{0,0,l.width,900},atlasBg*1.24f,atlasBg*.67f);
+    atlasText(hud,"Armament / Ship fit",24,24,l.close.x-48,32,atlasTextColour);atlasButton(hud,l.close,"Back / F8");
+    atlasText(hud,"Refit at a station. Your hold, trading, exploration and investigations remain available.",24,80,l.width-48,17,atlasSecondary);
+    atlasButton(hud,l.civilian,"Civilian / 1000 GC",combat.fit()==CombatFit::Civilian);
+    atlasButton(hud,l.corsair,"Corsair / 3500 GC",combat.fit()==CombatFit::Corsair);
+    atlasButton(hud,l.gunship,"Gunship / 9000 GC",combat.fit()==CombatFit::Gunship);
+    const double third=(l.width-64)/3;
+    for(unsigned i=0;i<3;++i){
+        const double x=24+i*(third+8),w=third;
+        constexpr std::array first{"Light defensive pulse","Twin pulse II / ion projector","Triple pulse III / ion projector"};
+        constexpr std::array second{"28-point rechargeable shield","48 shield / reinforced armour","80 shield / heavy armour"};
+        constexpr std::array thirdLine{"Low operating cost","4 torpedoes / boarding work","10 torpedoes / patrol combat"};
+        atlasText(hud,first[i],x,189,w,19,atlasTextColour);
+        atlasText(hud,second[i],x,221,w,17,atlasSecondary);
+        atlasText(hud,thirdLine[i],x,253,w,17,atlasSecondary);
+    }
+    const auto target=combat.selected();
+    atlasText(hud,target?target->body.name:"T selects a visible ship / K selects a crew",24,315,l.width-48,24,atlasTextColour);
+    if(target){
+        atlasText(hud,target->body.status,24,353,l.width-48,18,target->body.hostile?glm::vec3(1,.43,.29):atlasSecondary);
+        atlasText(hud,"Hull "+std::to_string(int(std::ceil(target->body.hull)))+"% / Shield "+
+                  std::to_string(int(std::round(target->shield.fraction*100.)))+"%",24,385,l.width-48,18,atlasSecondary);
+    }
+    atlasText(hud,"Wallet "+xMoney(economy.credits())+" / Local warrant "+xMoney(combat.localWarrant())+
+              " / Patrol vouchers "+xMoney(combat.bountyDue()),24,419,l.width-48,17,atlasSecondary);
+    atlasButton(hud,l.arm,combat.armed?"M  Weapons armed":"M  Weapons safe",combat.armed);
+    atlasButton(hud,l.pulse,"1  Pulse",combat.weapon==CombatWeapon::Pulse);
+    atlasButton(hud,l.ion,"2  Ion",combat.weapon==CombatWeapon::Ion);
+    atlasButton(hud,l.torpedo,"3  Torpedo",combat.weapon==CombatWeapon::Torpedo);
+    atlasButton(hud,l.demand,"Demand cargo",false,bool(target));
+    atlasButton(hud,l.seize,"Seize cargo / must be aboard",false,bool(target));
+    atlasButton(hud,l.claim,combat.localWarrant()?"Settle local warrant":"Redeem patrol vouchers");
+    atlasButton(hud,l.service,combat.playerHull()<=0?"Recover ship / cargo forfeited":"Repair hull / reload torpedoes");
+    atlasButton(hud,l.board,"Request manual boarding approach",false,bool(target));
+    atlasText(hud,"Hold Space to fire. Ion disables engines; leave the hull intact if you want to board.",24,752,l.width-48,18,atlasTextColour);
+    atlasText(hud,"Stolen cargo needs an Independent or Rebel fence. Piracy calls in local security.",24,784,l.width-48,17,atlasSecondary);
+    atlasText(hud,combat.message,24,838,l.width-48,18,{1.,.76,.43});
+    hud.hitRegions.push_back({0,0,l.width,900});return hud;
+}
+void xalariaCombatHud(CockpitOverlay& hud,const XalariaCombat& combat,double aspect,const ActivityContact* contact,double projectionScale){
+    if(!combat.armed&&!combat.target&&!combat.localWarrant())return;
+    const double width=900*aspect,w=std::max(180.,std::min(440.,width-684.)),x=(width-w)*.5;
+    const CockpitRect panel{x,130,w,137};occlude(hud,panel);atlasPanel(hud,{x,130,w,137},atlasSurface);
+    constexpr std::array weapons{"Pulse battery","Ion disruptor","Torpedo"};
+    const auto tint=combat.armed?glm::vec3(1.,.50,.28):atlasSecondary;
+    atlasText(hud,std::string(combat.armed?"ARMED / ":"SAFE / ")+weapons[unsigned(combat.weapon)],x+12,143,w-24,16,tint);
+    const auto target=combat.selected();
+    auto targetLabel=target?target->body.name:std::string("T Target / F8 Armament");
+    if(contact)targetLabel+=" / "+std::to_string(int(std::round(contact->distance)))+" m";
+    atlasText(hud,targetLabel,x+12,172,w-24,17,atlasTextColour);
+    if(contact&&!contact->occluded){
+        const auto marker=cockpitTargetMarker(contact->localDirection,aspect,projectionScale);
+        const auto p=marker.point;const double r=marker.offscreen?9.:18.;
+        const CockpitRect bounds{p.x-r,p.y-r,r*2,r*2};
+        if(std::none_of(hud.hitRegions.begin(),hud.hitRegions.end(),[&](const auto& panel){return panel.overlaps(bounds);})) {
+            const auto colour=contact->body.hostile?glm::vec3(1.,.30,.19):glm::vec3(1.,.72,.32);
+            for(double side:{-1.,1.})for(double vertical:{-1.,1.}){
+                line(hud.strokes,p.x+side*r,p.y+vertical*r,p.x+side*(r-6),p.y+vertical*r,colour);
+                line(hud.strokes,p.x+side*r,p.y+vertical*r,p.x+side*r,p.y+vertical*(r-6),colour);
+            }
+        }
+    }
+    atlasText(hud,target?"Hull "+std::to_string(int(std::ceil(target->body.hull)))+"% / Shield "+
+              std::to_string(int(std::round(target->shield.fraction*100.)))+"%":"M Arm / Space Fire",x+12,199,w-24,14,atlasSecondary);
+    atlasText(hud,"Heat "+std::to_string(int(combat.heat()))+"% / Torps "+std::to_string(combat.torpedoes()),x+12,224,w-24,14,tint);
+    if(combat.localWarrant())atlasText(hud,"Wanted / "+xMoney(combat.localWarrant()),x+12,246,w-24,13,{1.,.42,.29});
+    else if(combat.incomingAt>=0&&combat.convoys().seconds()-combat.incomingAt<5.)atlasText(hud,"Incoming / "+combat.incomingFire,x+12,246,w-24,13,{1.,.42,.29});
+}
+CabinDisplay xalariaPrizeDisplay(const StationLayout& layout,const XalariaTrafficContact& ship,const XalariaCombat& combat){
+    auto display=deckDisplay(stationFreightScreen(layout),"Prize cargo",{1.,.63,.25});auto& screen=display.content;
+    const auto units=combat.prizeCargo(ship.body.id);
+    terminalText(screen,ship.body.name,18,55,324,21,pearl);
+    rect(screen.panels,18,88,324,1,terminalRule);
+    terminalText(screen,units?"Cargo under your control":"Cargo transferred",18,103,324,23,cargoLight);
+    const auto key=combat.convoys().identity(ship.body.id,combat.convoys().seconds());
+    const auto good=key?combat.convoys().plan(*key).good:XGood(ship.body.seed%7);
+    terminalText(screen,std::string(xGoodInfo(good).name),18,139,324,21,pearl);
+    terminalText(screen,units?std::to_string(units)+" units / E to seize aboard":"Hold transfer complete",18,174,324,17,terminalMuted);
+    return display;
+}
+
+CockpitOverlay xalariaStoryOverlay(const XalariaStories& stories,const StoryContext& context,double seconds,
+                                  double aspect,std::string_view routeAction) {
+    constexpr std::array colours{glm::vec3{1.,.46,.40},glm::vec3{1.,.72,.34},glm::vec3{.91,.45,.63},
+        glm::vec3{.49,.73,1.},glm::vec3{.74,.60,1.},glm::vec3{.36,.88,.80}};
+    CockpitOverlay hud;
+    const XalariaStoryLayout l(aspect);
+    atlasGradient(hud,{0,0,l.width,900},atlasBg*1.24f,atlasBg*.67f);
+    atlasText(hud,"Dispatch",24,24,226,35,atlasTextColour);
+    const auto page=stories.page();
+    if(page==StoryPage::Feed||page==StoryPage::Archive||page==StoryPage::Nearby||page==StoryPage::News)
+        atlasText(hud,stories.catalog().star(stories.system).name,257,36,l.close.x-274,19,atlasSecondary);
+    atlasButton(hud,l.close,"Back  Esc");
+    atlasButton(hud,l.nearby,"Nearby",page==StoryPage::Nearby);
+    atlasButton(hud,l.news,"News",page==StoryPage::News);
+    atlasButton(hud,l.feed,"Local leads",page==StoryPage::Feed);
+    const auto followLabel=stories.followUpCount()?"Follow-ups  "+std::to_string(stories.followUpCount()):"Follow-ups";
+    atlasButton(hud,l.followUps,followLabel,page==StoryPage::FollowUps);
+    atlasButton(hud,l.journal,"Journal",page==StoryPage::Journal);
+    atlasButton(hud,l.archive,"Discoveries  "+std::to_string(stories.discoveredCount()),
+                page==StoryPage::Archive);
+    const auto& entries=stories.entries();
+    if(page==StoryPage::Nearby){
+        atlasText(hud,std::to_string(stories.nearbyCount())+" discovered leads within three jumps",
+                  24,76,l.width-48,17,atlasSecondary);
+    }else if(page==StoryPage::News){
+        atlasText(hud,"Updates on incidents you have discovered. Reports take time to reach you.",
+                  24,76,l.width-48,17,atlasSecondary);
+    }
+    for(size_t i=0;i<entries.size();++i){
+        const auto& story=entries[i];
+        const auto tint=colours[size_t(story.key.kind)];
+        const double y=l.list.y+i*l.rowHeight;
+        atlasPanel(hud,{l.list.x,y,l.list.w,l.rowHeight-6},
+                   i==stories.row?glm::mix(atlasSurface,tint,.13f):atlasSurface);
+        atlasPanel(hud,{l.list.x,y,3,l.rowHeight-6},tint*(i==stories.row?.92f:.46f));
+        const double x=l.list.x+14,w=l.list.w-28;
+        auto label=std::string(storyKindName(story.key.kind));
+        if(story.key.chapter)label+="  /  Chapter "+std::to_string(story.key.chapter+1);
+        else if(story.key.live&&stories.incident(story.key,seconds).urgent)label+="  /  Urgent";
+        atlasText(hud,label,x,y+11,w,16,tint);
+        atlasText(hud,story.headline,x,y+34,w,21,atlasTextColour);
+        auto status=stories.result(story.key)?"Reported":stories.tracked()==story.key?"Tracked":
+            story.key.chapter?stories.catalog().star(story.system).name+"  /  "+story.place:story.place;
+        if(story.key.live&&!story.key.chapter)
+            status=stories.catalog().star(story.system).name+" / "+std::to_string(stories.hops(story.key))+
+                   (stories.hops(story.key)==1?" jump":" jumps");
+        atlasText(hud,status,x,y+65,w,16,atlasSecondary);
+    }
+    const auto* story=stories.selected();
+    if(story){
+        const auto tint=colours[size_t(story->key.kind)];
+        atlasGradient(hud,l.detail,glm::mix(atlasSurface,tint,.07f),atlasBg);
+        atlasPanel(hud,{l.detail.x,l.detail.y,2,l.detail.h},tint*.56f);
+        const auto stage=stories.stage(story->key,seconds);
+        const auto result=stories.result(story->key);
+        const bool tracked=stories.tracked()==story->key;
+        const bool available=stories.actionable(story->key);
+        const bool ready=tracked&&available&&stories.ready(*story,context);
+        const bool living=story->key.live&&!story->key.chapter;
+        const auto* investigation=stories.investigation(story->key);
+        const bool caseFile=investigation&&stories.evidenceOpen;
+        const double reportSeconds=seconds-(page==StoryPage::News?stories.hops(story->key)*120.:0.);
+        const double x=l.detail.x+22,w=l.detail.w-44;
+        const auto block=[&](std::string_view value,double y,double size,double lineHeight,
+                             unsigned lines,glm::vec3 colour){
+            for(unsigned line=0;line<lines&&!value.empty();++line){
+                size_t end=value.size();
+                while(line+1<lines&&atlasTextWidth(value.substr(0,end),size)>w){
+                    const auto space=value.rfind(' ',end-1);
+                    if(space==value.npos||space==0)break;
+                    end=space;
+                }
+                atlasText(hud,value.substr(0,end),x,y+line*lineHeight,w,size,colour);
+                value.remove_prefix(std::min(value.size(),end+1));
+            }
+        };
+        auto heading=std::string(storyKindName(story->key.kind))+"  /  ";
+        if(story->key.chapter)heading+="Chapter "+std::to_string(story->key.chapter+1)+" of "+
+                                     std::to_string(storyChapterCount)+(result?"  /  Filed":"");
+        else if(result)heading+="Filed";
+        else if(living)heading+=incidentPhaseName(stories.incident(story->key,reportSeconds).phase);
+        else heading+=storyStageName(stage);
+        atlasText(hud,heading,x,192,w,17,tint);
+        block(story->headline,224,30,35,2,atlasTextColour);
+        atlasText(hud,stories.catalog().star(story->system).name+"  /  "+story->place,
+                  x,303,w,18,atlasSecondary);
+        if(const auto* found=stories.discovery(story->key))
+            atlasText(hud,"Found through / "+std::string(storyOriginName(story->key.chapter?StoryOrigin::FollowUp:found->origin)),
+                      x,326,w,13,atlasSecondary);
+        if(caseFile){
+            constexpr std::array labels{"Signal bearing","Physical trace","Recovered recorder","Independent account"};
+            const auto notes=stories.evidenceNotes(story->key);
+            for(unsigned step=0;step<4;++step){
+                const double y=350.+step*62.;
+                const bool collected=investigation->evidence&(1u<<step);
+                atlasText(hud,std::string(collected?"RECORDED / ":"PENDING / ")+labels[step],x,y,w,16,
+                          collected?tint:atlasSecondary);
+                block(notes[step],y+21.,16,19,2,collected?atlasTextColour:atlasSecondary);
+            }
+        }else{
+            block(story->report,341,20,25,5,atlasTextColour);
+            atlasText(hud,result?"Outcome":investigation&&!story->key.chapter?"Investigation":
+                      stage==StoryStage::FirstReport?"Assignment":"Latest report",x,476,w,17,tint);
+        }
+        const std::string update=result?story->outcomes[*result]:living?
+            stories.incidentReport(story->key,reportSeconds):
+            stage==StoryStage::FollowUp?story->followUp:story->development;
+        if(!caseFile)block(investigation&&!story->key.chapter&&!result?
+            stories.investigationTask(story->key):update,505,19,24,4,atlasTextColour);
+        const std::string instruction=result?
+            (stories.continuation(story->key)?"The next chapter is in Follow-ups or Journal":"Case closed"):!available?
+            "Response window closed":!stories.evidenceComplete(story->key)&&!story->key.chapter?
+            "B  Case file / N  Scan or take statement":ready?"Choose how to file the report":
+            story->site==StorySite::Vessel?"Resolve aboard the freighter beyond its airlock":
+            story->site==StorySite::Station?"Resolve inside the target station":
+            "Resolve from the target orbit";
+        if(living){
+            const auto remaining=stories.incident(story->key,seconds).endsAt-seconds;
+            const auto delay=stories.hops(story->key)*2;
+            const auto timing=page==StoryPage::News?
+                (delay?"Report delayed by "+std::to_string(delay)+" minutes":"Local dispatch report"):
+                remaining>0.?"Response window / "+std::to_string(int(std::ceil(remaining/60.)))+" min remaining":
+                "Response window ended";
+            atlasText(hud,timing,x,614,w,16,atlasSecondary);
+        }
+        atlasText(hud,instruction,x,646,w,17,ready?tint:atlasSecondary);
+        if(!routeAction.empty())atlasButton(hud,l.route,routeAction);
+        if(!result){
+            atlasButton(hud,l.track,tracked?"Tracked":"T  Track lead",tracked,available);
+            atlasButton(hud,l.primary,"1  "+story->decisions[0],false,ready);
+            atlasButton(hud,l.secondary,"2  "+story->decisions[1],false,ready);
+        }
+    }else{
+        atlasPanel(hud,l.detail,atlasSurface);
+        atlasText(hud,page==StoryPage::News?"No reports on your discoveries yet.":
+                  page==StoryPage::FollowUps?"Follow-ups must be earned.":"No discovered leads here yet.",
+                  l.detail.x+22,213,l.detail.w-44,21,atlasSecondary);
+        const double x=l.detail.x+22,w=l.detail.w-44;
+        atlasText(hud,"Scan worlds with N from the helm.",x,265,w,19,atlasTextColour);
+        atlasText(hud,"Select crews with K, then hail with I.",x,300,w,19,atlasTextColour);
+        atlasText(hud,"Walk into stations to meet local contacts.",x,335,w,19,atlasTextColour);
+        atlasText(hud,"Complete work to earn more private leads.",x,390,w,19,atlasSecondary);
+    }
+    const bool paged=stories.sheetCount()>1;
+    atlasText(hud,stories.message.empty()?(page==StoryPage::Archive?
+              "Your discoveries / Page Up or Down / B Case file":"Up / Down   Tab Feeds   B Case file"):stories.message,
+              24,836,l.width-(paged?390:48),19,atlasSecondary);
+    if(paged){
+        atlasText(hud,std::to_string(stories.sheet()+1)+" / "+std::to_string(stories.sheetCount()),
+                  l.previous.x-110,838,100,16,atlasSecondary);
+        atlasButton(hud,l.previous,"Previous",false,stories.sheet()>0);
+        atlasButton(hud,l.next,"Next",false,stories.sheet()+1<stories.sheetCount());
+    }
+    hud.hitRegions.push_back({0,0,l.width,900});
+    return hud;
+}
+
 void xalariaFlightOverlay(CockpitOverlay& h,const XalariaMapView& v,double aspect){
     const double width=900*aspect;const CockpitRect box{width-342,145,318,182};
     occlude(h,box);rect(h.panels,box.x,box.y,box.w,box.h,{.016,.038,.055},.96f);
@@ -3135,17 +4911,23 @@ void xalariaFlightOverlay(CockpitOverlay& h,const XalariaMapView& v,double aspec
     std::string info=v.activeRoute.empty()?(v.route.empty()?"NO WORMHOLE ROUTE":std::to_string(v.route.size()-1)+" HOPS PLANNED"):
         (hops?"LEG "+std::to_string(std::min(v.activeLeg+1,hops))+"/"+std::to_string(hops)+" / ":"LOCAL / ")+flightQuantity(v.range)+" / "+std::to_string(int(v.progress*100))+"%";
     fitted(h,info,x,box.y+145,w,10,muted);
-    fitted(h,"F5 WALK SHIP",x,box.y+165,w,9,ice);
+    fitted(h,c.star(v.current).surveyStar?"F6 STAR SCOPE / F7 DISPATCH":"F5 WALK SHIP / F7 DISPATCH",x,box.y+165,w,9,ice);
     h.hitRegions.push_back(box);
 }
 
-XEconomyLayout::XEconomyLayout(double aspect):width(900*aspect){
+XEconomyLayout::XEconomyLayout(double aspect,bool cargoTerminal):width(900*aspect){
  const double split=width*.59;
- for(size_t i=0;i<5;++i)tabs[i]={24+(width-48)/5*i,142,(width-48)/5-8,38};
+ if(cargoTerminal){
+  const double tabWidth=(width-56)*.5;
+  tabs={};
+  tabs.front()={24,142,tabWidth,38};
+  tabs.back()={32+tabWidth,142,tabWidth,38};
+ }else for(size_t i=0;i<tabs.size();++i)tabs[i]={24+(width-48)/5*i,142,(width-48)/5-8,38};
  rows={24,290,split-48,384};details={split,290,width-split-24,384};
  buy={24,700,(rows.w-12)/2,38};sell={buy.x+buy.w+12,700,buy.w,38};
  minus={24,751,44,36};plus={190,751,44,36};
- travel={split,222,details.w,42};venue={24,222,rows.w,42};
+ travel={split,222,details.w,42};manualDock={split+(details.w+10)*.5,222,(details.w-10)*.5,42};
+ venue={24,222,rows.w,42};
  action={split,700,details.w,38};secondary={split,751,details.w,36};tertiary={split,800,details.w,36};
 }
 void xalariaEconomyHud(CockpitOverlay& h,const XalariaEconomy& e,double aspect,bool map){
@@ -3157,20 +4939,33 @@ void xalariaEconomyHud(CockpitOverlay& h,const XalariaEconomy& e,double aspect,b
  h.hitRegions.push_back(b);
 }
 CockpitOverlay xalariaEconomyOverlay(const XalariaEconomy& e,double aspect){
- CockpitOverlay h;const XEconomyLayout l(aspect);const auto& v=e.view;
+ CockpitOverlay h;const auto& v=e.view;const XEconomyLayout l(aspect,v.cargoTerminal);
+ const auto accent=v.cargoTerminal?glm::vec3(1.,.75,.41):mint;
  rect(h.panels,8,8,l.width-16,884,ink,.99f);
- fitted(h,"INFINITY / XALARIA",24,28,l.width-48,13,ice);
- fitted(h,"TRADE, INDUSTRY AND CULTURE",24,58,l.width-48,21,pearl);
+ fitted(h,v.cargoTerminal?"SHIP INTERIOR / CARGO BAY":"INFINITY / XALARIA",24,28,l.width-48,13,ice);
+ fitted(h,v.cargoTerminal?"CARGO TERMINAL":"TRADE, INDUSTRY AND CULTURE",24,58,l.width-48,21,pearl);
+ if(v.cargoTerminal)rect(h.panels,24,88,l.width-48,1,accent*.6f);
  fitted(h,xMoney(e.credits())+" / HOLD "+std::to_string(e.cargoUnits())+"/"+std::to_string(e.holdCapacity())+
   " / FUEL "+std::to_string(int(e.fuel()))+"/"+std::to_string(int(e.fuelCapacity()))+
-  " / ENERGY "+std::to_string(int(e.energy()*5))+"%",24,101,l.width-48,12,mint);
+  " / ENERGY "+std::to_string(int(e.energy()*5))+"%",24,101,l.width-48,12,accent);
  constexpr std::array<std::string_view,5> tabs{"1 MARKET","2 HOLDINGS","3 MINING","4 SERVICES","5 CHARTERS"};
- for(size_t i=0;i<5;++i)mapButton(h,l.tabs[i],tabs[i],size_t(v.page)==i);
- const bool local=e.canTrade(v.place);const auto list=e.venues(v.place.system,v.place.world);
+ for(size_t i=0;i<tabs.size();++i)if(l.tabs[i].w>0)mapButton(h,l.tabs[i],tabs[i],size_t(v.page)==i);
+ const bool local=e.canTrade(v.place);
  fitted(h,e.placeName(v.place),24,197,l.width-48,13,ice);
  fitted(h,xFactionName(e.faction(v.place)),l.details.x,276,l.details.w,9,muted);
- mapButton(h,l.venue,list.size()>1?"CHANGE STATION / CITY":"LOCAL STATION / CITY");
- mapButton(h,l.travel,local?"UNDOCK / LAUNCH":"TRAVEL AND DOCK",!local);
+ if(v.cargoTerminal){
+  fitted(h,local?"STATION LINK / CLAMPS SECURE":"STATION LINK LOST",34,237,l.venue.w-20,12,local?mint:amber);
+  mapButton(h,l.travel,"CLOSE TERMINAL / ESC");
+ }else{
+  const auto list=e.venues(v.place.system,v.place.world);
+  mapButton(h,l.venue,list.size()>1?"CHANGE STATION / CITY":"LOCAL STATION / CITY");
+  if(!local&&!v.place.city&&!list.empty()){
+   auto automatic=l.travel;automatic.w=l.manualDock.w;
+   mapButton(h,automatic,"AUTO DOCK / D",true);
+   mapButton(h,l.manualDock,"MANUAL DOCK / M",false,
+             e.currentSystem()==v.place.system&&e.currentWorld()==v.place.world&&e.nearOrbit());
+  }else mapButton(h,l.travel,local?"UNDOCK / LAUNCH":"TRAVEL AND LAND",!local);
+ }
  const auto detail=[&](std::string_view s,unsigned row,glm::vec3 color=pearl){fitted(h,s,l.details.x+12,l.details.y+row*31,l.details.w-24,11,color);};
  const auto row=[&](std::string_view name,size_t n,bool selected,glm::vec3 color=pearl){
   if(n>=12)return;const double y=l.rows.y+n*32;if(selected)rect(h.panels,l.rows.x,y-7,l.rows.w,30,{.07,.18,.20});
@@ -3196,8 +4991,10 @@ CockpitOverlay xalariaEconomyOverlay(const XalariaEconomy& e,double aspect){
   detail("SELL TOTAL "+(sell.available?xMoney(sell.total):"UNAVAILABLE"),6);
   detail("TOTALS INCLUDE LOCAL FEES",7,muted);detail("GOODWILL "+std::to_string(e.goodwill()),9);
   detail("NEXT TRADE REBATE "+xMoney(e.goodwillDue()),10);
-  mapButton(h,l.buy,"BUY CARGO / B",true,local&&buy.available);
-  mapButton(h,l.sell,"SELL CARGO / S",false,local&&sell.available);
+  mapButton(h,l.buy,"BUY CARGO / B",true,local&&buy.available&&
+            (!v.cargoTerminal||(buy.total<=e.credits()&&v.quantity<=int64_t(e.holdCapacity())-e.cargoUnits())));
+  mapButton(h,l.sell,"SELL CARGO / S",false,local&&sell.available&&
+            (!v.cargoTerminal||v.quantity<=e.cargo()[v.good]));
   mapButton(h,l.action,"FIND PROFITABLE ROUTE");
   mapButton(h,l.secondary,"REFILL FUEL / R");
   mapButton(h,l.tertiary,"DELIVER PARCELS");
@@ -3249,7 +5046,10 @@ CockpitOverlay xalariaEconomyOverlay(const XalariaEconomy& e,double aspect){
   mapButton(h,l.buy,"LOWER ADVANCEMENT");mapButton(h,l.sell,"HIGHER ADVANCEMENT");
   mapButton(h,l.action,"USE SELECTED SERVICE / ENTER");
  }else{
-  const auto offer=e.offer(v.place);row("TODAY'S CHARTER / "+xMoney(offer.reward),0,v.good==0);
+  const auto offer=e.offer(v.place);
+  const bool claimed=e.charterClaimed(offer.id);
+  row(!offer.units?"NO CHARTER AVAILABLE":claimed?"TODAY'S CHARTER CLAIMED":
+      "TODAY'S CHARTER / "+xMoney(offer.reward),0,v.good==0);
   for(size_t i=0;i<e.contracts().size()&&i<10;++i){const auto& c=e.contracts()[e.contracts().size()-1-i];
    row((c.state==XContract::State::Active?"IN HOLD":c.state==XContract::State::Delivered?"DELIVERED":"EXPIRED")+std::string(" / ")+xMoney(c.reward),i+1,v.good==i+1);
   }
@@ -3259,15 +5059,71 @@ CockpitOverlay xalariaEconomyOverlay(const XalariaEconomy& e,double aspect){
   detail("SEALED CARGO "+std::to_string(c->units)+" UNITS",2);detail("REWARD "+xMoney(c->reward),4);
   detail("DEADLINE: DAY "+std::to_string(c->deadline),5);
   detail("DOCK AT THE DESTINATION TO DELIVER",7,muted);detail("PARCELS USE YOUR SHIP'S CARGO HOLD",9,muted);
-  mapButton(h,l.action,"ACCEPT TODAY'S CHARTER");mapButton(h,l.secondary,"DELIVER PARCELS");mapButton(h,l.tertiary,"PLOT DELIVERY DESTINATION");
+  mapButton(h,l.action,"ACCEPT TODAY'S CHARTER / ENTER",false,local&&offer.units&&!claimed);
+  mapButton(h,l.secondary,"DELIVER PARCELS");mapButton(h,l.tertiary,"PLOT DELIVERY DESTINATION");
  }
  if(v.page==XEconomyView::Page::Market){
   mapButton(h,l.minus,"-");mapButton(h,l.plus,"+");fitted(h,std::to_string(v.quantity)+" UNITS",79,762,103,12,pearl);
  }
  fitted(h,v.message,24,853,l.width-48,11,amber);
- fitted(h,"F4 CLOSE / F2 ATLAS / ARROWS SELECT / ENTER ACT / D TRAVEL / DAY "+std::to_string(e.day())+
+ fitted(h,std::string(v.cargoTerminal?"ESC CLOSE / ARROWS SELECT / BRACKETS SET QUANTITY / DAY ":
+                      "F4 CLOSE / F2 ATLAS / ARROWS SELECT / ENTER ACT / D TRAVEL / DAY ")+std::to_string(e.day())+
   " / ECONOMY TIME 60X",24,878,l.width-48,9,muted);
  h.hitRegions.push_back({8,8,l.width-16,884});return h;
 }
 
+} // namespace infinity
+
+namespace infinity {
+XalariaConvoyLayout::XalariaConvoyLayout(double aspect):width(900*aspect){
+ close={width-161,24,137,42};list={24,112,280,468};const double half=(width-58)/2;
+ escort={24,676,half,44};pirate={34+half,676,half,44};follow={24,734,half,44};hail={34+half,734,half,44};report={24,792,width-48,44};
+}
+CockpitOverlay xalariaConvoyOverlay(const XalariaConvoys& convoys,const XalariaEconomy& economy,double aspect,double seconds){
+ CockpitOverlay hud;const XalariaConvoyLayout l(aspect);atlasGradient(hud,{0,0,l.width,900},atlasBg*1.24f,atlasBg*.67f);
+ atlasText(hud,"Convoys / Operations",24,24,l.close.x-48,32,atlasTextColour);atlasButton(hud,l.close,"Back / F9");
+ const auto known=convoys.known();const auto selected=convoys.selected();atlasText(hud,"Discovered operations / "+std::to_string(known.size()),24,81,280,17,atlasSecondary);
+ const size_t start=(convoys.row/6)*6;
+ for(size_t i=start;i<std::min(known.size(),start+6);++i){
+  const auto key=known[i];const auto& p=convoys.plan(key);const auto* record=convoys.record(key);const double y=112.+double(i-start)*78.;
+  atlasPanel(hud,{24,y,280,70},selected==key?atlasSurface*1.7f:atlasSurface);
+  atlasText(hud,economy.placeName(p.origin),34,y+10,260,19,atlasTextColour);
+  atlasText(hud,std::string(convoyPhaseName(convoys.stage(key,seconds).phase)),34,y+40,260,15,record&&record->betrayed?glm::vec3(1,.43,.29):atlasSecondary);
+ }
+ if(known.size()>6)atlasText(hud,"Up / Down / Page "+std::to_string(convoys.row/6+1)+" of "+std::to_string((known.size()+5)/6),24,608,280,16,atlasSecondary);
+ const double x=328.,w=l.width-x-24.;
+ if(selected){
+  const auto key=*selected;const auto& p=convoys.plan(key);const auto* r=convoys.record(key);
+  atlasText(hud,"Convoy "+std::to_string(key.service)+"-"+std::to_string(key.cycle%1000),x,112,w,26,atlasTextColour);
+  atlasText(hud,"From / "+economy.placeName(p.origin),x,160,w,19,atlasTextColour);
+  atlasText(hud,"To / "+economy.placeName(p.destination),x,193,w,19,atlasTextColour);
+  atlasText(hud,std::string(convoyPhaseName(convoys.stage(key,seconds).phase)),x,235,w,20,{1.,.75,.42});
+  atlasText(hud,"Manifest / "+std::to_string(r?r->remaining:p.units)+" of "+std::to_string(p.units)+" "+std::string(xGoodInfo(p.good).name),x,275,w,19,atlasTextColour);
+  atlasText(hud,"Escort / "+std::string(xFactionName(p.faction))+" / Standing "+std::to_string(convoys.standing(p.faction)),x,316,w,18,atlasSecondary);
+  atlasText(hud,"Threat / "+std::string(convoys.factionBattle(key)?"Faction interdiction / ":"Pirate ambush / ")+std::string(xFactionName(p.rival)),x,349,w,18,atlasSecondary);
+  if(r){
+   atlasText(hud,"Fleet fire / "+std::to_string(r->npcShots)+" shots / "+std::to_string(r->npcHits)+" impacts / Your hits "+std::to_string(r->playerHits),x,394,w,18,atlasSecondary);
+   atlasText(hud,"Accompanied / "+std::to_string(int(r->accompanied))+" s / minimum 45 s",x,430,w,18,atlasSecondary);
+   atlasText(hud,r->betrayed?"Convoy attacked by you / escort credentials void":r->claimed?"Escort payment received":r->duty==ConvoyDuty::Escort?"Your duty / Escort":r->duty==ConvoyDuty::Pirate?"Your intent / Piracy":"No duty accepted",x,470,w,19,r->betrayed?glm::vec3(1,.43,.29):atlasTextColour);
+  }
+  atlasText(hud,"Escort: defend the manifest and report at the destination berth.",x,532,w,17,atlasSecondary);
+  atlasText(hud,"Piracy: disable the freighter, board and take its finite cargo.",x,563,w,17,atlasSecondary);
+  atlasText(hud,"Follow uses helm assist; manual flight or B returns control.",x,603,w,17,atlasSecondary);
+ }else{
+  atlasText(hud,"No convoy reports discovered",x,140,w,25,atlasTextColour);
+  atlasText(hud,"Hail a visible convoy or dock at a station for local departures.",x,198,w,18,atlasSecondary);
+  atlasText(hud,"Nearby distress calls identify battles while you are flying.",x,236,w,18,atlasSecondary);
+ }
+ atlasButton(hud,l.escort,"E  Accept escort",false,bool(selected));atlasButton(hud,l.pirate,"P  Mark as prize / illegal",false,bool(selected));
+ atlasButton(hud,l.follow,"F  Follow convoy / helm assist",convoys.following,bool(selected));atlasButton(hud,l.hail,"I  Hail selected convoy",false,bool(selected));
+ atlasButton(hud,l.report,"R  File escort report at destination",false,bool(selected));
+ atlasText(hud,convoys.message,24,854,l.width-48,17,{1.,.76,.43});hud.hitRegions.push_back({0,0,l.width,900});return hud;
+}
+void xalariaConvoyHud(CockpitOverlay& hud,const XalariaConvoys& convoys,double aspect,double seconds){
+ if(!convoys.tracked())return;const auto key=*convoys.tracked();const auto* r=convoys.record(key);if(!r)return;
+ const double w=std::max(180.,std::min(440.,900*aspect-684.)),x=(900*aspect-w)*.5;
+ const CockpitRect panel{x,280,w,66};occlude(hud,panel);atlasPanel(hud,{x,280,w,66},atlasSurface);
+ atlasText(hud,r->betrayed?"CONVOY / PIRACY REPORTED":r->duty==ConvoyDuty::Escort?"CONVOY / ESCORT DUTY":"CONVOY / PRIZE TRACKED",x+12,290,w-24,15,{1.,.73,.40});
+ atlasText(hud,std::string(convoyPhaseName(convoys.stage(key,seconds).phase))+" / F9",x+12,319,w-24,14,atlasSecondary);
+}
 } // namespace infinity

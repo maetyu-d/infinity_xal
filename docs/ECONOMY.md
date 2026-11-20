@@ -1,12 +1,12 @@
 # Economy in Infinity / Xalaria 0.3
 
-Press **F4** or **Trade** on the atlas. Choose a world, inspect its markets, then use **Travel and dock**. Remote prices are previews; buying, selling and station services require the ship to be physically docked. City exchanges require a landing on their world. Change Station / City cycles that world's available venues.
+Press **F4** or **Trade** on the atlas. Choose a world, inspect its markets, then choose **Auto Dock** or fly to the world and choose **Manual Dock**. Remote prices are previews. Buying, selling and station services require the ship to be physically docked. City exchanges require a landing on their world. **Change Station / City** cycles that world's available venues.
 
 A new commander starts with **20,000 GC**, a **30-unit hold**, **80 fuel**, and Technology/Culture Level 1. Existing flight saves receive the new economy once. Your original Infinity saves remain separate.
 
 ## A first trading trip
 
-1. Open F4 near your starting world and request docking. The flight view shows the approach and docking lane.
+1. Open **F4** near your starting world and press **D** for automatic docking or **M** for manual docking. The flight view shows the approach lights. During manual docking, the cockpit shows alignment and closing speed until the clamps engage.
 2. Buy a small load of metal. Select quantity with the minus/plus buttons or brackets.
 3. Use **Find profitable route** to preview a market within three directed wormhole hops. Estimates include the spread, current fees and expected fuel cost; prices can change.
 4. Use **Undock / launch**, then fly there using the atlas. Open its market and request docking, then sell the cargo.

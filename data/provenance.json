@@ -422,5 +422,37 @@
       "sha256": "509a90684a72dc2c46a34ad2750183c0c31b5c93124c2b0ba9c8a472a3d9edda"
     }
   ],
-  "notes": "Public explorer snapshot. No server code, accounts, player state, narrative text or artwork included. Source rights remain with Julian Cochran."
+  "notes": "Public explorer snapshot. No server code, accounts, player state, narrative text or artwork included. Source rights remain with Julian Cochran.",
+  "ring_orientation": {
+    "retrieved_utc": "2026-11-13T16:29:00Z",
+    "fields": [
+      "rg.ob (degrees)",
+      "rg.nd (degrees)"
+    ],
+    "match": "System ID, world ID, and existing inner and outer radii",
+    "published_axes": 14860,
+    "orbital_plane_fallbacks": 27,
+    "region_hash_overrides": {
+      "r-0-3.json": "bb9a26076d4ecfa88a45aefe34e891f02f23fa1e41decdbfd56a48650c23ff7d",
+      "r-0-4.json": "c479448a9696b321c7206074a071d80f23138db07b141da693f9e3b64e2c4118",
+      "r-0-6.json": "edba8b72c46cdd20d4eeb50d52cddd225be0727fbf8ab38451e9f1183effa97c",
+      "r-2-2.json": "64a814db9b7cb188689f2c21c3ffc8f1b810ddcabf6c881bce8e252d7d1a122d",
+      "r-1-2.json": "6c8565bcea9889cac406a0ed96ecda1b732647214f17fac53b632e1a11448352",
+      "r-2-4.json": "9efbae93d22ef523cda921c8d3ae49ab76cf6da4272f7c059d809cca685db646",
+      "r-3-2.json": "15d73944fc33dfbd219159b72a896b56f04227c857fe342435d6ba97aa4dec3c",
+      "r-3-5.json": "d5afe5925d156f3795912bef479e035f6969d1819bda2f3ac47df8cf6ac0ed02",
+      "r-3-8.json": "5bc95166da08d8add33f224206b24eee9d58c429afa5627f12a3d60ea5eebeb2",
+      "r-3-7.json": "18e64237c04b8b20a27337cbe5a3f03c0f534922ca61c16f889b9f71493d6a24",
+      "r-4-5.json": "0f16aa113f632623ad56932d0a2a1255acad46281b1d361415092f43335529b1",
+      "r-4-9.json": "83026254894df78dc26ef89fef22d2564e94e5878eb601962b24cd7a4fd83dba",
+      "r-5-7.json": "0b30b95d290fe525f8a431c93b09db1ed01f6a09562c7ea1d0885636c71bf352",
+      "r-5-6.json": "d819f10834c12bb9afa93652c0bba37a970f1fabcb94f60970a1a02d5e39bc3d",
+      "r-6-9.json": "cfc158d3a18374803c367026da81c876b1e7f8b1bdbfd2542547298e51509910",
+      "r-7-7.json": "82b4637fe320b0bbb72ab724a58b032e3ee065ec13b51fc3559d2d344690348a",
+      "r-7-6.json": "168ac2a7e94e5294fb8d9447d3717f06d9bf336f10d11ca2e342acc7a242c8d4",
+      "r-8-1.json": "26d97b744140237e524221c02d06b808ba8f2f8b797d5c1e1b01b846eae403bb",
+      "r-8-5.json": "a7600b0e794c032fd3a32ec63f578ed7817a0d84b34ea747257249baa88140f8",
+      "r-9-2.json": "2cdc6d01281209f194df9e8d9469314edd78c03892ffa4910d7213e972fbaefa"
+    }
+  }
 }

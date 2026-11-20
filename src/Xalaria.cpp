@@ -35,11 +35,24 @@ double number(const std::string& s) {
     return n;
 }
 std::string upper(std::string_view s){std::string r(s);for(auto& c:r)if(c>='a'&&c<='z')c=char(c-32);return r;}
+
+StellarProcess surveyStar(std::string_view family,uint32_t seed) {
+    // These channels select the same evolutionary recipes as standalone Infinity.
+    constexpr std::array<std::pair<std::string_view,unsigned>,4> channels{{
+        {"red_giant",11},{"neutron_star",16},{"brown_dwarf",17},{"carbon_giant",18}
+    }};
+    for(const auto& [name,channel]:channels)
+        if(family==name)
+            return stellarEvolution(mix64(seed),channel,8.,true);
+    throw std::runtime_error("Unknown survey star family");
+}
 }
 XalariaCatalog::XalariaCatalog(const std::filesystem::path& path) {
     std::ifstream file(path);if(!file)throw std::runtime_error("Cannot open Xalaria catalogue: "+path.string());
     std::string row;std::getline(file,row);auto header=fields(row);
-    if(header.size()!=4||header[0]!="XALARIA_CATALOG"||header[1]!="1")throw std::runtime_error("Unsupported Xalaria catalogue");
+    if(header.size()!=4||header[0]!="XALARIA_CATALOG"||(header[1]!="1"&&header[1]!="2"))
+        throw std::runtime_error("Unsupported Xalaria catalogue");
+    const bool hasRingOrientation = header[1] == "2";
     fingerprint=header[2];grid=unsigned(integer(header[3]));if(grid!=200)throw std::runtime_error("Unexpected map grid");
     while(std::getline(file,row)) {
         if(row.empty())continue;auto f=fields(row);
@@ -50,13 +63,49 @@ XalariaCatalog::XalariaCatalog(const std::filesystem::path& path) {
             if(f[10]!="-")for(const auto& v:fields(f[10],','))s.wormholes.push_back(uint32_t(integer(v)));
             if(s.seed>=grid*grid||s.spectralClass>6||s.radius<=0||s.temperature<=0||stars.contains(s.seed))throw std::runtime_error("Invalid/duplicate star");
             stars.emplace(s.seed,std::move(s));
-        } else if(f[0]=="W"&&f.size()==24) {
+        } else if(f[0]=="T"&&f.size()==7) {
+            const auto id=integer(f[1]),hub=integer(f[4]);
+            const double orbit=number(f[6]);
+            if(id>=grid*grid||hub>=grid*grid||stars.contains(uint32_t(id))||!stars.contains(uint32_t(hub))||
+                stars.at(uint32_t(hub)).surveyStar||f[3].empty()||f[5].empty()||orbit<=0.)
+                throw std::runtime_error("Invalid survey system");
+            XalariaStar s;
+            s.seed=uint32_t(id);s.name=f[3];
+            s.surveyStar=std::make_shared<const StellarProcess>(surveyStar(f[2],s.seed));
+            const auto& stellar=*s.surveyStar;
+            s.radius=stellar.radiusMetres;s.temperature=stellar.temperatureK;
+            s.spectralClass=unsigned(std::string_view("OBAFGKM").find(spectralClass(s.temperature)));
+            s.wormholes={uint32_t(hub)};
+            constexpr double astronomicalUnit=1.495978707e11;
+            const double distance=orbit*astronomicalUnit;
+            if(!std::isfinite(distance)||distance<stellar.radiusMetres*8.)
+                throw std::runtime_error("Survey world orbit is too close to its star");
+            s.disc=distance*1.8;
+            XalariaWorld w;
+            w.uniqueId=(uint64_t(1)<<62)|id;w.name=f[5];w.radius=1.65e6;
+            w.distance=distance;w.period=2.*std::numbers::pi*std::sqrt(std::pow(w.distance,3)/(1.32712440018e20*stellar.massSolar));
+            w.temperature=std::max(35.,278.*std::pow(stellar.luminositySolar,.25)/std::sqrt(orbit));
+            w.freezing=w.temperature<220.;
+            s.worlds.emplace(0,std::move(w));
+            stars.emplace(uint32_t(id),std::move(s));
+            stars.at(uint32_t(hub)).wormholes.push_back(uint32_t(id));
+            ++worldCount;
+        } else if(f[0]=="W"&&f.size()==(hasRingOrientation ? 26u : 24u)) {
             auto& s=stars.at(uint32_t(integer(f[1])));XalariaWorld w;
             w.id=integer(f[2]);w.uniqueId=integer(f[3]);w.name=f[4];w.primary=std::stoi(f[5]);
             w.radius=number(f[6]);w.distance=number(f[7]);w.period=number(f[8]);w.tilt=number(f[9]);w.tiltRotation=number(f[10]);
             w.temperature=number(f[11]);w.composition=std::stoi(f[12]);w.lifeStructure=std::stoi(f[13]);w.intelligence=std::stoi(f[14]);
             w.life=integer(f[15])!=0;w.communities=unsigned(integer(f[16]));w.stations=unsigned(integer(f[17]));w.mines=unsigned(integer(f[18]));
             w.freezing=integer(f[19])!=0;w.cloudCover=number(f[20]);w.cloudColor=f[21];w.ringInner=number(f[22]);w.ringOuter=number(f[23]);
+            if (hasRingOrientation && w.ringOuter > w.ringInner && (f[24] != "-" || f[25] != "-")) {
+                const double tilt = number(f[24]), node = number(f[25]);
+                if (tilt < 0 || tilt > 180 || node < 0 || node > 360)
+                    throw std::runtime_error("Invalid catalogue ring orientation");
+                const double obliquity = glm::radians(tilt), azimuth = glm::radians(node);
+                const double horizontal = std::sin(obliquity);
+                w.ringAxis = glm::dvec3(horizontal * std::cos(azimuth), std::cos(obliquity),
+                                        horizontal * std::sin(azimuth));
+            }
             if(w.radius<=0||w.distance<=0||w.period<0||s.worlds.contains(w.id))throw std::runtime_error("Invalid/duplicate world");
             
             ++worldCount;lifeCount+=w.life;communityCount+=w.communities;s.worlds.emplace(w.id,std::move(w));
@@ -112,9 +161,14 @@ std::vector<uint32_t> XalariaCatalog::search(std::string_view query,size_t limit
     std::vector<std::pair<size_t,uint32_t>> ranked;
     for(const auto& [id,s]:stars){
         size_t rank=SIZE_MAX;
-        const auto score=[&](const std::string& name,bool world){const auto text=upper(name);const auto at=text.find(q);
+        const auto score=[&](std::string_view name,bool world){const auto text=upper(name);const auto at=text.find(q);
             if(at!=std::string::npos)rank=std::min(rank,text==q?size_t(world?1:0):at==0?size_t(world?3:2):size_t(4+at));};
         score(s.name,false);if(std::to_string(id)==q)rank=0;
+        if(s.surveyStar){
+            const auto type=stellarKindName(s.surveyStar->kind);
+            score(type,false);
+            score(std::string(type)+"s",false);
+        }
         for(const auto& [wid,w]:s.worlds)score(w.name,true);
         if(rank!=SIZE_MAX)ranked.emplace_back(rank,id);
     }
@@ -144,9 +198,15 @@ void XalariaCatalog::apply(Node& n,const Node& p) const {
         n.temperatureK=s.temperature;n.stellarRadiusMetres=s.radius;
         n.luminositySolar=std::pow(s.radius/solarRadiusMetres,2)*std::pow(s.temperature/5772,4);
         n.massSolar=std::clamp(std::pow(n.luminositySolar,1/3.5),.08,80.);n.companions=0;
-        auto st=std::make_shared<StellarProcess>();st->temperatureK=n.temperatureK;st->radiusMetres=s.radius;
-        st->luminositySolar=n.luminositySolar;st->massSolar=n.massSolar;st->initialMassSolar=n.massSolar;st->ageGyr=4;
-        n.stellar=st;n.environment.temperature=s.temperature;n.environment.ageGyr=4;
+        if(s.surveyStar){
+            n.stellar=s.surveyStar;
+            n.luminositySolar=n.stellar->luminositySolar;n.massSolar=n.stellar->massSolar;
+        }else{
+            auto st=std::make_shared<StellarProcess>();st->temperatureK=n.temperatureK;st->radiusMetres=s.radius;
+            st->luminositySolar=n.luminositySolar;st->massSolar=n.massSolar;st->initialMassSolar=n.massSolar;st->ageGyr=4;
+            n.stellar=st;
+        }
+        n.environment.temperature=s.temperature;n.environment.ageGyr=n.stellar->ageGyr;
         for(const auto& [id,w]:s.worlds)if(w.primary<0)n.frame.logRadius=std::max(n.frame.logRadius,std::log10(w.distance*1.5));
         return;
     }
